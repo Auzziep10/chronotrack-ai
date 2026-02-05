@@ -1,104 +1,27 @@
 
 import { WorkLog, Department } from "../types";
 
-// Lazy-load Gemini AI only when needed
-let aiInstance: any = null;
-let aiInitialized = false;
-
-async function getAI() {
-  if (aiInitialized) return aiInstance;
-
-  aiInitialized = true;
-  try {
-    const { GoogleGenAI } = await import("@google/genai");
-    const API_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
-    if (API_KEY) {
-      aiInstance = new GoogleGenAI({ apiKey: API_KEY });
-    }
-  } catch (e) {
-    console.warn("Gemini AI not available");
-  }
-  return aiInstance;
-}
+/**
+ * GEMINI SERVICE STUBBED FOR STABILITY
+ * The AI features are currently disabled to prevent production crashes 
+ * while the API key is being configured.
+ */
 
 export const generateDailySummary = async (logs: WorkLog[]): Promise<string> => {
   if (logs.length === 0) {
     return "No work logs available to summarize.";
   }
 
-  const ai = await getAI();
+  const totalLogs = logs.length;
+  const departments = [...new Set(logs.map(l => l.department))];
 
-  // If no API key, return a basic summary instead
-  if (!ai) {
-    const totalLogs = logs.length;
-    const departments = [...new Set(logs.map(l => l.department))];
-    return `📊 Daily Summary:\n• ${totalLogs} activities logged\n• Departments: ${departments.join(', ')}\n\n(AI summaries require a Gemini API key)`;
-  }
+  return `📊 Daily Activity Breakdown:
+• Total Entries: ${totalLogs}
+• Departments Involved: ${departments.join(', ')}
 
-  const logsText = logs.map(log => {
-    const time = new Date(log.timestamp).toLocaleTimeString();
-    let details = `[${time}] Dept: ${log.department} | Task: ${log.task}`;
-    if (log.department === Department.Production && log.productionData) {
-      details += ` | Project: ${log.productionData.projectName} | Qty: ${log.productionData.quantity}`;
-    }
-    if (log.notes) {
-      details += ` | Notes: ${log.notes}`;
-    }
-    return details;
-  }).join('\n');
-
-  const prompt = `
-    You are a professional project manager assistant. 
-    Review the following work logs from a team member's day and generate a concise, professional daily summary report.
-    Highlight key achievements, total production quantities (if any), and distribution of time across departments.
-    
-    Work Logs:
-    ${logsText}
-  `;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-    });
-    return response.text || "Could not generate summary.";
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    return "An error occurred while communicating with the AI service.";
-  }
+(Note: Advanced AI analysis is currently in Manual Mode. Please configure your VITE_GEMINI_API_KEY in Vercel to re-enable.)`;
 };
 
-/**
- * Parses raw text from an external Daily Planner (e.g., from Replit)
- * and turns it into a structured set of expected goals.
- */
 export const processExternalPlan = async (rawPlanText: string): Promise<string> => {
-  const ai = await getAI();
-
-  if (!ai) {
-    return "AI plan processing is not available (no API key configured).";
-  }
-
-  const prompt = `
-    I have a daily work plan from an external planner tool. 
-    Please parse this text and convert it into a structured "Expected Goals" list.
-    Categorize tasks by department (Design, Print, Warehousing, Production, Facility, Event).
-    Identify any production targets (quantities) mentioned.
-    
-    Raw Plan Data:
-    ${rawPlanText}
-    
-    Format the output as a clean, structured Markdown report that a manager can use to track shift progress.
-  `;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-    });
-    return response.text || "Unable to parse the plan.";
-  } catch (error) {
-    console.error("Gemini Plan Parsing Error:", error);
-    return "Error processing external plan data.";
-  }
+  return "AI Plan Parsing is currently unavailable. Viewing raw plan data instead:\n\n" + rawPlanText;
 };
