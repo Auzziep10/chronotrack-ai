@@ -1,0 +1,164 @@
+import React, { useState } from 'react';
+import { UserSession, User } from '../types';
+import { Timer } from './Timer';
+import { PinPad } from './PinPad';
+import { Play, Pause, ShieldCheck, User as UserIcon, LogOut, CheckCircle2 } from 'lucide-react';
+import { LOG_INTERVAL_MS } from '../constants';
+
+interface Props {
+  activeSessions: Record<string, UserSession>;
+  users: User[];
+  onClockIn: (user: User) => void;
+  onClockOut: (user: User) => void;
+}
+
+export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut }) => {
+  const [showPinPad, setShowPinPad] = useState(false);
+  const [pinMessage, setPinMessage] = useState<string>('');
+
+  const handlePinAction = () => {
+    setPinMessage('');
+    setShowPinPad(true);
+  };
+
+  const handlePinSuccess = (user: User) => {
+    const isClockedIn = !!activeSessions[user.id];
+    
+    if (isClockedIn) {
+      // Clock Out Logic
+      onClockOut(user);
+      setPinMessage(`Goodbye, ${user.name}! Clocked out successfully.`);
+    } else {
+      // Clock In Logic
+      onClockIn(user);
+      setPinMessage(`Welcome, ${user.name}! Clocked in successfully.`);
+    }
+    
+    // Close pad and clear message after delay
+    setTimeout(() => {
+      setShowPinPad(false);
+      setPinMessage('');
+    }, 1500);
+  };
+
+  if (showPinPad) {
+    return (
+      <div className="max-w-4xl mx-auto flex flex-col items-center justify-center py-10 space-y-6">
+        {pinMessage ? (
+           <div className="bg-green-100 border border-green-200 text-green-800 px-6 py-4 rounded-xl flex items-center gap-3 text-lg font-bold animate-fade-in">
+             <CheckCircle2 className="w-8 h-8" />
+             {pinMessage}
+           </div>
+        ) : (
+           <PinPad 
+            mode="IN" // Mode is generic here, action determined by user state
+            users={users}
+            onSuccess={handlePinSuccess} 
+            onCancel={() => setShowPinPad(false)} 
+          />
+        )}
+      </div>
+    );
+  }
+
+  const sessionsList = Object.values(activeSessions) as UserSession[];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
+      {/* Left Column: Clock In/Out Action */}
+      <div className="lg:col-span-5 space-y-6">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 h-full flex flex-col">
+          <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-8 text-white text-center">
+            <h2 className="text-3xl font-bold mb-2">Master Time Station</h2>
+            <p className="text-slate-300">Identify yourself to start or end your shift.</p>
+          </div>
+          
+          <div className="p-10 flex-1 flex flex-col items-center justify-center space-y-8">
+            <div className="p-6 bg-blue-50 rounded-full">
+               <ShieldCheck className="w-20 h-20 text-blue-600" />
+            </div>
+
+            <button
+              onClick={handlePinAction}
+              className="w-full max-w-xs flex flex-col items-center justify-center gap-3 px-8 py-6 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-lg shadow-blue-200 font-bold text-xl transition-all hover:scale-105 active:scale-95"
+            >
+              <span>Enter PIN</span>
+              <span className="text-sm font-normal opacity-80">Clock In / Clock Out</span>
+            </button>
+            
+            <p className="text-center text-gray-400 text-sm max-w-xs">
+              Enter your 4-digit PIN. The system will automatically clock you in or out based on your current status.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Column: Active Users Dashboard */}
+      <div className="lg:col-span-7">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <UserIcon className="w-5 h-5 text-green-600" />
+              Active Team Members ({sessionsList.length})
+            </h3>
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              Live Tracking
+            </div>
+          </div>
+          
+          {sessionsList.length === 0 ? (
+            <div className="p-12 text-center text-gray-400 flex flex-col items-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <LogOut className="w-8 h-8 text-gray-300" />
+              </div>
+              <p>No one is currently clocked in.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 max-h-[600px] overflow-y-auto">
+              {sessionsList.map(session => {
+                const now = Date.now();
+                const elapsedSinceLog = now - session.lastLogTime;
+                const isOverdue = elapsedSinceLog > LOG_INTERVAL_MS;
+
+                return (
+                  <div key={session.userId} className={`p-4 rounded-xl border-2 transition-all hover:shadow-md
+                    ${isOverdue ? 'border-red-100 bg-red-50' : 'border-green-100 bg-white'}`}>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm
+                        ${isOverdue ? 'bg-red-400' : 'bg-green-500'}`}>
+                        {session.user.avatarInitials}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-gray-900 truncate">{session.user.name}</h4>
+                        <p className="text-xs text-gray-500 truncate">{session.user.role}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">Shift Time:</span>
+                        <Timer startTime={session.startTime} isActive={true} />
+                      </div>
+                      
+                      {isOverdue && (
+                        <div className="flex items-center gap-2 text-xs text-red-600 font-semibold bg-red-100 px-2 py-1 rounded">
+                          <ShieldCheck className="w-3 h-3" />
+                          <span>Check-in Required</span>
+                        </div>
+                      )}
+                      
+                      <div className="text-xs text-gray-400 pt-2 border-t border-gray-100 mt-2">
+                         Last Log: {new Date(session.lastLogTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

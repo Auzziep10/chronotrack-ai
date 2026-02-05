@@ -1,0 +1,5 @@
+{
+  "name": "ChronoTrack AI",
+  "description": "An intelligent company-wide time tracking tool that enforces hourly work logging with department-specific workflows and AI-powered daily summaries.",
+  "requestFramePermissions": []
+}
