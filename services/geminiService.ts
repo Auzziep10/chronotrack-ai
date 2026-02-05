@@ -1,21 +1,32 @@
 
-import { GoogleGenAI } from "@google/genai";
 import { WorkLog, Department } from "../types";
 
-// Make API key optional - feature will be disabled if not provided
-// Use try-catch to safely access import.meta.env
-let API_KEY = '';
-try {
-  API_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
-} catch (e) {
-  // Running in environment without import.meta.env
+// Lazy-load Gemini AI only when needed
+let aiInstance: any = null;
+let aiInitialized = false;
+
+async function getAI() {
+  if (aiInitialized) return aiInstance;
+
+  aiInitialized = true;
+  try {
+    const { GoogleGenAI } = await import("@google/genai");
+    const API_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+    if (API_KEY) {
+      aiInstance = new GoogleGenAI({ apiKey: API_KEY });
+    }
+  } catch (e) {
+    console.warn("Gemini AI not available");
+  }
+  return aiInstance;
 }
-const ai = API_KEY ? new GoogleGenAI({ apiKey: API_KEY }) : null;
 
 export const generateDailySummary = async (logs: WorkLog[]): Promise<string> => {
   if (logs.length === 0) {
     return "No work logs available to summarize.";
   }
+
+  const ai = await getAI();
 
   // If no API key, return a basic summary instead
   if (!ai) {
@@ -62,6 +73,8 @@ export const generateDailySummary = async (logs: WorkLog[]): Promise<string> => 
  * and turns it into a structured set of expected goals.
  */
 export const processExternalPlan = async (rawPlanText: string): Promise<string> => {
+  const ai = await getAI();
+
   if (!ai) {
     return "AI plan processing is not available (no API key configured).";
   }
