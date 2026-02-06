@@ -40,69 +40,68 @@ export const PinPad: React.FC<Props> = ({ mode, users, onSuccess, onCancel }) =>
   }, [pin, onSuccess, users]);
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 max-w-sm w-full mx-auto animate-scale-in">
-      <div className={`p-6 text-white text-center ${mode === 'IN' ? 'bg-blue-600' : 'bg-red-600'}`}>
+    <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 max-w-md w-full mx-auto">
+      <div className={`p-8 text-white text-center ${mode === 'IN' ? 'bg-blue-600' : 'bg-red-600'}`}>
         <div className="relative">
-          <button 
+          <button
             onClick={onCancel}
             className="absolute -right-2 -top-2 p-2 hover:bg-white/20 rounded-full transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-6 h-6" />
           </button>
-          <h2 className="text-2xl font-bold mb-1">
+          <h2 className="text-3xl font-bold mb-1">
             {mode === 'IN' ? 'Clock In' : 'Clock Out'}
           </h2>
-          <p className="text-blue-100 opacity-90 text-sm">Enter your 4-digit PIN</p>
+          <p className="text-white/80 text-sm">Enter your 4-digit PIN</p>
         </div>
       </div>
 
-      <div className="p-8 flex flex-col items-center">
+      <div className="p-10 flex flex-col items-center">
         {/* PIN Display */}
-        <div className="flex gap-4 mb-8">
+        <div className="flex gap-6 mb-10">
           {[0, 1, 2, 3].map((i) => (
-            <div 
-              key={i} 
-              className={`w-4 h-4 rounded-full border-2 transition-all duration-200 
-                ${i < pin.length 
-                  ? 'bg-gray-800 border-gray-800 scale-110' 
+            <div
+              key={i}
+              className={`w-5 h-5 rounded-full border-2 transition-all duration-200 
+                ${i < pin.length
+                  ? 'bg-gray-800 border-gray-800 scale-125'
                   : 'bg-transparent border-gray-300'}`}
             />
           ))}
         </div>
 
         {error && (
-          <div className="mb-4 text-red-500 font-medium text-sm animate-pulse">
+          <div className="mb-6 text-red-500 font-bold text-sm animate-bounce">
             {error}
           </div>
         )}
 
         {/* Numpad */}
-        <div className="grid grid-cols-3 gap-4 w-full">
+        <div className="grid grid-cols-3 gap-6 w-full max-w-[320px]">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
             <button
               key={num}
               onClick={() => handleNumClick(num.toString())}
-              className="h-16 w-full rounded-xl bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-semibold text-gray-700 transition-colors shadow-sm border border-gray-100"
+              className="aspect-square flex items-center justify-center rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-3xl font-bold text-gray-700 transition-all shadow-sm border border-gray-100 active:scale-90"
             >
               {num}
             </button>
           ))}
-          <div className="col-start-2">
-            <button
-              onClick={() => handleNumClick('0')}
-              className="h-16 w-full rounded-xl bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-semibold text-gray-700 transition-colors shadow-sm border border-gray-100"
-            >
-              0
-            </button>
+          <div className="flex justify-center">
+            {/* Empty space for grid alignment if needed, but we'll use col-start */}
           </div>
-          <div className="col-start-3">
-             <button
-              onClick={handleDelete}
-              className="h-16 w-full rounded-xl hover:bg-red-50 active:bg-red-100 text-gray-500 hover:text-red-500 transition-colors flex items-center justify-center"
-            >
-              <Delete className="w-8 h-8" />
-            </button>
-          </div>
+          <button
+            onClick={() => handleNumClick('0')}
+            className="aspect-square flex items-center justify-center rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-3xl font-bold text-gray-700 transition-all shadow-sm border border-gray-100 active:scale-90"
+          >
+            0
+          </button>
+          <button
+            onClick={handleDelete}
+            className="aspect-square flex items-center justify-center rounded-full hover:bg-red-50 active:bg-red-100 text-gray-400 hover:text-red-500 transition-all active:scale-90"
+          >
+            <Delete className="w-8 h-8" />
+          </button>
         </div>
       </div>
     </div>
