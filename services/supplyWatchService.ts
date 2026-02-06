@@ -116,5 +116,131 @@ export const supplyWatchService = {
             console.error("Failed to fetch daily schedule:", error);
             throw error;
         }
+    },
+
+    /**
+     * Generates a schedule using AI from a transcript
+     */
+    generateSchedule: async (replitUrl: string, token: string, transcript: string, date: Date) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/daily-schedules/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ transcript, date: date.toISOString() })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to generate schedule: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to generate schedule:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Creates a new schedule block
+     */
+    createScheduleBlock: async (replitUrl: string, token: string, scheduleId: string, blockData: any) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/daily-schedules/${scheduleId}/assign-block`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(blockData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to create block: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to create schedule block:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Updates an existing schedule block
+     */
+    updateScheduleBlock: async (replitUrl: string, token: string, blockId: string, blockData: any) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/schedule-blocks/${blockId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(blockData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to update block: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to update schedule block:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Deletes a schedule block
+     */
+    deleteScheduleBlock: async (replitUrl: string, token: string, blockId: string) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/schedule-blocks/${blockId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to delete block: ${response.statusText}`);
+            }
+
+            return true;
+        } catch (error) {
+            console.error("Failed to delete schedule block:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Publishes a schedule (notifies team)
+     */
+    publishSchedule: async (replitUrl: string, token: string, scheduleId: string) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/daily-schedules/${scheduleId}/publish`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to publish schedule: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to publish schedule:", error);
+            throw error;
+        }
     }
 };

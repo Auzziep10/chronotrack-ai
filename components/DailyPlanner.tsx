@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X } from 'lucide-react';
 import { User, DailySchedule, ScheduleBlock } from '../types';
 import { supplyWatchService } from '../services/supplyWatchService';
 
@@ -33,6 +33,14 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [schedule, setSchedule] = useState<DailySchedule | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Planning Mode State
+    const [isPlanningMode, setIsPlanningMode] = useState(false);
+    const [transcript, setTranscript] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [unassignedBlocks, setUnassignedBlocks] = useState<any[]>([]);
+
+    const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
     // Time marker for current time
     const [currentTimePercentage, setCurrentTimePercentage] = useState<number | null>(null);
@@ -88,6 +96,98 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         const newDate = new Date(currentDate);
         newDate.setDate(currentDate.getDate() + 1);
         setCurrentDate(newDate);
+    };
+
+    const handleGenerateAI = async () => {
+        if (!transcript.trim()) return;
+        setIsGenerating(true);
+        setError(null);
+
+        try {
+            const replitUrl = localStorage.getItem('replitAppUrl');
+            const token = localStorage.getItem('chronoAuthToken');
+
+            if (replitUrl && token) {
+                const result = await supplyWatchService.generateSchedule(replitUrl, token, transcript, currentDate);
+                setSchedule(prev => ({
+                    ...prev,
+                    id: result.schedule.id,
+                    date: result.schedule.date,
+                    blocks: [...(prev?.blocks || []), ...result.blocks]
+                } as any));
+                setUnassignedBlocks(result.unassignedBlocks || []);
+                setTranscript('');
+                alert("AI Schedule Generated! Review tasks below.");
+            }
+        } catch (err: any) {
+            console.error("Generation failed:", err);
+            setError("AI generation failed. Please try again.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handlePublish = async () => {
+        if (!schedule?.id) return;
+        setLoading(true);
+
+        try {
+            const replitUrl = localStorage.getItem('replitAppUrl');
+            const token = localStorage.getItem('chronoAuthToken');
+
+            if (replitUrl && token) {
+                await supplyWatchService.publishSchedule(replitUrl, token, schedule.id);
+                setIsPlanningMode(false);
+                alert("Schedule Published! Notifications sent to team.");
+            }
+        } catch (err) {
+            setError("Failed to publish schedule.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAssignBlock = async (tempBlock: any, userId: string) => {
+        try {
+            const replitUrl = localStorage.getItem('replitAppUrl');
+            const token = localStorage.getItem('chronoAuthToken');
+
+            if (replitUrl && token && schedule?.id) {
+                const result = await supplyWatchService.createScheduleBlock(replitUrl, token, schedule.id, {
+                    ...tempBlock,
+                    assignedTo: userId
+                });
+
+                // Add to visible blocks
+                setSchedule(prev => prev ? {
+                    ...prev,
+                    blocks: [...prev.blocks, result]
+                } : null);
+
+                // Remove from unassigned
+                setUnassignedBlocks(prev => prev.filter(b => b.tempId !== tempBlock.tempId));
+            }
+        } catch (err) {
+            alert("Failed to assign task.");
+        }
+    };
+
+    const handleDeleteBlock = async (blockId: string) => {
+        if (!confirm("Delete this task?")) return;
+        try {
+            const replitUrl = localStorage.getItem('replitAppUrl');
+            const token = localStorage.getItem('chronoAuthToken');
+
+            if (replitUrl && token) {
+                await supplyWatchService.deleteScheduleBlock(replitUrl, token, blockId);
+                setSchedule(prev => prev ? {
+                    ...prev,
+                    blocks: prev.blocks.filter(b => b.id !== blockId)
+                } : null);
+            }
+        } catch (err) {
+            alert("Failed to delete task.");
+        }
     };
 
     const isToday = (date: Date) => {
@@ -169,7 +269,20 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <div className="flex bg-white rounded-lg border border-gray-300 shadow-sm p-1 items-center">
+                    {isAdminOrManager && (
+                        <button
+                            onClick={() => setIsPlanningMode(!isPlanningMode)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border ${isPlanningMode
+                                ? 'bg-orange-600 border-orange-700 text-white animate-pulse'
+                                : 'bg-blue-600 border-blue-700 text-white hover:bg-blue-700'
+                                }`}
+                        >
+                            <Wand2 className="w-4 h-4" />
+                            {isPlanningMode ? 'Exit Planning Mode' : 'Build Schedule'}
+                        </button>
+                    )}
+
+                    <div className="flex bg-white rounded-lg border border-gray-300 shadow-sm p-1 items-center ml-2">
                         <button onClick={handlePrevDay} className="p-1 hover:bg-gray-100 rounded text-gray-600">
                             <ChevronLeft className="w-5 h-5" />
                         </button>
@@ -189,6 +302,86 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                     </button>
                 </div>
             </div>
+
+            {/* AI Planning Panel */}
+            {isPlanningMode && (
+                <div className="bg-orange-50 border-b border-orange-100 p-6 animate-slide-down">
+                    <div className="max-w-4xl mx-auto flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-orange-900 font-bold flex items-center gap-2">
+                                    <Mic className="w-5 h-5" />
+                                    AI Schedule Generator
+                                </h3>
+                                <p className="text-orange-700 text-sm">Paste notes or a transcript of what everyone is doing today.</p>
+                            </div>
+                            <button
+                                onClick={handlePublish}
+                                disabled={!schedule?.blocks.length || loading}
+                                className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-lg shadow-green-100 transition-all disabled:opacity-50"
+                            >
+                                <CheckCircle className="w-4 h-4" />
+                                Publish Schedule
+                            </button>
+                        </div>
+
+                        <div className="flex gap-4">
+                            <div className="flex-1 relative">
+                                <textarea
+                                    value={transcript}
+                                    onChange={(e) => setTranscript(e.target.value)}
+                                    placeholder="Example: Austin is mopping 1-2pm. kurtis is doing printer maintenance 10-12 and then inventory check at 2..."
+                                    className="w-full h-24 p-4 border border-orange-200 rounded-xl bg-white shadow-inner focus:ring-2 focus:ring-orange-500 outline-none text-sm resize-none"
+                                />
+                                <button
+                                    onClick={handleGenerateAI}
+                                    disabled={!transcript.trim() || isGenerating}
+                                    className="absolute bottom-3 right-3 flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold transition-all disabled:opacity-50 shadow-md"
+                                >
+                                    {isGenerating ? (
+                                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                    ) : (
+                                        <Send className="w-3 h-3" />
+                                    )}
+                                    Generate Draft
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Unassigned Workings */}
+                        {unassignedBlocks.length > 0 && (
+                            <div className="mt-4 animate-fade-in">
+                                <h4 className="text-xs font-bold text-orange-800 uppercase mb-2 flex items-center gap-2">
+                                    <AlertCircle className="w-3 h-3" />
+                                    Review Unassigned Tasks ({unassignedBlocks.length})
+                                </h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {unassignedBlocks.map((block) => (
+                                        <div key={block.tempId} className="bg-white p-3 rounded-lg border border-orange-200 shadow-sm flex flex-col gap-2">
+                                            <div>
+                                                <div className="font-bold text-gray-800 text-sm">{block.title}</div>
+                                                <div className="text-[10px] text-gray-500">
+                                                    {block.suggestedName ? `(Suggested for: ${block.suggestedName})` : '(No assignee found)'}
+                                                </div>
+                                            </div>
+                                            <select
+                                                onChange={(e) => handleAssignBlock(block, e.target.value)}
+                                                className="text-xs p-1.5 border rounded bg-orange-50 focus:ring-1 focus:ring-orange-500 outline-none"
+                                                defaultValue=""
+                                            >
+                                                <option value="" disabled>Choose Team Member...</option>
+                                                {teamMembers.map(u => (
+                                                    <option key={u.id} value={u.id}>{u.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {loading && (
                 <div className="flex-1 flex items-center justify-center">
@@ -288,7 +481,20 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                     {block.title}
                                                     {/* Tooltip-ish Details on hover could go here */}
                                                     <div className="hidden group-hover:block absolute top-full left-0 bg-gray-800 text-white text-xs p-2 rounded shadow-lg z-50 w-48 mt-1 whitespace-normal">
-                                                        <div className="font-bold mb-1">{block.title}</div>
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <div className="font-bold">{block.title}</div>
+                                                            {isPlanningMode && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDeleteBlock(block.id);
+                                                                    }}
+                                                                    className="p-1 hover:bg-red-500 rounded transition-colors"
+                                                                >
+                                                                    <X className="w-3 h-3" />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                         <div className="opacity-80 mb-1">{block.description}</div>
                                                         <div className="text-[10px] opacity-60">Status: {block.status}</div>
                                                     </div>
