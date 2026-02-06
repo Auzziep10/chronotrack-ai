@@ -164,6 +164,13 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [authToken]);
 
+  // Handle Role-based Tab Restrictions
+  useEffect(() => {
+    if (currentUser?.role === 'terminal' && (activeTab === 'activity' || activeTab === 'manager')) {
+      setActiveTab('station');
+    }
+  }, [currentUser, activeTab]);
+
   const handleLoginSuccess = async (token: string, userData: any) => {
     setAuthToken(token);
     setCurrentUser(userData);
@@ -378,16 +385,20 @@ const App: React.FC = () => {
               <Radio className={`w-4 h-4 ${activeTab === 'station' ? 'animate-pulse' : ''}`} />
               Master Station (iPad)
             </button>
-            <button
-              onClick={() => setActiveTab('activity')}
-              className={`${activeTab === 'activity'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
-            >
-              <ClipboardList className="w-4 h-4" />
-              Activity Tracker (Mobile)
-            </button>
+
+            {currentUser?.role !== 'terminal' && (
+              <button
+                onClick={() => setActiveTab('activity')}
+                className={`${activeTab === 'activity'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
+              >
+                <ClipboardList className="w-4 h-4" />
+                Activity Tracker (Mobile)
+              </button>
+            )}
+
             <button
               onClick={() => setActiveTab('planner')}
               className={`${activeTab === 'planner'
@@ -398,16 +409,19 @@ const App: React.FC = () => {
               <Calendar className="w-4 h-4" />
               Daily Planner
             </button>
-            <button
-              onClick={() => setActiveTab('manager')}
-              className={`${activeTab === 'manager'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
-            >
-              <BarChart4 className="w-4 h-4" />
-              Activity Manager
-            </button>
+
+            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+              <button
+                onClick={() => setActiveTab('manager')}
+                className={`${activeTab === 'manager'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
+              >
+                <BarChart4 className="w-4 h-4" />
+                Activity Manager
+              </button>
+            )}
           </nav>
         </div>
       </div>
