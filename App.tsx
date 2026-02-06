@@ -48,6 +48,82 @@ const App: React.FC = () => {
   // Daily Schedule State
   const [todaySchedule, setTodaySchedule] = useState<any>(null);
 
+  // Sync Users from Replit helper
+  const syncUsersFromReplit = async (token: string) => {
+    try {
+      const replitUrl = localStorage.getItem('replitAppUrl');
+      if (replitUrl) {
+        const { supplyWatchService } = await import('./services/supplyWatchService');
+        try {
+          const remoteUsers = await supplyWatchService.getUsers(replitUrl, token);
+          if (Array.isArray(remoteUsers)) {
+            setUsers(prevUsers => {
+              const newUsers = [...prevUsers];
+              let hasChanges = false;
+              const defaultAvail: any = {
+                'Monday': { active: true, start: '09:00', end: '17:00' },
+                'Tuesday': { active: true, start: '09:00', end: '17:00' },
+                'Wednesday': { active: true, start: '09:00', end: '17:00' },
+                'Thursday': { active: true, start: '09:00', end: '17:00' },
+                'Friday': { active: true, start: '09:00', end: '17:00' },
+                'Saturday': { active: false, start: '09:00', end: '17:00' },
+                'Sunday': { active: false, start: '09:00', end: '17:00' }
+              };
+
+              remoteUsers.forEach((rUser: any) => {
+                const existingIndex = newUsers.findIndex(u =>
+                  u.id === String(rUser.id) ||
+                  u.name.toLowerCase() === (rUser.username || '').toLowerCase()
+                );
+
+                const firstName = rUser.firstName || '';
+                const lastName = rUser.lastName || '';
+                const fullName = (firstName || lastName)
+                  ? `${firstName} ${lastName}`.trim()
+                  : (rUser.displayName || rUser.username || 'Unknown');
+
+                const initials = (firstName && lastName)
+                  ? (firstName[0] + lastName[0]).toUpperCase()
+                  : (rUser.username || fullName || '??').substring(0, 2).toUpperCase();
+
+                const mappedUser: User = {
+                  id: String(rUser.id),
+                  name: fullName,
+                  username: rUser.username,
+                  role: rUser.role || 'Staff',
+                  primaryDepartment: Department.Production,
+                  avatarInitials: initials,
+                  pin: rUser.pin || '0000',
+                  availability: defaultAvail,
+                  lateDays: 0,
+                  correctionNotes: ''
+                };
+
+                if (existingIndex >= 0) {
+                  const existing = newUsers[existingIndex];
+                  if (existing.name !== mappedUser.name || existing.role !== mappedUser.role) {
+                    newUsers[existingIndex] = { ...existing, ...mappedUser };
+                    hasChanges = true;
+                  }
+                } else {
+                  newUsers.push(mappedUser);
+                  hasChanges = true;
+                }
+              });
+
+              if (hasChanges) return newUsers;
+              return prevUsers;
+            });
+          }
+        } catch (innerErr) {
+          console.warn("Could not fetch remote users", innerErr);
+        }
+      }
+    } catch (err) {
+      console.error("User sync setup failed", err);
+    }
+  };
+
   // Persist state
   useEffect(() => {
     localStorage.setItem('chronoSessions', JSON.stringify(activeSessions));
@@ -61,11 +137,15 @@ const App: React.FC = () => {
     localStorage.setItem('chronoSettings', JSON.stringify(appSettings));
   }, [appSettings]);
 
-  // Fetch today's schedule when authenticated
+  // Fetch today's schedule and sync users when authenticated
   useEffect(() => {
-    const fetchTodaySchedule = async () => {
+    const initAuthenticatedData = async () => {
       if (!authToken) return;
 
+      // Sync users immediately
+      syncUsersFromReplit(authToken);
+
+      // Fetch schedule
       try {
         const replitUrl = localStorage.getItem('replitAppUrl');
         if (replitUrl) {
@@ -78,9 +158,9 @@ const App: React.FC = () => {
       }
     };
 
-    fetchTodaySchedule();
-    // Refresh every 5 minutes
-    const interval = setInterval(fetchTodaySchedule, 5 * 60 * 1000);
+    initAuthenticatedData();
+    // Refresh schedule every 5 minutes
+    const interval = setInterval(initAuthenticatedData, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [authToken]);
 
@@ -91,92 +171,7 @@ const App: React.FC = () => {
     localStorage.setItem('chronoCurrentUser', JSON.stringify(userData));
 
     // Sync Users from Replit
-    try {
-      const replitUrl = localStorage.getItem('replitAppUrl');
-      if (replitUrl) {
-        // Dynamic import to avoid circular dependency issues
-        const { supplyWatchService } = await import('./services/supplyWatchService');
-        // We need to fetch users. Note: API/users endpoint must exist on Replit side.
-        // If it fails, we fall back silently.
-        try {
-          const remoteUsers = await supplyWatchService.getUsers(replitUrl, token);
-
-          if (Array.isArray(remoteUsers)) {
-            setUsers(prevUsers => {
-              const newUsers = [...prevUsers];
-              let hasChanges = false;
-
-              // Helper to get default availability
-              // We do this inside to avoid needing the import if not adding users
-              // But async inside reducer is bad. 
-              // So we will just use a hardcoded default for now if needed.
-              const defaultAvail: any = {
-                'Monday': { active: true, start: '09:00', end: '17:00' },
-                'Tuesday': { active: true, start: '09:00', end: '17:00' },
-                'Wednesday': { active: true, start: '09:00', end: '17:00' },
-                'Thursday': { active: true, start: '09:00', end: '17:00' },
-                'Friday': { active: true, start: '09:00', end: '17:00' },
-                'Saturday': { active: false, start: '09:00', end: '17:00' },
-                'Sunday': { active: false, start: '09:00', end: '17:00' }
-              };
-
-              remoteUsers.forEach((rUser: any) => {
-                // Match by ID if possible, or fuzzy match by name/username
-                const existingIndex = newUsers.findIndex(u =>
-                  u.id === String(rUser.id) ||
-                  u.name.toLowerCase() === (rUser.username || '').toLowerCase()
-                );
-
-                const initials = (rUser.username || rUser.name || '??').substring(0, 2).toUpperCase();
-
-                const mappedUser: User = {
-                  id: String(rUser.id),
-                  name: rUser.displayName || rUser.username || 'Unknown',
-                  username: rUser.username,
-                  role: rUser.role || 'Staff',
-                  primaryDepartment: Department.Production, // Default
-                  avatarInitials: initials,
-                  pin: rUser.pin || '0000', // Default PIN if not in remote
-                  availability: defaultAvail,
-                  lateDays: 0,
-                  correctionNotes: ''
-                };
-
-                if (existingIndex >= 0) {
-                  // Update existing
-                  const existing = newUsers[existingIndex];
-                  if (existing.name !== mappedUser.name || existing.role !== mappedUser.role) {
-                    newUsers[existingIndex] = {
-                      ...existing, // Keep local stuff
-                      name: mappedUser.name,
-                      role: mappedUser.role,
-                      // Update ID to match remote if we matched by name so future syncs are cleaner
-                      id: mappedUser.id
-                    };
-                    hasChanges = true;
-                  }
-                } else {
-                  // Add new
-                  newUsers.push(mappedUser);
-                  hasChanges = true;
-                }
-              });
-
-              if (hasChanges) {
-                // We can't alert easily in a state setter, but it will update.
-                console.log(`Synced ${remoteUsers.length} users.`);
-                return newUsers;
-              }
-              return prevUsers;
-            });
-          }
-        } catch (innerErr) {
-          console.warn("Could not fetch remote users", innerErr);
-        }
-      }
-    } catch (err) {
-      console.error("User sync setup failed", err);
-    }
+    syncUsersFromReplit(token);
   };
 
   const handleLogout = () => {
