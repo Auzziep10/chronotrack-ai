@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { LogIn, Key, Loader2, Link2 } from 'lucide-react';
+import { LogIn, Key, Loader2, Link2, Smartphone } from 'lucide-react';
 
 interface Props {
     onLogin: (token: string, userData: any) => void;
@@ -13,19 +13,20 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleLogin = async (e?: React.FormEvent, customCreds?: { u: string, p: string }) => {
+        if (e) e.preventDefault();
         setIsLoading(true);
         setError('');
 
-        try {
-            // Clean URL (remove trailing slash)
-            const baseUrl = replitUrl.replace(/\/$/, '');
+        const u = customCreds ? customCreds.u : username;
+        const p = customCreds ? customCreds.p : password;
 
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
             const response = await fetch(`${baseUrl}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ username: u, password: p })
             });
 
             if (!response.ok) {
@@ -33,10 +34,7 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
             }
 
             const data = await response.json();
-
-            // Save URL for future uses
             localStorage.setItem('replitAppUrl', baseUrl);
-
             onLogin(data.token, data.user);
         } catch (err: any) {
             setError(err.message || 'Login failed. Please check your credentials.');
@@ -61,15 +59,10 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
 
             <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
                 <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-100">
-                    <form className="space-y-6" onSubmit={handleLogin}>
-
+                    <form className="space-y-6" onSubmit={(e) => handleLogin(e)}>
                         {error && (
-                            <div className="bg-red-50 border-l-4 border-red-500 p-4">
-                                <div className="flex">
-                                    <div className="ml-3">
-                                        <p className="text-sm text-red-700">{error}</p>
-                                    </div>
-                                </div>
+                            <div className="bg-red-50 border-l-4 border-red-500 p-4 font-medium text-sm text-red-700">
+                                {error}
                             </div>
                         )}
 
@@ -83,12 +76,11 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
                                 </div>
                                 <input
                                     id="replitUrl"
-                                    name="replitUrl"
                                     type="url"
                                     required
                                     value={replitUrl}
                                     onChange={(e) => setReplitUrl(e.target.value)}
-                                    className="block w-full pl-10 text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-500"
+                                    className="block w-full pl-10 text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-500 py-2 border px-3"
                                 />
                             </div>
                         </div>
@@ -100,7 +92,6 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
                             <div className="mt-1">
                                 <input
                                     id="username"
-                                    name="username"
                                     type="text"
                                     required
                                     value={username}
@@ -120,7 +111,6 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
                                 </div>
                                 <input
                                     id="password"
-                                    name="password"
                                     type="password"
                                     required
                                     value={password}
@@ -130,7 +120,7 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
                             </div>
                         </div>
 
-                        <div>
+                        <div className="space-y-3">
                             <button
                                 type="submit"
                                 disabled={isLoading}
@@ -147,6 +137,16 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
                                         Sign In
                                     </>
                                 )}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => handleLogin(undefined, { u: 'Warehouse', p: 'Catalyst1!' })}
+                                disabled={isLoading}
+                                className="w-full flex justify-center py-2 px-4 border border-blue-200 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all gap-2"
+                            >
+                                <Smartphone className="w-4 h-4" />
+                                Warehouse iPad Quick-Sign
                             </button>
                         </div>
                     </form>
