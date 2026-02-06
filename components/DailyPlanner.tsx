@@ -40,7 +40,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [unassignedBlocks, setUnassignedBlocks] = useState<any[]>([]);
 
-    const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+    const isAdminOrManager = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && currentUser?.username !== 'Warehouse';
 
     // Time marker for current time
     const [currentTimePercentage, setCurrentTimePercentage] = useState<number | null>(null);
@@ -249,7 +249,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const teamMembers = users.filter(u => u.role !== 'client' && u.username);
 
     // If user is not admin, manager, or a public terminal, only show their own row
-    const canSeeAll = currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentUser?.role === 'terminal';
+    const canSeeAll = currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentUser?.role === 'terminal' || currentUser?.username === 'Warehouse';
     const visibleUsers = canSeeAll
         ? teamMembers
         : teamMembers.filter(u => u.id === currentUser?.id);
