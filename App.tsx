@@ -166,7 +166,7 @@ const App: React.FC = () => {
 
   // Handle Role-based Tab Restrictions
   useEffect(() => {
-    const isTerminal = currentUser?.role === 'terminal' || currentUser?.username === 'Warehouse';
+    const isTerminal = currentUser?.role === 'terminal' || currentUser?.username?.toLowerCase() === 'warehouse';
     if (isTerminal && (activeTab === 'activity' || activeTab === 'manager')) {
       setActiveTab('station');
     }
@@ -352,7 +352,7 @@ const App: React.FC = () => {
               </span>
             </div>
             <div className="h-8 w-px bg-gray-200 mx-2"></div>
-            {currentUser?.role === 'admin' && currentUser?.username !== 'Warehouse' && (
+            {currentUser?.role === 'admin' && currentUser?.username?.toLowerCase() !== 'warehouse' && (
               <button
                 onClick={() => setShowSettings(true)}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -387,7 +387,7 @@ const App: React.FC = () => {
               Master Station (iPad)
             </button>
 
-            {(currentUser?.role !== 'terminal' && currentUser?.username !== 'Warehouse') && (
+            {(currentUser?.role !== 'terminal' && currentUser?.username?.toLowerCase() !== 'warehouse') && (
               <button
                 onClick={() => setActiveTab('activity')}
                 className={`${activeTab === 'activity'
@@ -411,7 +411,7 @@ const App: React.FC = () => {
               Daily Planner
             </button>
 
-            {((currentUser?.role === 'admin' || currentUser?.role === 'manager') && currentUser?.username !== 'Warehouse') && (
+            {((currentUser?.role === 'admin' || currentUser?.role === 'manager') && currentUser?.username?.toLowerCase() !== 'warehouse') && (
               <button
                 onClick={() => setActiveTab('manager')}
                 className={`${activeTab === 'manager'
