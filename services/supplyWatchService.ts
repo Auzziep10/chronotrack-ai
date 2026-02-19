@@ -430,10 +430,12 @@ export const supplyWatchService = {
             const endpoints = [
                 '/api/daily-planner/logs',
                 '/api/daily-planner/work-logs',
+                '/api/daily-planner/activities',
                 '/api/daily-planner/check-ins',
-                '/api/daily_planner/logs',
-                '/api/daily-planner',
                 '/api/planner/logs',
+                '/api/planner/work-logs',
+                '/api/daily_planner/logs',
+                '/api/activity-logs',
                 '/api/logs',
                 '/api/work-logs'
             ];
