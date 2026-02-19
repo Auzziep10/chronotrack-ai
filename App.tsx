@@ -263,31 +263,41 @@ const App: React.FC = () => {
     if (!authToken || !isFirebaseConfigured()) return;
 
     const syncReplitLogs = async () => {
-      const replitUrl = localStorage.getItem('replitAppUrl');
+      let replitUrl = localStorage.getItem('replitAppUrl');
       if (!replitUrl) return;
+      if (!replitUrl.startsWith('http')) replitUrl = `https://${replitUrl}`;
 
       try {
         const { supplyWatchService } = await import('./services/supplyWatchService');
-        const remoteLogs = await supplyWatchService.getLogs(replitUrl, authToken);
+        const remoteLogsRaw = await supplyWatchService.getLogs(replitUrl, authToken);
 
-        if (Array.isArray(remoteLogs)) {
-          // Get today's date in local ISO format to filter
-          const todayStr = new Date().toISOString().split('T')[0];
+        // Handle both direct array and { logs: [] } formats
+        const logs = Array.isArray(remoteLogsRaw) ? remoteLogsRaw : (remoteLogsRaw?.logs || []);
 
-          for (const rLog of remoteLogs) {
-            // Only process logs from today to keep it efficient
-            const logDateStr = new Date(rLog.startTime || rLog.timestamp).toISOString().split('T')[0];
-            if (logDateStr !== todayStr) continue;
+        if (logs.length > 0) {
+          console.debug(`[Sync] Found ${logs.length} Replit logs. Checking for matches...`);
 
-            // Find matching user in ChronoTrack
-            const sessionUser = usersRef.current.find(u =>
-              u.id === String(rLog.userId) ||
-              u.username === rLog.username ||
-              u.name === rLog.userName
-            );
+          // Use a timestamp filter instead of string date to avoid UTC/Local drift
+          const twelveHoursAgo = Date.now() - (12 * 60 * 60 * 1000);
+
+          for (const rLog of logs) {
+            const logTime = new Date(rLog.timestamp || rLog.startTime).getTime();
+            if (isNaN(logTime) || logTime < twelveHoursAgo) continue;
+
+            // Robust User Matching
+            const sessionUser = usersRef.current.find(u => {
+              const matchId = rLog.userId && String(u.id) === String(rLog.userId);
+              const matchUser = rLog.username && u.username?.toLowerCase() === rLog.username.toLowerCase();
+              const matchName = rLog.userName && u.name.toLowerCase() === rLog.userName.toLowerCase();
+              return matchId || matchUser || matchName;
+            });
 
             if (sessionUser) {
-              const logId = rLog.id ? `replit-${rLog.id}` : `replit-${sessionUser.id}-${new Date(rLog.startTime).getTime()}`;
+              const logId = rLog.id ? `replit-${rLog.id}` : `replit-${sessionUser.id}-${logTime}`;
+
+              // Ensure periodEnd is at least the log time to reset the timer
+              const pStart = new Date(rLog.startTime || rLog.timestamp).getTime();
+              const pEnd = new Date(rLog.endTime || rLog.timestamp || rLog.startTime).getTime();
 
               const chronoLog: WorkLog = {
                 id: logId,
@@ -296,9 +306,9 @@ const App: React.FC = () => {
                 department: (rLog.department as Department) || Department.Production,
                 task: rLog.task || 'Staff Check-in',
                 notes: rLog.notes || 'Imported from Replit',
-                timestamp: new Date(rLog.timestamp || rLog.startTime).getTime(),
-                periodStart: new Date(rLog.startTime || rLog.timestamp).getTime(),
-                periodEnd: new Date(rLog.endTime || rLog.timestamp).getTime(),
+                timestamp: logTime,
+                periodStart: isNaN(pStart) ? logTime : pStart,
+                periodEnd: isNaN(pEnd) ? logTime : pEnd,
                 productionData: rLog.productionQuantity ? {
                   quantity: rLog.productionQuantity,
                   projectName: rLog.projectReference || ''
@@ -307,18 +317,18 @@ const App: React.FC = () => {
 
               // Push to Firebase — if the user is active, this also resets their timer
               await firebaseAddLog(sessionUser.id, chronoLog);
+              console.log(`[Sync] Successfully bridged Replit check-in for ${sessionUser.name}`);
             }
           }
         }
       } catch (err) {
-        // Silent fail for background sync to avoid annoying user
-        console.debug("Replit log bridge background sync:", err);
+        console.warn("[Sync] Replit bridge connectivity issue:", err);
       }
     };
 
-    // Run once on load, then every minute
+    // Poll frequently (every 30s) so check-ins feel instant
     syncReplitLogs();
-    const interval = setInterval(syncReplitLogs, 60 * 1000);
+    const interval = setInterval(syncReplitLogs, 30 * 1000);
     return () => clearInterval(interval);
   }, [authToken]);
 

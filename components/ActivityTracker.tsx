@@ -131,8 +131,8 @@ export const ActivityTracker: React.FC<Props> = ({ activeSessions, onLogSubmit, 
                   <p className="text-red-100 text-sm">Hourly check-in required to continue</p>
                 </div>
               </div>
-              <div className="text-red-200 font-mono text-xl">
-                01:00:00
+              <div className="text-red-200 font-mono text-sm px-3 py-1 bg-white/10 rounded-full border border-white/20">
+                OVERDUE
               </div>
             </div>
             <div className="bg-white rounded-b-xl shadow-2xl overflow-hidden p-1">
@@ -208,9 +208,9 @@ export const ActivityTracker: React.FC<Props> = ({ activeSessions, onLogSubmit, 
                               </span>
                             )}
                             <span className={`px-2 py-0.5 rounded font-medium ${task.priority === 'urgent' ? 'bg-red-100 text-red-700' :
-                                task.priority === 'high' ? 'bg-orange-100 text-orange-700' :
-                                  task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                                    'bg-gray-100 text-gray-600'
+                              task.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+                                task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-gray-100 text-gray-600'
                               }`}>
                               {task.priority}
                             </span>
