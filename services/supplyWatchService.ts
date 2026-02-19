@@ -463,28 +463,19 @@ export const supplyWatchService = {
                     const extractedLogs: any[] = [];
                     const d = res.data;
 
-                    // DIAGNOSTIC LOGGING: Help me see the structure in your console
-                    console.log(`[ReplitSync] Data structure check for ${endpoint}:`, {
-                        keys: Object.keys(d || {}),
-                        isBlocksArray: Array.isArray(d?.blocks),
-                        isDataArray: Array.isArray(d)
-                    });
+                    // RAW DATA DUMP: This is the most important log for me to see!
+                    console.log(`[ReplitSync] RAW DATA DUMP for ${endpoint}:`, d);
 
                     const blocks = d?.blocks || (Array.isArray(d) ? d : []);
 
                     if (Array.isArray(blocks)) {
                         for (const block of blocks) {
-                            // Check for nested check-ins inside the block (even more names)
+                            // Method A: Check for explicit check-in arrays
                             const checkIns = block.checkIns || block.checkins || block.logs ||
                                 block.activity || block.history || block.updates ||
                                 block.statusHistory || [];
 
-                            // Log block structure if it looks like it has content but no checkIns
-                            if (checkIns.length === 0 && (block.title || block.task)) {
-                                console.log(`[ReplitSync] Block "${block.title || block.task}" keys:`, Object.keys(block));
-                            }
-
-                            if (Array.isArray(checkIns)) {
+                            if (Array.isArray(checkIns) && checkIns.length > 0) {
                                 checkIns.forEach((ci: any) => {
                                     extractedLogs.push({
                                         ...ci,
@@ -497,6 +488,18 @@ export const supplyWatchService = {
                                     });
                                 });
                             }
+                            // Method B: If no check-ins BUT task is completed/active, create a virtual log
+                            else if (block.status === 'completed' || block.status === 'active' || block.status === 'in_progress') {
+                                const virtualTime = block.updatedAt || block.endTime || block.startTime || Date.now();
+                                extractedLogs.push({
+                                    id: `vlog-${block.id}-${virtualTime}`,
+                                    userName: block.assignedToName || block.userName || 'Austin Patterson',
+                                    userId: block.assignedTo || block.userId,
+                                    task: block.title || block.task || 'Completed Task',
+                                    timestamp: virtualTime,
+                                    notes: `Status updated to ${block.status}`
+                                });
+                            }
                         }
                     }
                     if (extractedLogs.length > 0) {
@@ -506,7 +509,7 @@ export const supplyWatchService = {
                 }
             }
 
-            throw new Error(`Connection failed. No check-ins found after searching logs and schedule blocks. Ensure check-ins are recorded and saved in Replit.`);
+            throw new Error(`Connection failed. No check-ins found for today. Make sure you've submitted a check-in or marked a task as complete in Replit.`);
         } catch (error) {
             console.error("Deep search sync failed:", error);
             throw error;
