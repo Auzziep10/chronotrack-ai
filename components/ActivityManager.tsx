@@ -212,13 +212,25 @@ export const ActivityManager: React.FC<Props> = ({ users, settings }) => {
 
   const handleExportCSV = () => {
     if (filteredTimeCards.length === 0) return;
-    const headers = ['Employee ID', 'Name', 'Focus Area', 'Date', 'Clock In', 'Clock Out', 'Total Hours', 'Status'];
+    const headers = ['Employee ID', 'Name', 'Role', 'Date', 'Clock In', 'Clock Out', 'Gross Hours', 'Idle Hours (Unpaid)', 'Net Hours', 'Status'];
     const rows = filteredTimeCards.map(card => {
       const user = users.find(u => u.id === card.userId);
       const clockIn = new Date(card.clockIn).toLocaleTimeString();
       const clockOut = card.clockOut ? new Date(card.clockOut).toLocaleTimeString() : 'Active';
+      const idle = card.totalIdleHours || 0;
+      const net = card.totalHours;
+      const gross = net + idle;
       return [
-        card.userId, user?.name || 'Unknown', user?.role || 'Unknown', card.date, clockIn, clockOut, card.totalHours.toFixed(2), card.status
+        card.userId,
+        user?.name || 'Unknown',
+        user?.role || 'Unknown',
+        card.date,
+        clockIn,
+        clockOut,
+        gross.toFixed(2),
+        idle.toFixed(2),
+        net.toFixed(2),
+        card.status
       ].map(field => `"${field}"`).join(',');
     });
     const csvContent = [headers.join(','), ...rows].join('\n');
@@ -459,9 +471,69 @@ export const ActivityManager: React.FC<Props> = ({ users, settings }) => {
                     <Download className="w-4 h-4" /> Export All Data
                   </button>
                 </div>
-                {/* Table rendering logic would go here similar to previous version */}
-                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
-                  Select a pay period above to view timecard data.
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase text-[10px]">
+                      <tr>
+                        <th className="px-6 py-3">Member</th>
+                        <th className="px-6 py-3">Date</th>
+                        <th className="px-6 py-3">In / Out</th>
+                        <th className="px-6 py-3">Idle (Unpaid)</th>
+                        <th className="px-6 py-3">Net Work</th>
+                        <th className="px-6 py-3 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {filteredTimeCards.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
+                            No data found for this period.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredTimeCards.map(card => {
+                          const user = users.find(u => u.id === card.userId);
+                          return (
+                            <tr key={card.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="font-bold text-gray-900">{user?.name || 'Unknown'}</div>
+                                <div className="text-[10px] text-gray-500">{user?.role}</div>
+                              </td>
+                              <td className="px-6 py-4 text-gray-600">
+                                {new Date(card.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-xs font-medium text-gray-900">
+                                  {new Date(card.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                                <div className="text-[10px] text-gray-500">
+                                  {card.clockOut ? new Date(card.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className={`text-xs font-bold ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                                  -{card.totalIdleHours?.toFixed(2) || '0.00'} hr
+                                </div>
+                                <div className="text-[10px] text-gray-400">Idle / Missed Logs</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-xs font-bold text-blue-600">
+                                  {card.totalHours.toFixed(2)} hr
+                                </div>
+                                <div className="text-[10px] text-gray-400 font-medium">Applied to Payroll</div>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
+                                  ${card.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                  {card.status}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}

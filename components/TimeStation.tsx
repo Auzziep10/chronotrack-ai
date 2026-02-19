@@ -23,7 +23,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
 
   const handlePinSuccess = (user: User) => {
     const isClockedIn = !!activeSessions[user.id];
-    
+
     if (isClockedIn) {
       // Clock Out Logic
       onClockOut(user);
@@ -33,7 +33,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
       onClockIn(user);
       setPinMessage(`Welcome, ${user.name}! Clocked in successfully.`);
     }
-    
+
     // Close pad and clear message after delay
     setTimeout(() => {
       setShowPinPad(false);
@@ -45,16 +45,16 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
     return (
       <div className="max-w-4xl mx-auto flex flex-col items-center justify-center py-10 space-y-6">
         {pinMessage ? (
-           <div className="bg-green-100 border border-green-200 text-green-800 px-6 py-4 rounded-xl flex items-center gap-3 text-lg font-bold animate-fade-in">
-             <CheckCircle2 className="w-8 h-8" />
-             {pinMessage}
-           </div>
+          <div className="bg-green-100 border border-green-200 text-green-800 px-6 py-4 rounded-xl flex items-center gap-3 text-lg font-bold animate-fade-in">
+            <CheckCircle2 className="w-8 h-8" />
+            {pinMessage}
+          </div>
         ) : (
-           <PinPad 
+          <PinPad
             mode="IN" // Mode is generic here, action determined by user state
             users={users}
-            onSuccess={handlePinSuccess} 
-            onCancel={() => setShowPinPad(false)} 
+            onSuccess={handlePinSuccess}
+            onCancel={() => setShowPinPad(false)}
           />
         )}
       </div>
@@ -72,10 +72,10 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
             <h2 className="text-3xl font-bold mb-2">Master Time Station</h2>
             <p className="text-slate-300">Identify yourself to start or end your shift.</p>
           </div>
-          
+
           <div className="p-10 flex-1 flex flex-col items-center justify-center space-y-8">
             <div className="p-6 bg-blue-50 rounded-full">
-               <ShieldCheck className="w-20 h-20 text-blue-600" />
+              <ShieldCheck className="w-20 h-20 text-blue-600" />
             </div>
 
             <button
@@ -85,7 +85,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
               <span>Enter PIN</span>
               <span className="text-sm font-normal opacity-80">Clock In / Clock Out</span>
             </button>
-            
+
             <p className="text-center text-gray-400 text-sm max-w-xs">
               Enter your 4-digit PIN. The system will automatically clock you in or out based on your current status.
             </p>
@@ -106,7 +106,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
               Live Tracking
             </div>
           </div>
-          
+
           {sessionsList.length === 0 ? (
             <div className="p-12 text-center text-gray-400 flex flex-col items-center">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -123,10 +123,11 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
 
                 return (
                   <div key={session.userId} className={`p-4 rounded-xl border-2 transition-all hover:shadow-md
-                    ${isOverdue ? 'border-red-100 bg-red-50' : 'border-green-100 bg-white'}`}>
+                    ${session.isPaused ? 'border-amber-200 bg-amber-50 shadow-inner' :
+                      isOverdue ? 'border-red-100 bg-red-50' : 'border-green-100 bg-white'}`}>
                     <div className="flex items-center gap-3 mb-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm
-                        ${isOverdue ? 'bg-red-400' : 'bg-green-500'}`}>
+                        ${session.isPaused ? 'bg-amber-500' : isOverdue ? 'bg-red-400' : 'bg-green-500'}`}>
                         {session.user.avatarInitials}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -134,22 +135,32 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                         <p className="text-xs text-gray-500 truncate">{session.user.role}</p>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500">Shift Time:</span>
-                        <Timer startTime={session.startTime} isActive={true} />
+                        <Timer
+                          startTime={session.startTime}
+                          isActive={!session.isPaused}
+                          totalIdleTimeMs={session.totalIdleTimeMs}
+                          currentIdleStartTime={session.currentIdleStartTime}
+                        />
                       </div>
-                      
-                      {isOverdue && (
+
+                      {session.isPaused ? (
+                        <div className="flex items-center gap-2 text-xs text-amber-700 font-bold bg-amber-200 px-2 py-1 rounded animate-pulse">
+                          <Pause className="w-3 h-3" />
+                          <span>SHIFT PAUSED (IDLE)</span>
+                        </div>
+                      ) : isOverdue && (
                         <div className="flex items-center gap-2 text-xs text-red-600 font-semibold bg-red-100 px-2 py-1 rounded">
                           <ShieldCheck className="w-3 h-3" />
                           <span>Check-in Required</span>
                         </div>
                       )}
-                      
+
                       <div className="text-xs text-gray-400 pt-2 border-t border-gray-100 mt-2">
-                         Last Log: {new Date(session.lastLogTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                        Last Log: {new Date(session.lastLogTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
                   </div>

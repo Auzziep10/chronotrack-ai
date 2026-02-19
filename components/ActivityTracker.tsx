@@ -136,18 +136,29 @@ export const ActivityTracker: React.FC<Props> = ({
       {isLocked && (
         <div className="fixed inset-0 bg-gray-900/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-2xl animate-in zoom-in-95 duration-200">
-            <div className="bg-red-600 text-white px-6 py-4 rounded-t-xl flex items-center justify-between shadow-lg">
+            <div className={`${selectedSession.isPaused ? 'bg-amber-600' : 'bg-red-600'} text-white px-6 py-4 rounded-t-xl flex items-center justify-between shadow-lg`}>
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/20 rounded-lg">
-                  <Lock className="w-6 h-6" />
+                  {selectedSession.isPaused ? <Clock className="w-6 h-6 animate-pulse" /> : <Lock className="w-6 h-6" />}
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold">Session Locked for {selectedSession.user.name}</h2>
-                  <p className="text-red-100 text-sm">Hourly check-in required to continue</p>
+                  <h2 className="text-lg font-bold">
+                    {selectedSession.isPaused ? 'Shift Paused' : 'Session Locked'} for {selectedSession.user.name}
+                  </h2>
+                  <p className="text-red-100 text-sm">
+                    {selectedSession.isPaused
+                      ? 'Timer stopped. Submit a check-in to resume paid work.'
+                      : 'Hourly check-in required to continue'}
+                  </p>
                 </div>
               </div>
-              <div className="text-red-200 font-mono text-sm px-3 py-1 bg-white/10 rounded-full border border-white/20">
-                OVERDUE
+              <div className="flex flex-col items-end gap-1">
+                <div className="text-white font-mono text-sm px-3 py-1 bg-white/10 rounded-full border border-white/20">
+                  {selectedSession.isPaused ? 'IDLE' : 'OVERDUE'}
+                </div>
+                <div className="text-[10px] font-bold text-white/70 uppercase">
+                  {Math.floor((Date.now() - selectedSession.lastLogTime) / 60000)} mins since last log
+                </div>
               </div>
             </div>
             <div className="bg-white rounded-b-xl shadow-2xl overflow-hidden p-1">

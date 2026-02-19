@@ -61,6 +61,9 @@ export interface UserSession {
   startTime: number;
   lastLogTime: number;
   logs: WorkLog[];
+  isPaused?: boolean;
+  currentIdleStartTime?: number | null;
+  totalIdleTimeMs?: number;
 }
 
 export interface DailyTimeCard {
@@ -70,6 +73,7 @@ export interface DailyTimeCard {
   clockIn: number;
   clockOut: number | null;
   totalHours: number;
+  totalIdleHours?: number; // Subtracted from total due to missed check-ins
   status: 'Complete' | 'Active' | 'Missing';
 }
 

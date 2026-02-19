@@ -4,25 +4,31 @@ import { Clock } from 'lucide-react';
 interface Props {
   startTime: number | null;
   isActive: boolean;
+  totalIdleTimeMs?: number;
+  currentIdleStartTime?: number | null;
 }
 
-export const Timer: React.FC<Props> = ({ startTime, isActive }) => {
+export const Timer: React.FC<Props> = ({ startTime, isActive, totalIdleTimeMs = 0, currentIdleStartTime = null }) => {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     let interval: number;
 
-    if (isActive && startTime) {
-      setElapsed(Date.now() - startTime); // Initial sync
-      interval = window.setInterval(() => {
-        setElapsed(Date.now() - startTime);
-      }, 1000);
-    } else {
-      setElapsed(0);
+    if (startTime) {
+      const updateElapsed = () => {
+        const now = (!isActive && currentIdleStartTime) ? currentIdleStartTime : Date.now();
+        const totalIdle = totalIdleTimeMs;
+        setElapsed(Math.max(0, now - startTime - totalIdle));
+      };
+
+      updateElapsed();
+      if (isActive) {
+        interval = window.setInterval(updateElapsed, 1000);
+      }
     }
 
     return () => clearInterval(interval);
-  }, [isActive, startTime]);
+  }, [isActive, startTime, totalIdleTimeMs, currentIdleStartTime]);
 
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);

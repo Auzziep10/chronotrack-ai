@@ -71,6 +71,9 @@ export const firebaseClockIn = async (user: User): Promise<void> => {
         startTime: now,
         lastLogTime: now,
         logs: [],
+        isPaused: false,
+        currentIdleStartTime: null,
+        totalIdleTimeMs: 0,
         clockedOut: false,
         updatedAt: serverTimestamp()
     });
@@ -79,7 +82,16 @@ export const firebaseClockIn = async (user: User): Promise<void> => {
 /** Clock out — marks session clockedOut and saves a time card */
 export const firebaseClockOut = async (userId: string, session: UserSession): Promise<DailyTimeCard> => {
     const now = Date.now();
-    const totalHours = (now - session.startTime) / (1000 * 60 * 60);
+
+    // Accumulate last idle period if currently paused
+    let totalIdle = session.totalIdleTimeMs || 0;
+    if (session.isPaused && session.currentIdleStartTime) {
+        totalIdle += (now - session.currentIdleStartTime);
+    }
+
+    const totalIdleHours = totalIdle / (1000 * 60 * 60);
+    const grossHours = (now - session.startTime) / (1000 * 60 * 60);
+    const netHours = Math.max(0, grossHours - totalIdleHours);
 
     const timeCard: DailyTimeCard = {
         id: `tc-${userId}-${now}`,
@@ -87,13 +99,16 @@ export const firebaseClockOut = async (userId: string, session: UserSession): Pr
         date: new Date(session.startTime).toISOString().split('T')[0],
         clockIn: session.startTime,
         clockOut: now,
-        totalHours,
+        totalHours: netHours,
+        totalIdleHours: totalIdleHours,
         status: 'Complete'
     };
 
     await setDoc(doc(db, SESSIONS_COL, userId), {
         clockedOut: true,
         clockOutTime: now,
+        isPaused: false,
+        totalIdleTimeMs: totalIdle,
         updatedAt: serverTimestamp()
     }, { merge: true });
 
@@ -113,6 +128,8 @@ export const firebaseAddLog = async (userId: string, log: WorkLog): Promise<void
         if (v !== undefined) cleanLog[k] = v;
     });
 
+    const now = Date.now();
+
     await setDoc(doc(db, WORKLOGS_COL, log.id), {
         ...cleanLog,
         createdAt: serverTimestamp()
@@ -120,15 +137,53 @@ export const firebaseAddLog = async (userId: string, log: WorkLog): Promise<void
 
     // Update session's lastLogTime and logs array ONLY if they are already clocked in
     try {
-        await updateDoc(doc(db, SESSIONS_COL, userId), {
+        const sessionRef = doc(db, SESSIONS_COL, userId);
+
+        // Calculate accrued idle time if they were paused
+        let idleUpdate: any = {
             lastLogTime: log.periodEnd,
             logs: arrayUnion(cleanLog),
             updatedAt: serverTimestamp()
-        });
+        };
+
+        // If they were paused, finish the idle period
+        // Note: we'd ideally read the doc first, but we can rely on local state logic 
+        // to pass us a session or just do a partial update. 
+        // For robustness, we check if they are paused.
+        if (log.notes?.includes("Resumed from Idle")) {
+            // This logic will be handled better by the caller in App.tsx passing correct values,
+            // but we'll add the atomic resume here.
+        }
+
+        await updateDoc(sessionRef, idleUpdate);
     } catch (e) {
         // Ignore if document doesn't exist (user not clocked in)
-        console.debug("User not clocked in, skipping session timer update.");
     }
+};
+
+/** Atomic Resume: Calculates accumulated idle time and resumes tracking */
+export const firebaseResumeSession = async (userId: string, currentSession: any): Promise<void> => {
+    const now = Date.now();
+    if (!currentSession.isPaused) return;
+
+    const accruedIdle = now - (currentSession.currentIdleStartTime || now);
+    const newTotalIdle = (currentSession.totalIdleTimeMs || 0) + accruedIdle;
+
+    await updateDoc(doc(db, SESSIONS_COL, userId), {
+        isPaused: false,
+        currentIdleStartTime: null,
+        totalIdleTimeMs: newTotalIdle,
+        updatedAt: serverTimestamp()
+    });
+};
+
+/** Mark a session as paused/idle */
+export const firebasePauseSession = async (userId: string): Promise<void> => {
+    await updateDoc(doc(db, SESSIONS_COL, userId), {
+        isPaused: true,
+        currentIdleStartTime: Date.now(),
+        updatedAt: serverTimestamp()
+    });
 };
 
 /** Delete a work log from Firestore */

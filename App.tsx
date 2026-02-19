@@ -264,6 +264,31 @@ const App: React.FC = () => {
       unsubUsers();
     };
   }, [authToken]); // Add users to dependency to ensure mapping works when users list changes
+
+  // ─── IDLE ENFORCEMENT MONITOR ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!isFirebaseConfigured() || !authToken) return;
+
+    const IDLE_THRESHOLD_MS = 70 * 60 * 1000; // 70 minutes (60m lock + 10m grace)
+
+    const checkIdleSessions = async () => {
+      const now = Date.now();
+      for (const [userId, session] of Object.entries(activeSessions) as [string, UserSession][]) {
+        if (session.isPaused) continue;
+
+        const timeSinceLastLog = now - session.lastLogTime;
+        if (timeSinceLastLog >= IDLE_THRESHOLD_MS) {
+          console.log(`[IdleEnforcement] Pausing session for ${session.user.name} (70m threshold reached)`);
+          const { firebasePauseSession } = await import('./services/firebaseService');
+          await firebasePauseSession(userId);
+        }
+      }
+    };
+
+    const interval = setInterval(checkIdleSessions, 15000); // Check every 15 seconds
+    return () => clearInterval(interval);
+  }, [activeSessions, authToken]);
+
   // ─── REPLIT -> FIREBASE LOG BRIDGE ──────────────────────────────────────────
   // Sync hourly check-ins from Replit Supply Watch into ChronoTrack Firebase
   useEffect(() => {
@@ -563,12 +588,20 @@ const App: React.FC = () => {
         userName: session.user.name,
         timestamp: now,
         periodStart: session.lastLogTime,
-        periodEnd: now
+        periodEnd: now,
+        notes: session.isPaused
+          ? `${logData.notes || ''} (Resumed from Idle: spent ${Math.round((now - (session.currentIdleStartTime || now)) / 60000)}m unpaid)`.trim()
+          : logData.notes
       };
 
       // Primary: Write to Firebase
       if (isFirebaseConfigured()) {
-        firebaseAddLog(userId, newLog).catch(err => console.error('Firebase log failed:', err));
+        import('./services/firebaseService').then(async (mod) => {
+          if (session.isPaused) {
+            await mod.firebaseResumeSession(userId, session);
+          }
+          await mod.firebaseAddLog(userId, newLog);
+        });
       }
 
       // Save locally as backup
@@ -589,7 +622,9 @@ const App: React.FC = () => {
         [userId]: {
           ...session,
           logs: [...session.logs, newLog],
-          lastLogTime: now // Reset timer for this specific user
+          lastLogTime: now, // Reset timer for this specific user
+          isPaused: false,
+          currentIdleStartTime: null
         }
       };
     });
