@@ -184,4 +184,18 @@ export const firebaseGetTimeCards = async (): Promise<DailyTimeCard[]> => {
     });
 };
 
+/** Get all work logs from Firestore */
+export const firebaseGetLogs = async (): Promise<WorkLog[]> => {
+    const snapshot = await getDocs(collection(db, WORKLOGS_COL));
+    return snapshot.docs.map(d => {
+        const data = d.data();
+        return {
+            ...data,
+            timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toMillis() : (data.timestamp || Date.now()),
+            periodStart: data.periodStart instanceof Timestamp ? data.periodStart.toMillis() : data.periodStart,
+            periodEnd: data.periodEnd instanceof Timestamp ? data.periodEnd.toMillis() : data.periodEnd
+        } as WorkLog;
+    });
+};
+
 export { db };

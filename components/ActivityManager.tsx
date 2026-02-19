@@ -129,39 +129,24 @@ export const ActivityManager: React.FC<Props> = ({ users, settings }) => {
       setTimeCards(localData.timeCards);
       setLogs(localData.logs);
 
-      // 2. Sync from Backend if possible
-      const authToken = localStorage.getItem('chronoAuthToken');
-      const replitUrl = localStorage.getItem('replitAppUrl');
+      // 2. Sync from Backend (Firebase)
+      const {
+        firebaseGetLogs,
+        firebaseGetTimeCards,
+        isFirebaseConfigured
+      } = await import('../services/firebaseService');
 
-      if (authToken && replitUrl) {
+      if (isFirebaseConfigured()) {
         try {
-          const { supplyWatchService } = await import('../services/supplyWatchService');
-
-          // Parallel fetch for speed
           const [remoteLogs, remoteTimeCards] = await Promise.all([
-            supplyWatchService.getLogs(replitUrl, authToken).catch(() => []),
-            supplyWatchService.getTimeCards(replitUrl, authToken).catch(() => [])
+            firebaseGetLogs().catch(() => []),
+            firebaseGetTimeCards().catch(() => [])
           ]);
 
-          if (remoteLogs && Array.isArray(remoteLogs)) {
-            // Merge or replace? For "seeing the same thing", replace is better if backend is truth
-            setLogs(remoteLogs.map((l: any) => ({
-              ...l,
-              timestamp: new Date(l.startTime || l.timestamp).getTime(),
-              periodStart: new Date(l.startTime).getTime(),
-              periodEnd: new Date(l.endTime).getTime()
-            })));
-          }
-
-          if (remoteTimeCards && Array.isArray(remoteTimeCards)) {
-            setTimeCards(remoteTimeCards.map((tc: any) => ({
-              ...tc,
-              clockIn: new Date(tc.clockIn).getTime(),
-              clockOut: tc.clockOut ? new Date(tc.clockOut).getTime() : null
-            })));
-          }
+          if (remoteLogs && Array.isArray(remoteLogs)) setLogs(remoteLogs);
+          if (remoteTimeCards && Array.isArray(remoteTimeCards)) setTimeCards(remoteTimeCards);
         } catch (err) {
-          console.warn("Failed to sync historical data from backend", err);
+          console.warn("Failed to sync historical data from Firebase", err);
         }
       }
     };

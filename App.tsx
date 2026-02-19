@@ -182,61 +182,11 @@ const App: React.FC = () => {
       try {
         const { supplyWatchService } = await import('./services/supplyWatchService');
 
-        // Fetch schedule
+        // Fetch schedule only — sessions are handled by Firebase listener
         const schedule = await supplyWatchService.getDailySchedule(replitUrl, authToken, new Date());
         setTodaySchedule(schedule);
-
-        // Fetch active sessions and all logs from server to sync discrepancy
-        const [remoteSessions, remoteLogs] = await Promise.all([
-          supplyWatchService.getActiveSessions(replitUrl, authToken).catch(() => []),
-          supplyWatchService.getLogs(replitUrl, authToken).catch(() => [])
-        ]);
-
-        if (remoteSessions && Array.isArray(remoteSessions)) {
-          setActiveSessions(prev => {
-            const newSessions: Record<string, UserSession> = {};
-
-            remoteSessions.forEach((rSess: any) => {
-              // Only process logs that are currently active (no shiftEnd)
-              if (!rSess.shiftEnd) {
-                const sessionUser = users.find(u => u.id === String(rSess.userId) || u.username === rSess.username);
-
-                if (sessionUser) {
-                  // Filter logs for this specific user that belong to the current shift
-                  const shiftStart = new Date(rSess.shiftStart).getTime();
-                  const userShiftLogs = Array.isArray(remoteLogs)
-                    ? remoteLogs
-                      .filter((l: any) => String(l.userId) === sessionUser.id && new Date(l.startTime || l.timestamp).getTime() >= shiftStart)
-                      .map((l: any) => ({
-                        ...l,
-                        id: l.id || crypto.randomUUID(),
-                        timestamp: l.timestamp || new Date(l.startTime).getTime(),
-                        periodStart: new Date(l.startTime || l.timestamp).getTime(),
-                        periodEnd: new Date(l.endTime || l.timestamp).getTime(),
-                        userName: sessionUser.name
-                      }))
-                    : [];
-
-                  const lastLogTime = userShiftLogs.length > 0
-                    ? Math.max(...userShiftLogs.map(l => l.periodEnd))
-                    : new Date(rSess.updatedAt || rSess.shiftStart).getTime();
-
-                  newSessions[sessionUser.id] = {
-                    userId: sessionUser.id,
-                    user: sessionUser,
-                    startTime: shiftStart,
-                    lastLogTime: lastLogTime,
-                    logs: userShiftLogs
-                  };
-                }
-              }
-            });
-
-            return newSessions;
-          });
-        }
       } catch (err) {
-        console.warn("Could not fetch remote data:", err);
+        console.warn("Could not fetch remote schedule:", err);
       }
     };
 
