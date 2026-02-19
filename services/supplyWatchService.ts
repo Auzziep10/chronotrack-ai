@@ -400,11 +400,23 @@ export const supplyWatchService = {
      */
     getLogs: async (replitUrl: string, token: string) => {
         try {
-            const baseUrl = replitUrl.replace(/\/$/, '');
+            let baseUrl = replitUrl.replace(/\/$/, '');
+            if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+
             const response = await fetch(`${baseUrl}/api/daily-planner/logs`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!response.ok) throw new Error(`Failed to fetch logs: ${response.statusText}`);
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`API Error ${response.status}: ${text.substring(0, 100)}`);
+            }
+
+            const contentType = response.headers.get('content-type');
+            if (contentType && !contentType.includes('application/json')) {
+                throw new Error("Server returned HTML instead of JSON. Check your Replit App URL.");
+            }
+
             return await response.json();
         } catch (error) {
             console.error("Failed to fetch logs:", error);

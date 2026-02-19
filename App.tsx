@@ -58,6 +58,7 @@ const App: React.FC = () => {
   // Replit Bridge State
   const [lastReplitSync, setLastReplitSync] = useState<number>(0);
   const [isSyncingReplit, setIsSyncingReplit] = useState(false);
+  const [replitSyncError, setReplitSyncError] = useState<string | null>(null);
   const [replitSyncTrigger, setReplitSyncTrigger] = useState(0);
   const syncedLogIdsRef = useRef<Set<string>>(new Set());
 
@@ -277,69 +278,69 @@ const App: React.FC = () => {
         const { supplyWatchService } = await import('./services/supplyWatchService');
         const remoteLogsRaw = await supplyWatchService.getLogs(replitUrl, authToken);
 
-        // Handle both direct array and { logs: [] } formats
         const logs = Array.isArray(remoteLogsRaw) ? remoteLogsRaw : (remoteLogsRaw?.logs || []);
 
-        if (logs.length > 0) {
-          setIsSyncingReplit(true);
-          const nowTs = Date.now();
-          const threeHoursAgo = nowTs - (3 * 60 * 60 * 1000);
+        const nowTs = Date.now();
+        const twelveHoursAgo = nowTs - (12 * 60 * 60 * 1000);
 
-          for (const rLog of logs) {
-            const logTimeStr = rLog.timestamp || rLog.startTime || rLog.createdAt || rLog.created_at;
-            const logTime = new Date(logTimeStr).getTime();
+        // Helper to normalize strings for robust matching
+        const norm = (s: any) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, '');
 
-            if (isNaN(logTime) || logTime < threeHoursAgo) continue;
+        for (const rLog of logs) {
+          const logTimeStr = rLog.timestamp || rLog.startTime || rLog.createdAt || rLog.created_at;
+          const logTime = new Date(logTimeStr).getTime();
 
-            const rawLogId = rLog.id || `check-${rLog.userId || rLog.username}-${logTime}`;
-            if (syncedLogIdsRef.current.has(rawLogId)) continue;
+          if (isNaN(logTime) || logTime < twelveHoursAgo) continue;
 
-            const cleanRName = (rLog.userName || rLog.user_name || rLog.name || "").trim().toLowerCase();
-            const cleanRUser = (rLog.username || "").trim().toLowerCase();
+          const rawLogId = rLog.id || `check-${rLog.userId || rLog.username}-${logTime}`;
+          if (syncedLogIdsRef.current.has(rawLogId)) continue;
 
-            const sessionUser = usersRef.current.find(u => {
-              const uName = u.name.trim().toLowerCase();
-              const uUser = (u.username || "").trim().toLowerCase();
+          const cleanRName = norm(rLog.userName || rLog.user_name || rLog.name);
+          const cleanRUser = norm(rLog.username || rLog.user_username);
 
-              const matchId = rLog.userId && String(u.id) === String(rLog.userId);
-              const matchUser = cleanRUser && (uUser === cleanRUser);
-              const matchName = cleanRName && (uName === cleanRName);
+          const sessionUser = usersRef.current.find(u => {
+            const uName = norm(u.name);
+            const uUser = norm(u.username);
 
-              return matchId || matchUser || matchName;
-            });
+            const matchId = rLog.userId && String(u.id) === String(rLog.userId);
+            const matchUser = cleanRUser && (uUser === cleanRUser);
+            const matchName = cleanRName && (uName === cleanRName);
 
-            if (sessionUser) {
-              const logId = `replit-${rawLogId}`;
-              const pEndRaw = new Date(rLog.endTime || rLog.timestamp || rLog.startTime).getTime();
-              let pEnd = isNaN(pEndRaw) ? logTime : pEndRaw;
+            return matchId || matchUser || matchName;
+          });
 
-              if (pEnd < logTime) pEnd = logTime;
+          if (sessionUser) {
+            const logId = `replit-${rawLogId}`;
+            const pEndRaw = new Date(rLog.endTime || rLog.timestamp || rLog.startTime).getTime();
+            let pEnd = isNaN(pEndRaw) ? logTime : pEndRaw;
 
-              const chronoLog: WorkLog = {
-                id: logId,
-                userId: sessionUser.id,
-                userName: sessionUser.name,
-                department: (rLog.department as Department) || Department.Production,
-                task: rLog.task || 'Staff Check-in',
-                notes: rLog.notes || 'Imported from Replit',
-                timestamp: logTime,
-                periodStart: new Date(rLog.startTime || rLog.timestamp).getTime() || logTime,
-                periodEnd: pEnd,
-                productionData: rLog.productionQuantity ? {
-                  quantity: rLog.productionQuantity,
-                  projectName: rLog.projectReference || ''
-                } : undefined
-              };
+            if (pEnd < logTime) pEnd = logTime;
 
-              await firebaseAddLog(sessionUser.id, chronoLog);
-              syncedLogIdsRef.current.add(rawLogId);
-              console.log(`[ReplitSync] Bridged check-in for ${sessionUser.name}`);
-            }
+            const chronoLog: WorkLog = {
+              id: logId,
+              userId: sessionUser.id,
+              userName: sessionUser.name,
+              department: (rLog.department as Department) || Department.Production,
+              task: rLog.task || 'Staff Check-in',
+              notes: rLog.notes || 'Imported from Replit',
+              timestamp: logTime,
+              periodStart: new Date(rLog.startTime || rLog.timestamp).getTime() || logTime,
+              periodEnd: pEnd,
+              productionData: rLog.productionQuantity ? {
+                quantity: rLog.productionQuantity,
+                projectName: rLog.projectReference || ''
+              } : undefined
+            };
+
+            await firebaseAddLog(sessionUser.id, chronoLog);
+            syncedLogIdsRef.current.add(rawLogId);
+            console.log(`[ReplitSync] Bridged check-in for ${sessionUser.name}`);
           }
-          setLastReplitSync(Date.now());
         }
-      } catch (err) {
+        setLastReplitSync(Date.now());
+      } catch (err: any) {
         console.warn("[ReplitSync] Sync issue:", err);
+        setReplitSyncError(err.message || String(err));
       } finally {
         setIsSyncingReplit(false);
       }
@@ -724,6 +725,7 @@ const App: React.FC = () => {
               onManualSync={() => setReplitSyncTrigger(prev => prev + 1)}
               isSyncingReplit={isSyncingReplit}
               lastSyncTime={lastReplitSync}
+              syncError={replitSyncError}
             />
           ) : activeTab === 'planner' ? (
             // Lazy load nicely or just static

@@ -14,6 +14,7 @@ interface Props {
   onManualSync?: () => void;
   isSyncingReplit?: boolean;
   lastSyncTime?: number;
+  syncError?: string | null;
 }
 
 export const ActivityTracker: React.FC<Props> = ({
@@ -23,7 +24,8 @@ export const ActivityTracker: React.FC<Props> = ({
   scheduledTasks = [],
   onManualSync,
   isSyncingReplit = false,
-  lastSyncTime = 0
+  lastSyncTime = 0,
+  syncError = null
 }) => {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
@@ -157,22 +159,37 @@ export const ActivityTracker: React.FC<Props> = ({
               />
 
               {onManualSync && (
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                  <div className="text-xs text-gray-500">
-                    {lastSyncTime > 0 ? (
-                      <span>Last checked Replit: {new Date(lastSyncTime).toLocaleTimeString()}</span>
-                    ) : (
-                      <span>Not synced with Replit yet</span>
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Replit Sync Status</div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onManualSync();
+                      }}
+                      disabled={isSyncingReplit}
+                      className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 disabled:opacity-50 transition-all hover:scale-105 active:scale-95 px-2 py-1 rounded bg-blue-50/50"
+                    >
+                      <RefreshCcw className={`w-3.5 h-3.5 ${isSyncingReplit ? 'animate-spin' : ''}`} />
+                      {isSyncingReplit ? 'Syncing...' : 'Check for Replit Check-in'}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px]">
+                    <div className="text-gray-500">
+                      {lastSyncTime > 0 ? (
+                        <span>Last match: {new Date(lastSyncTime).toLocaleTimeString()}</span>
+                      ) : (
+                        <span>No historical matches found for this session</span>
+                      )}
+                    </div>
+                    {syncError && (
+                      <div className="text-red-500 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3" />
+                        {syncError.includes('JSON') ? 'Check URL' : 'Sync Error'}
+                      </div>
                     )}
                   </div>
-                  <button
-                    onClick={onManualSync}
-                    disabled={isSyncingReplit}
-                    className="flex items-center gap-2 text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50"
-                  >
-                    <RefreshCcw className={`w-3.5 h-3.5 ${isSyncingReplit ? 'animate-spin' : ''}`} />
-                    {isSyncingReplit ? 'Syncing...' : 'Check for Replit Check-in'}
-                  </button>
                 </div>
               )}
             </div>
