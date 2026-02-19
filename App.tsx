@@ -55,6 +55,12 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('station');
   const [showSettings, setShowSettings] = useState(false);
 
+  // Replit Bridge State
+  const [lastReplitSync, setLastReplitSync] = useState<number>(0);
+  const [isSyncingReplit, setIsSyncingReplit] = useState(false);
+  const [replitSyncTrigger, setReplitSyncTrigger] = useState(0);
+  const syncedLogIdsRef = useRef<Set<string>>(new Set());
+
   // Track when we last made a local user update (to avoid sync overwriting unsaved data)
   const lastUserUpdateRef = useRef<number>(0);
 
@@ -275,29 +281,39 @@ const App: React.FC = () => {
         const logs = Array.isArray(remoteLogsRaw) ? remoteLogsRaw : (remoteLogsRaw?.logs || []);
 
         if (logs.length > 0) {
-          console.debug(`[Sync] Found ${logs.length} Replit logs. Checking for matches...`);
-
-          // Use a timestamp filter instead of string date to avoid UTC/Local drift
-          const twelveHoursAgo = Date.now() - (12 * 60 * 60 * 1000);
+          setIsSyncingReplit(true);
+          const nowTs = Date.now();
+          const threeHoursAgo = nowTs - (3 * 60 * 60 * 1000);
 
           for (const rLog of logs) {
-            const logTime = new Date(rLog.timestamp || rLog.startTime).getTime();
-            if (isNaN(logTime) || logTime < twelveHoursAgo) continue;
+            const logTimeStr = rLog.timestamp || rLog.startTime || rLog.createdAt || rLog.created_at;
+            const logTime = new Date(logTimeStr).getTime();
 
-            // Robust User Matching
+            if (isNaN(logTime) || logTime < threeHoursAgo) continue;
+
+            const rawLogId = rLog.id || `check-${rLog.userId || rLog.username}-${logTime}`;
+            if (syncedLogIdsRef.current.has(rawLogId)) continue;
+
+            const cleanRName = (rLog.userName || rLog.user_name || rLog.name || "").trim().toLowerCase();
+            const cleanRUser = (rLog.username || "").trim().toLowerCase();
+
             const sessionUser = usersRef.current.find(u => {
+              const uName = u.name.trim().toLowerCase();
+              const uUser = (u.username || "").trim().toLowerCase();
+
               const matchId = rLog.userId && String(u.id) === String(rLog.userId);
-              const matchUser = rLog.username && u.username?.toLowerCase() === rLog.username.toLowerCase();
-              const matchName = rLog.userName && u.name.toLowerCase() === rLog.userName.toLowerCase();
+              const matchUser = cleanRUser && (uUser === cleanRUser);
+              const matchName = cleanRName && (uName === cleanRName);
+
               return matchId || matchUser || matchName;
             });
 
             if (sessionUser) {
-              const logId = rLog.id ? `replit-${rLog.id}` : `replit-${sessionUser.id}-${logTime}`;
+              const logId = `replit-${rawLogId}`;
+              const pEndRaw = new Date(rLog.endTime || rLog.timestamp || rLog.startTime).getTime();
+              let pEnd = isNaN(pEndRaw) ? logTime : pEndRaw;
 
-              // Ensure periodEnd is at least the log time to reset the timer
-              const pStart = new Date(rLog.startTime || rLog.timestamp).getTime();
-              const pEnd = new Date(rLog.endTime || rLog.timestamp || rLog.startTime).getTime();
+              if (pEnd < logTime) pEnd = logTime;
 
               const chronoLog: WorkLog = {
                 id: logId,
@@ -307,30 +323,32 @@ const App: React.FC = () => {
                 task: rLog.task || 'Staff Check-in',
                 notes: rLog.notes || 'Imported from Replit',
                 timestamp: logTime,
-                periodStart: isNaN(pStart) ? logTime : pStart,
-                periodEnd: isNaN(pEnd) ? logTime : pEnd,
+                periodStart: new Date(rLog.startTime || rLog.timestamp).getTime() || logTime,
+                periodEnd: pEnd,
                 productionData: rLog.productionQuantity ? {
                   quantity: rLog.productionQuantity,
                   projectName: rLog.projectReference || ''
                 } : undefined
               };
 
-              // Push to Firebase — if the user is active, this also resets their timer
               await firebaseAddLog(sessionUser.id, chronoLog);
-              console.log(`[Sync] Successfully bridged Replit check-in for ${sessionUser.name}`);
+              syncedLogIdsRef.current.add(rawLogId);
+              console.log(`[ReplitSync] Bridged check-in for ${sessionUser.name}`);
             }
           }
+          setLastReplitSync(Date.now());
         }
       } catch (err) {
-        console.warn("[Sync] Replit bridge connectivity issue:", err);
+        console.warn("[ReplitSync] Sync issue:", err);
+      } finally {
+        setIsSyncingReplit(false);
       }
     };
 
-    // Poll frequently (every 30s) so check-ins feel instant
     syncReplitLogs();
-    const interval = setInterval(syncReplitLogs, 30 * 1000);
+    const interval = setInterval(syncReplitLogs, 25 * 1000);
     return () => clearInterval(interval);
-  }, [authToken]);
+  }, [authToken, replitSyncTrigger]);
 
   // Handle Role-based Tab Restrictions
   useEffect(() => {
@@ -703,6 +721,9 @@ const App: React.FC = () => {
               onLogSubmit={handleLogSubmit}
               onDeleteLog={deleteLog}
               scheduledTasks={todaySchedule?.blocks || []}
+              onManualSync={() => setReplitSyncTrigger(prev => prev + 1)}
+              isSyncingReplit={isSyncingReplit}
+              lastSyncTime={lastReplitSync}
             />
           ) : activeTab === 'planner' ? (
             // Lazy load nicely or just static

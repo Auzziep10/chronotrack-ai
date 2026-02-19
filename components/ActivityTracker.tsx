@@ -3,7 +3,7 @@ import { WorkLog, UserSession, ScheduleBlock } from '../types';
 import { WorkLogForm } from './WorkLogForm';
 import { HistoryLog } from './HistoryLog';
 import { AiSummary } from './AiSummary';
-import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw } from 'lucide-react';
 import { LOG_INTERVAL_MS } from '../constants';
 
 interface Props {
@@ -11,9 +11,20 @@ interface Props {
   onLogSubmit: (userId: string, logData: Omit<WorkLog, 'id' | 'timestamp' | 'periodStart' | 'periodEnd' | 'userId' | 'userName'>) => void;
   onDeleteLog: (userId: string, id: string) => void;
   scheduledTasks?: ScheduleBlock[]; // Tasks from Daily Planner
+  onManualSync?: () => void;
+  isSyncingReplit?: boolean;
+  lastSyncTime?: number;
 }
 
-export const ActivityTracker: React.FC<Props> = ({ activeSessions, onLogSubmit, onDeleteLog, scheduledTasks = [] }) => {
+export const ActivityTracker: React.FC<Props> = ({
+  activeSessions,
+  onLogSubmit,
+  onDeleteLog,
+  scheduledTasks = [],
+  onManualSync,
+  isSyncingReplit = false,
+  lastSyncTime = 0
+}) => {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
 
@@ -144,6 +155,26 @@ export const ActivityTracker: React.FC<Props> = ({ activeSessions, onLogSubmit, 
                 isRequired={true}
                 title="Hourly Activity Summary"
               />
+
+              {onManualSync && (
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                  <div className="text-xs text-gray-500">
+                    {lastSyncTime > 0 ? (
+                      <span>Last checked Replit: {new Date(lastSyncTime).toLocaleTimeString()}</span>
+                    ) : (
+                      <span>Not synced with Replit yet</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={onManualSync}
+                    disabled={isSyncingReplit}
+                    className="flex items-center gap-2 text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                  >
+                    <RefreshCcw className={`w-3.5 h-3.5 ${isSyncingReplit ? 'animate-spin' : ''}`} />
+                    {isSyncingReplit ? 'Syncing...' : 'Check for Replit Check-in'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
