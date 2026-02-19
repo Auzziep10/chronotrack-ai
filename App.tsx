@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { WorkLog, UserSession, User, AppSettings, DailyTimeCard, Department } from './types';
 import { DEFAULT_USERS } from './constants';
 import { WorkLogForm } from './components/WorkLogForm';
@@ -43,11 +43,21 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('station');
   const [showSettings, setShowSettings] = useState(false);
 
+  // Track when we last made a local user update (to avoid sync overwriting unsaved data)
+  const lastUserUpdateRef = useRef<number>(0);
+
   // Daily Schedule State
   const [todaySchedule, setTodaySchedule] = useState<any>(null);
 
   // Sync Users from Replit helper
   const syncUsersFromReplit = async (token: string) => {
+    // Don't overwrite if a local update happened in the last 15 seconds
+    const timeSinceLastUpdate = Date.now() - lastUserUpdateRef.current;
+    if (timeSinceLastUpdate < 15000) {
+      console.log('Skipping user sync — local update was just made.');
+      return;
+    }
+
     try {
       const replitUrl = localStorage.getItem('replitAppUrl');
       if (replitUrl) {
@@ -262,6 +272,9 @@ const App: React.FC = () => {
   };
 
   const handleUpdateUser = async (updatedUser: User) => {
+    // Mark local update time so sync doesn't overwrite this
+    lastUserUpdateRef.current = Date.now();
+
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
 
     // Also update active session if this user is logged in
@@ -295,10 +308,20 @@ const App: React.FC = () => {
           availability: updatedUser.availability,
           avatarInitials: updatedUser.avatarInitials,
           email: updatedUser.email,
-          username: updatedUser.username
+          username: updatedUser.username,
+          phoneNumber: updatedUser.phoneNumber,
+          address: updatedUser.address,
+          supportingRole: updatedUser.supportingRole,
+          secondaryDepartment: updatedUser.secondaryDepartment,
+          lateDays: updatedUser.lateDays,
+          correctionNotes: updatedUser.correctionNotes,
+          permissions: updatedUser.permissions
         });
+        // Success — profile saved to backend
+        alert(`✅ ${updatedUser.name}'s profile saved successfully!`);
       } catch (err) {
         console.error("Failed to sync user update to Replit:", err);
+        alert(`⚠️ Profile saved locally but failed to sync to the server. Changes may not appear on other devices. Please check your connection.`);
       }
     }
   };
