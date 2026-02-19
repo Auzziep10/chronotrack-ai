@@ -426,18 +426,33 @@ export const supplyWatchService = {
         };
 
         try {
-            // Try endpoints in order of likelihood for a "Daily Planner" Replit
+            // Try endpoints in order of likelihood for a "Daily Planner" / "Time Station" Replit
             const endpoints = [
+                // Primary Daily Planner Paths
                 '/api/daily-planner/logs',
+                '/api/daily-planner/time-cards',
                 '/api/daily-planner/work-logs',
-                '/api/daily-planner/activities',
                 '/api/daily-planner/check-ins',
-                '/api/planner/logs',
-                '/api/planner/work-logs',
-                '/api/daily_planner/logs',
-                '/api/activity-logs',
+                '/api/daily-planner/activities',
+
+                // Common Backend Fallbacks
                 '/api/logs',
-                '/api/work-logs'
+                '/api/time-cards',
+                '/api/timecards',
+                '/api/work-logs',
+                '/api/check-ins',
+                '/api/checkins',
+
+                // Planner variations
+                '/api/planner/logs',
+                '/api/planner/time-cards',
+                '/api/planner/work-logs',
+
+                // Non-API prefixed (some older Repls use these)
+                '/daily-planner/logs',
+                '/daily-planner/time-cards',
+                '/logs',
+                '/time-cards'
             ];
 
             let errors: string[] = [];
@@ -445,20 +460,23 @@ export const supplyWatchService = {
                 const result = await tryFetch(endpoint);
                 if (result.ok) {
                     console.log(`[ReplitSync] Success using endpoint: ${endpoint}`);
-                    return result.data;
+                    // If the data is an object with a logs array, or time-cards array, normalize it
+                    let data = result.data;
+                    if (!Array.isArray(data)) {
+                        data = data.logs || data.timeCards || data.time_cards || data.data || [];
+                    }
+                    return data;
                 }
 
                 if (result.error === "is_html") {
-                    errors.push(`${endpoint} (HTML/404)`);
+                    errors.push(`${endpoint}(404)`);
                 } else if (result.status) {
-                    errors.push(`${endpoint} (HTTP ${result.status})`);
-                } else {
-                    errors.push(`${endpoint} (${result.error})`);
+                    errors.push(`${endpoint}(${result.status})`);
                 }
             }
 
             // If all failed, throw a detailed error
-            throw new Error(`Connection failed after trying ${endpoints.length} endpoints. Ensure your Replit Daily Planner is awake and the URL is correct. Tried: ${errors.join(', ')}`);
+            throw new Error(`Connection failed. No data found at ${endpoints.length} common endpoints. Ensure your Daily Planner app is running.`);
         } catch (error) {
             console.error("No endpoint responded with JSON logs:", error);
             throw error;
