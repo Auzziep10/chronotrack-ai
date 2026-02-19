@@ -9,7 +9,8 @@ import {
     getDocs,
     updateDoc,
     serverTimestamp,
-    Timestamp
+    Timestamp,
+    arrayUnion
 } from 'firebase/firestore';
 import { User, UserSession, WorkLog, DailyTimeCard } from '../types';
 
@@ -106,17 +107,22 @@ export const firebaseClockOut = async (userId: string, session: UserSession): Pr
 
 /** Save a work log to Firestore and update session's lastLogTime */
 export const firebaseAddLog = async (userId: string, log: WorkLog): Promise<void> => {
+    // Sanitize log to remove any undefined fields (Firestore doesn't accept them)
+    const cleanLog: any = {};
+    Object.entries(log).forEach(([k, v]) => {
+        if (v !== undefined) cleanLog[k] = v;
+    });
+
     await setDoc(doc(db, WORKLOGS_COL, log.id), {
-        ...log,
-        periodStart: log.periodStart,
-        periodEnd: log.periodEnd,
+        ...cleanLog,
         createdAt: serverTimestamp()
     });
 
-    // Update session's lastLogTime ONLY if they are already clocked in
+    // Update session's lastLogTime and logs array ONLY if they are already clocked in
     try {
         await updateDoc(doc(db, SESSIONS_COL, userId), {
             lastLogTime: log.periodEnd,
+            logs: arrayUnion(cleanLog),
             updatedAt: serverTimestamp()
         });
     } catch (e) {
