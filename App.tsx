@@ -270,10 +270,19 @@ const App: React.FC = () => {
     if (!authToken || !isFirebaseConfigured()) return;
 
     const syncReplitLogs = async () => {
-      let replitUrl = localStorage.getItem('replitAppUrl');
-      if (!replitUrl) return;
-      if (!replitUrl.startsWith('http')) replitUrl = `https://${replitUrl}`;
+      let replitUrlRaw = localStorage.getItem('replitAppUrl');
+      if (!replitUrlRaw) return;
 
+      let replitUrl = replitUrlRaw;
+      try {
+        const urlObj = new URL(replitUrlRaw.startsWith('http') ? replitUrlRaw : `https://${replitUrlRaw}`);
+        replitUrl = urlObj.origin;
+      } catch (e) {
+        if (!replitUrl.startsWith('http')) replitUrl = `https://${replitUrl}`;
+      }
+
+      setIsSyncingReplit(true);
+      setReplitSyncError(null);
       try {
         const { supplyWatchService } = await import('./services/supplyWatchService');
         const remoteLogsRaw = await supplyWatchService.getLogs(replitUrl, authToken);
@@ -726,6 +735,7 @@ const App: React.FC = () => {
               isSyncingReplit={isSyncingReplit}
               lastSyncTime={lastReplitSync}
               syncError={replitSyncError}
+              replitUrl={localStorage.getItem('replitAppUrl') || undefined}
             />
           ) : activeTab === 'planner' ? (
             // Lazy load nicely or just static
