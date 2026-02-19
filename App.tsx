@@ -66,7 +66,6 @@ const App: React.FC = () => {
           const remoteUsers = await supplyWatchService.getUsers(replitUrl, token);
           if (Array.isArray(remoteUsers)) {
             setUsers(prevUsers => {
-              let hasChanges = false;
               const defaultAvail: any = {
                 'Monday': { active: true, start: '09:00', end: '17:00' },
                 'Tuesday': { active: true, start: '09:00', end: '17:00' },
@@ -88,30 +87,46 @@ const App: React.FC = () => {
                   ? (firstName[0] + lastName[0]).toUpperCase()
                   : (rUser.username || fullName || '??').substring(0, 2).toUpperCase();
 
+                // Find existing local user to merge with — local data wins for
+                // fields the backend may return as empty/default
+                const existingLocal = prevUsers.find(u => u.id === String(rUser.id) || u.username === rUser.username);
+
+                // For PIN: only trust backend value if it's real (not '0000' or missing)
+                // If backend returns '0000' or empty, prefer local PIN
+                const remotePin = rUser.pin && rUser.pin !== '0000' ? rUser.pin : null;
+                const resolvedPin = remotePin || existingLocal?.pin || '0000';
+
                 return {
+                  // Start with existing local data as base (preserves all edited fields)
+                  ...existingLocal,
+                  // Then overlay with real remote values (non-empty, non-default)
                   id: String(rUser.id),
-                  name: fullName,
-                  username: rUser.username,
-                  role: rUser.role || 'Staff',
-                  primaryDepartment: rUser.primaryDepartment || Department.Production,
-                  avatarInitials: rUser.avatarInitials || initials,
-                  pin: rUser.pin || '0000',
-                  availability: rUser.availability || defaultAvail,
-                  lateDays: rUser.lateDays || 0,
-                  correctionNotes: rUser.correctionNotes || ''
+                  name: fullName || existingLocal?.name || 'Unknown',
+                  username: rUser.username || existingLocal?.username,
+                  role: rUser.role || existingLocal?.role || 'Staff',
+                  primaryDepartment: rUser.primaryDepartment || existingLocal?.primaryDepartment || Department.Production,
+                  avatarInitials: rUser.avatarInitials || existingLocal?.avatarInitials || initials,
+                  pin: resolvedPin,
+                  // For availability: prefer remote if it looks real, else keep local
+                  availability: (rUser.availability && Object.keys(rUser.availability).length > 0)
+                    ? rUser.availability
+                    : (existingLocal?.availability || defaultAvail),
+                  lateDays: rUser.lateDays !== undefined ? rUser.lateDays : (existingLocal?.lateDays || 0),
+                  correctionNotes: rUser.correctionNotes || existingLocal?.correctionNotes || '',
+                  // Personal info: keep local if backend doesn't have it
+                  email: rUser.email || existingLocal?.email,
+                  phoneNumber: rUser.phoneNumber || existingLocal?.phoneNumber,
+                  address: rUser.address || existingLocal?.address,
+                  supportingRole: rUser.supportingRole || existingLocal?.supportingRole,
+                  secondaryDepartment: rUser.secondaryDepartment || existingLocal?.secondaryDepartment,
+                  permissions: rUser.permissions || existingLocal?.permissions || []
                 };
               });
 
-              // Reconcile: Keep only users that are in remote list OR are local-only defaults (like u1..u4)
-              // But if a user exists in both, use the remote one.
-              const reconciledUsers = [...mappedRemoteUsers];
-
-              // We check if anything actually changed compared to current state
-              if (JSON.stringify(reconciledUsers) !== JSON.stringify(prevUsers)) {
-                hasChanges = true;
+              // Only update state if something actually changed
+              if (JSON.stringify(mappedRemoteUsers) !== JSON.stringify(prevUsers)) {
+                return mappedRemoteUsers;
               }
-
-              if (hasChanges) return reconciledUsers;
               return prevUsers;
             });
           }
