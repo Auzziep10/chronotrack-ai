@@ -193,10 +193,8 @@ export const ActivityTracker: React.FC<Props> = ({
                   {syncError && (
                     <div className="mt-2 p-2 bg-red-50 rounded border border-red-100 flex items-center gap-2 text-[10px] text-red-600 font-medium animate-shake">
                       <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      <div className="flex-1">
-                        {syncError.includes('HTML')
-                          ? 'Connection Error: Server returned a webpage instead of data. Check your Replit App URL.'
-                          : `Sync Error: ${syncError}`}
+                      <div className="flex-1 break-words">
+                        {syncError}
                       </div>
                     </div>
                   )}
