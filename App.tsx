@@ -287,7 +287,7 @@ const App: React.FC = () => {
         const { supplyWatchService } = await import('./services/supplyWatchService');
         const remoteLogsRaw = await supplyWatchService.getLogs(replitUrl, authToken);
 
-        const logs = Array.isArray(remoteLogsRaw) ? remoteLogsRaw : (remoteLogsRaw?.logs || []);
+        const logs = Array.isArray(remoteLogsRaw) ? remoteLogsRaw : [];
 
         const nowTs = Date.now();
         const twelveHoursAgo = nowTs - (12 * 60 * 60 * 1000);
@@ -296,7 +296,7 @@ const App: React.FC = () => {
         const norm = (s: any) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, '');
 
         for (const rLog of logs) {
-          const logTimeStr = rLog.timestamp || rLog.startTime || rLog.createdAt || rLog.created_at;
+          const logTimeStr = rLog.timestamp || rLog.startTime || rLog.createdAt || rLog.created_at || rLog.time;
           const logTime = new Date(logTimeStr).getTime();
 
           if (isNaN(logTime) || logTime < twelveHoursAgo) continue;

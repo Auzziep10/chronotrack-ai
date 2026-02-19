@@ -409,13 +409,12 @@ export const supplyWatchService = {
                 });
 
                 if (!response.ok) {
-                    const text = await response.text();
-                    return { ok: false, status: response.status, text: text.substring(0, 50), contentType: response.headers.get('content-type') };
+                    return { ok: false, status: response.status };
                 }
 
                 const contentType = response.headers.get('content-type');
                 if (contentType && !contentType.includes('application/json')) {
-                    return { ok: false, error: "is_html", contentType, status: response.status };
+                    return { ok: false, error: "is_html", status: response.status };
                 }
 
                 const data = await response.json();
@@ -426,59 +425,84 @@ export const supplyWatchService = {
         };
 
         try {
-            // Try endpoints in order of likelihood for a "Daily Planner" / "Time Station" Replit
+            const todayStr = new Date().toISOString().split('T')[0];
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yestStr = yesterday.toISOString().split('T')[0];
+
+            // Aggressive search for the right endpoint
             const endpoints = [
-                // Primary Daily Planner Paths
-                '/api/daily-planner/logs',
-                '/api/daily-planner/time-cards',
-                '/api/daily-planner/work-logs',
-                '/api/daily-planner/check-ins',
-                '/api/daily-planner/activities',
+                // Primary Paths (including date-specific variations)
+                `/api/daily-planner/logs`,
+                `/api/daily-planner/logs?date=${todayStr}`,
+                `/api/daily-planner/check-ins`,
+                `/api/daily-planner/check-ins?date=${todayStr}`,
+                `/api/daily-planner/time-cards`,
+                `/api/daily-planner/time-cards?date=${todayStr}`,
+                `/api/daily-planner/work-logs`,
+                `/api/daily-planner/work-logs?date=${todayStr}`,
 
-                // Common Backend Fallbacks
-                '/api/logs',
-                '/api/time-cards',
-                '/api/timecards',
-                '/api/work-logs',
+                // Daily Schedules variations
+                `/api/daily-schedules/logs`,
+                `/api/daily-schedules/check-ins`,
+                `/api/daily-schedules/date/${todayStr}/logs`,
+                `/api/daily-schedules/logs/today`,
+
+                // Generic Backend Paths
                 '/api/check-ins',
-                '/api/checkins',
+                '/api/check-ins/today',
+                '/api/logs',
+                '/api/logs/today',
+                '/api/time-cards',
+                '/api/work-logs',
+                '/api/activity-logs',
+                '/api/checks',
+                '/api/daily-checkins',
 
-                // Planner variations
-                '/api/planner/logs',
-                '/api/planner/time-cards',
-                '/api/planner/work-logs',
-
-                // Non-API prefixed (some older Repls use these)
+                // Non-API prefixed fallbacks
                 '/daily-planner/logs',
-                '/daily-planner/time-cards',
+                '/daily-planner/check-ins',
                 '/logs',
-                '/time-cards'
+                '/check-ins'
             ];
 
-            let errors: string[] = [];
             for (const endpoint of endpoints) {
                 const result = await tryFetch(endpoint);
                 if (result.ok) {
                     console.log(`[ReplitSync] Success using endpoint: ${endpoint}`);
-                    // If the data is an object with a logs array, or time-cards array, normalize it
                     let data = result.data;
                     if (!Array.isArray(data)) {
-                        data = data.logs || data.timeCards || data.time_cards || data.data || [];
+                        data = data.logs || data.checkIns || data.checkins || data.timeCards || data.data || [];
                     }
-                    return data;
-                }
-
-                if (result.error === "is_html") {
-                    errors.push(`${endpoint}(404)`);
-                } else if (result.status) {
-                    errors.push(`${endpoint}(${result.status})`);
+                    if (Array.isArray(data)) return data;
                 }
             }
 
-            // If all failed, throw a detailed error
-            throw new Error(`Connection failed. No data found at ${endpoints.length} common endpoints. Ensure your Daily Planner app is running.`);
+            // FINAL FALLBACK: Fetch the schedule and extract check-ins from blocks
+            console.log("[ReplitSync] No flat logs endpoint found. Falling back to Schedule Block extraction...");
+            const scheduleRes = await tryFetch(`/api/daily-schedules/date/${todayStr}`);
+            if (scheduleRes.ok && scheduleRes.data?.blocks) {
+                const extractedLogs: any[] = [];
+                for (const block of scheduleRes.data.blocks) {
+                    // Check for nested check-ins inside the block (common in Replit templates)
+                    const checkIns = block.checkIns || block.checkins || block.logs || block.activity || [];
+                    if (Array.isArray(checkIns)) {
+                        checkIns.forEach((ci: any) => {
+                            extractedLogs.push({
+                                ...ci,
+                                userName: ci.userName || block.assignedToName || ci.name,
+                                task: block.title,
+                                userId: ci.userId || block.assignedTo
+                            });
+                        });
+                    }
+                }
+                if (extractedLogs.length > 0) return extractedLogs;
+            }
+
+            throw new Error(`Connection failed. No data found at ${endpoints.length} endpoints, and Schedule extraction yielded no results. Ensure your Replit Daily Planner is running and you have check-ins saved.`);
         } catch (error) {
-            console.error("No endpoint responded with JSON logs:", error);
+            console.error("Deep search sync failed:", error);
             throw error;
         }
     },
