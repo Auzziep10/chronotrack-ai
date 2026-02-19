@@ -255,16 +255,30 @@ const App: React.FC = () => {
       setActiveSessions(() => {
         const newSessions: Record<string, UserSession> = {};
         Object.entries(rawSessions).forEach(([userId, data]: [string, any]) => {
+          // Try full user from our local list first
           const sessionUser = usersRef.current.find(u => u.id === userId);
-          if (sessionUser) {
-            newSessions[userId] = {
-              userId,
-              user: sessionUser,
-              startTime: data.startTime,
-              lastLogTime: data.lastLogTime,
-              logs: data.logs || []
-            };
-          }
+
+          // Fall back to data Firestore stored at clock-in time — fixes race condition
+          // where user list isn't loaded yet but session data is already available
+          const user: User = sessionUser || {
+            id: userId,
+            name: data.userName || 'Team Member',
+            avatarInitials: data.avatarInitials || '??',
+            role: data.role || 'Staff',
+            primaryDepartment: data.primaryDepartment || 'Production',
+            pin: '',
+            availability: {} as any,
+            lateDays: 0,
+            correctionNotes: ''
+          };
+
+          newSessions[userId] = {
+            userId,
+            user,
+            startTime: data.startTime,
+            lastLogTime: data.lastLogTime,
+            logs: data.logs || []
+          };
         });
         return newSessions;
       });
