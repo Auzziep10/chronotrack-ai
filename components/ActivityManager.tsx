@@ -120,13 +120,53 @@ export const ActivityManager: React.FC<Props> = ({ users, settings }) => {
   const [timeCards, setTimeCards] = useState<DailyTimeCard[]>([]);
   const [logs, setLogs] = useState<WorkLog[]>([]);
 
-  // Load data on mount
+  // Load data on mount from both LocalStorage (legacy/fallback) and Backend (sync)
   React.useEffect(() => {
-    import('../services/storageService').then(({ storageService }) => {
-      const data = storageService.getAllData();
-      setTimeCards(data.timeCards);
-      setLogs(data.logs);
-    });
+    const fetchData = async () => {
+      // 1. Load Local Fallback
+      const { storageService } = await import('../services/storageService');
+      const localData = storageService.getAllData();
+      setTimeCards(localData.timeCards);
+      setLogs(localData.logs);
+
+      // 2. Sync from Backend if possible
+      const authToken = localStorage.getItem('chronoAuthToken');
+      const replitUrl = localStorage.getItem('replitAppUrl');
+
+      if (authToken && replitUrl) {
+        try {
+          const { supplyWatchService } = await import('../services/supplyWatchService');
+
+          // Parallel fetch for speed
+          const [remoteLogs, remoteTimeCards] = await Promise.all([
+            supplyWatchService.getLogs(replitUrl, authToken).catch(() => []),
+            supplyWatchService.getTimeCards(replitUrl, authToken).catch(() => [])
+          ]);
+
+          if (remoteLogs && Array.isArray(remoteLogs)) {
+            // Merge or replace? For "seeing the same thing", replace is better if backend is truth
+            setLogs(remoteLogs.map((l: any) => ({
+              ...l,
+              timestamp: new Date(l.startTime || l.timestamp).getTime(),
+              periodStart: new Date(l.startTime).getTime(),
+              periodEnd: new Date(l.endTime).getTime()
+            })));
+          }
+
+          if (remoteTimeCards && Array.isArray(remoteTimeCards)) {
+            setTimeCards(remoteTimeCards.map((tc: any) => ({
+              ...tc,
+              clockIn: new Date(tc.clockIn).getTime(),
+              clockOut: tc.clockOut ? new Date(tc.clockOut).getTime() : null
+            })));
+          }
+        } catch (err) {
+          console.warn("Failed to sync historical data from backend", err);
+        }
+      }
+    };
+
+    fetchData();
   }, []);
 
   const periods = useMemo(() => getPayPeriods(settings), [settings]);

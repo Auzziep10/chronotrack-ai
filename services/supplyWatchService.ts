@@ -242,5 +242,190 @@ export const supplyWatchService = {
             console.error("Failed to publish schedule:", error);
             throw error;
         }
+    },
+
+    /**
+     * Gets active user sessions for the day
+     */
+    getActiveSessions: async (replitUrl: string, token: string) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/active-sessions`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch active sessions: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to fetch active sessions:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Clocks in a user
+     */
+    clockIn: async (replitUrl: string, token: string, userId: string, workspaceType?: string) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/clock-in`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ userId, workspaceType })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to clock in: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to clock in:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Clocks out a user
+     */
+    clockOut: async (replitUrl: string, token: string, userId: string) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/clock-out`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ userId })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to clock out: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to clock out:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Updates user information in Replit backend
+     */
+    updateUser: async (replitUrl: string, token: string, userId: string, userData: any) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/users/${userId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(userData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to update user: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to update user in Replit:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Deletes a user from Replit backend
+     */
+    deleteUser: async (replitUrl: string, token: string, userId: string) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/users/${userId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to delete user: ${response.statusText}`);
+            }
+
+            return true;
+        } catch (error) {
+            console.error("Failed to delete user in Replit:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Creates a new user in Replit backend
+     */
+    createUser: async (replitUrl: string, token: string, userData: any) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/users`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(userData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to create user: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to create user in Replit:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Fetches work logs from Replit
+     */
+    getLogs: async (replitUrl: string, token: string) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/daily-planner/logs`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error(`Failed to fetch logs: ${response.statusText}`);
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to fetch logs:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Fetches time cards from Replit
+     */
+    getTimeCards: async (replitUrl: string, token: string) => {
+        try {
+            const baseUrl = replitUrl.replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/daily-planner/time-cards`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error(`Failed to fetch time cards: ${response.statusText}`);
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to fetch time cards:", error);
+            throw error;
+        }
     }
 };
