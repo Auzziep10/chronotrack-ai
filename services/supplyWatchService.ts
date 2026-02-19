@@ -410,12 +410,12 @@ export const supplyWatchService = {
 
                 if (!response.ok) {
                     const text = await response.text();
-                    return { ok: false, status: response.status, text: text.substring(0, 100), contentType: response.headers.get('content-type') };
+                    return { ok: false, status: response.status, text: text.substring(0, 50), contentType: response.headers.get('content-type') };
                 }
 
                 const contentType = response.headers.get('content-type');
                 if (contentType && !contentType.includes('application/json')) {
-                    return { ok: false, error: "is_html", contentType };
+                    return { ok: false, error: "is_html", contentType, status: response.status };
                 }
 
                 const data = await response.json();
@@ -426,31 +426,39 @@ export const supplyWatchService = {
         };
 
         try {
-            // Try endpoints in order of likelihood
+            // Try endpoints in order of likelihood for a "Daily Planner" Replit
             const endpoints = [
                 '/api/daily-planner/logs',
+                '/api/daily-planner/work-logs',
+                '/api/daily-planner/check-ins',
+                '/api/daily_planner/logs',
+                '/api/daily-planner',
                 '/api/planner/logs',
                 '/api/logs',
                 '/api/work-logs'
             ];
 
-            let lastRes: any = null;
+            let errors: string[] = [];
             for (const endpoint of endpoints) {
                 const result = await tryFetch(endpoint);
                 if (result.ok) {
                     console.log(`[ReplitSync] Success using endpoint: ${endpoint}`);
                     return result.data;
                 }
-                lastRes = result;
+
+                if (result.error === "is_html") {
+                    errors.push(`${endpoint} (HTML/404)`);
+                } else if (result.status) {
+                    errors.push(`${endpoint} (HTTP ${result.status})`);
+                } else {
+                    errors.push(`${endpoint} (${result.error})`);
+                }
             }
 
-            // If all failed, throw the last specific error
-            if (lastRes.error === "is_html") {
-                throw new Error("Server returned HTML instead of JSON. Check your Replit App URL.");
-            }
-            throw new Error(`API Error ${lastRes.status || 'Network'}: ${lastRes.text || lastRes.error}`);
+            // If all failed, throw a detailed error
+            throw new Error(`Connection failed after trying ${endpoints.length} endpoints. Ensure your Replit Daily Planner is awake and the URL is correct. Tried: ${errors.join(', ')}`);
         } catch (error) {
-            console.error("Failed to fetch logs from any endpoint:", error);
+            console.error("No endpoint responded with JSON logs:", error);
             throw error;
         }
     },
