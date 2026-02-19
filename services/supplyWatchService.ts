@@ -399,27 +399,58 @@ export const supplyWatchService = {
      * Fetches work logs from Replit
      */
     getLogs: async (replitUrl: string, token: string) => {
-        try {
+        const tryFetch = async (endpoint: string) => {
             let baseUrl = replitUrl.replace(/\/$/, '');
             if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
 
-            const response = await fetch(`${baseUrl}/api/daily-planner/logs`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            try {
+                const response = await fetch(`${baseUrl}${endpoint}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
 
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(`API Error ${response.status}: ${text.substring(0, 100)}`);
+                if (!response.ok) {
+                    const text = await response.text();
+                    return { ok: false, status: response.status, text: text.substring(0, 100), contentType: response.headers.get('content-type') };
+                }
+
+                const contentType = response.headers.get('content-type');
+                if (contentType && !contentType.includes('application/json')) {
+                    return { ok: false, error: "is_html", contentType };
+                }
+
+                const data = await response.json();
+                return { ok: true, data };
+            } catch (e: any) {
+                return { ok: false, error: e.message };
+            }
+        };
+
+        try {
+            // Try endpoints in order of likelihood
+            const endpoints = [
+                '/api/daily-planner/logs',
+                '/api/planner/logs',
+                '/api/logs',
+                '/api/work-logs'
+            ];
+
+            let lastRes: any = null;
+            for (const endpoint of endpoints) {
+                const result = await tryFetch(endpoint);
+                if (result.ok) {
+                    console.log(`[ReplitSync] Success using endpoint: ${endpoint}`);
+                    return result.data;
+                }
+                lastRes = result;
             }
 
-            const contentType = response.headers.get('content-type');
-            if (contentType && !contentType.includes('application/json')) {
+            // If all failed, throw the last specific error
+            if (lastRes.error === "is_html") {
                 throw new Error("Server returned HTML instead of JSON. Check your Replit App URL.");
             }
-
-            return await response.json();
+            throw new Error(`API Error ${lastRes.status || 'Network'}: ${lastRes.text || lastRes.error}`);
         } catch (error) {
-            console.error("Failed to fetch logs:", error);
+            console.error("Failed to fetch logs from any endpoint:", error);
             throw error;
         }
     },
