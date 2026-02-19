@@ -460,37 +460,53 @@ export const supplyWatchService = {
             for (const endpoint of scheduleEndpoints) {
                 const res = await tryFetch(endpoint);
                 if (res.ok) {
-                    console.log(`[ReplitSync] Extracting from schedule endpoint: ${endpoint}`);
                     const extractedLogs: any[] = [];
+                    const d = res.data;
 
-                    // The data might be an object with .blocks or just a list of blocks
-                    const blocks = res.data?.blocks || (Array.isArray(res.data) ? res.data : []);
+                    // DIAGNOSTIC LOGGING: Help me see the structure in your console
+                    console.log(`[ReplitSync] Data structure check for ${endpoint}:`, {
+                        keys: Object.keys(d || {}),
+                        isBlocksArray: Array.isArray(d?.blocks),
+                        isDataArray: Array.isArray(d)
+                    });
+
+                    const blocks = d?.blocks || (Array.isArray(d) ? d : []);
 
                     if (Array.isArray(blocks)) {
                         for (const block of blocks) {
-                            // Check for nested check-ins inside the block
-                            const checkIns = block.checkIns || block.checkins || block.logs || block.activity || [];
+                            // Check for nested check-ins inside the block (even more names)
+                            const checkIns = block.checkIns || block.checkins || block.logs ||
+                                block.activity || block.history || block.updates ||
+                                block.statusHistory || [];
+
+                            // Log block structure if it looks like it has content but no checkIns
+                            if (checkIns.length === 0 && (block.title || block.task)) {
+                                console.log(`[ReplitSync] Block "${block.title || block.task}" keys:`, Object.keys(block));
+                            }
+
                             if (Array.isArray(checkIns)) {
                                 checkIns.forEach((ci: any) => {
-                                    // Robust mapping from block/check-in to log
                                     extractedLogs.push({
                                         ...ci,
                                         id: ci.id || `block-${block.id}-${ci.time || ci.timestamp}`,
                                         userName: ci.userName || ci.name || block.assignedToName || block.userName,
                                         userId: ci.userId || block.assignedTo || block.userId,
                                         task: block.title || block.task || 'Staff Check-in',
-                                        timestamp: ci.timestamp || ci.time || ci.createdAt || ci.created_at,
+                                        timestamp: ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt,
                                         notes: ci.notes || ci.note || block.description || 'Schedule Check-in'
                                     });
                                 });
                             }
                         }
                     }
-                    if (extractedLogs.length > 0) return extractedLogs;
+                    if (extractedLogs.length > 0) {
+                        console.log(`[ReplitSync] Successfully extracted ${extractedLogs.length} logs from schedule.`);
+                        return extractedLogs;
+                    }
                 }
             }
 
-            throw new Error(`Connection failed. Tried logs and team schedule endpoints, but no check-ins found. Ensure your Replit is active.`);
+            throw new Error(`Connection failed. No check-ins found after searching logs and schedule blocks. Ensure check-ins are recorded and saved in Replit.`);
         } catch (error) {
             console.error("Deep search sync failed:", error);
             throw error;
