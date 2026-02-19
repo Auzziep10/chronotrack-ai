@@ -493,7 +493,7 @@ export const supplyWatchService = {
                                 const virtualTime = block.updatedAt || block.endTime || block.startTime || Date.now();
                                 extractedLogs.push({
                                     id: `vlog-${block.id}-${virtualTime}`,
-                                    userName: block.assignedToName || block.userName || 'Austin Patterson',
+                                    userName: block.assignedToName || block.userName,
                                     userId: block.assignedTo || block.userId,
                                     task: block.title || block.task || 'Completed Task',
                                     timestamp: virtualTime,
