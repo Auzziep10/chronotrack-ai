@@ -9,6 +9,18 @@ import { SettingsDialog } from './components/SettingsDialog';
 import { LoginScreen } from './components/LoginScreen';
 import { DailyPlanner } from './components/DailyPlanner';
 import { Radio, ClipboardList, BarChart4, Settings, LogOut, Calendar } from 'lucide-react';
+import {
+  subscribeToActiveSessions,
+  subscribeToUsers,
+  firebaseClockIn,
+  firebaseClockOut,
+  firebaseAddLog,
+  firebaseDeleteLog,
+  firebaseSaveUser,
+  firebaseDeleteUser,
+  firebaseGetUsers,
+  isFirebaseConfigured
+} from './services/firebaseService';
 
 type Tab = 'station' | 'activity' | 'manager' | 'planner';
 
@@ -45,6 +57,10 @@ const App: React.FC = () => {
 
   // Track when we last made a local user update (to avoid sync overwriting unsaved data)
   const lastUserUpdateRef = useRef<number>(0);
+
+  // Ref to always-current users list — used inside Firebase callbacks to avoid stale closures
+  const usersRef = useRef<User[]>(users);
+  useEffect(() => { usersRef.current = users; }, [users]);
 
   // Daily Schedule State
   const [todaySchedule, setTodaySchedule] = useState<any>(null);
@@ -225,10 +241,58 @@ const App: React.FC = () => {
     };
 
     initAuthenticatedData();
-    // Refresh schedule and sessions every 30 seconds for real-time feel across devices
-    const interval = setInterval(initAuthenticatedData, 30 * 1000);
+    // Still poll schedule every 5 minutes
+    const interval = setInterval(initAuthenticatedData, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [authToken, users]); // Add users to dependency to ensure mapping works when users list changes
+  }, [authToken]);
+
+  // ─── FIREBASE REAL-TIME LISTENERS ────────────────────────────────────────────
+  useEffect(() => {
+    if (!authToken || !isFirebaseConfigured()) return;
+
+    // 1. Real-time active sessions listener
+    const unsubSessions = subscribeToActiveSessions((rawSessions) => {
+      setActiveSessions(() => {
+        const newSessions: Record<string, UserSession> = {};
+        Object.entries(rawSessions).forEach(([userId, data]: [string, any]) => {
+          const sessionUser = usersRef.current.find(u => u.id === userId);
+          if (sessionUser) {
+            newSessions[userId] = {
+              userId,
+              user: sessionUser,
+              startTime: data.startTime,
+              lastLogTime: data.lastLogTime,
+              logs: data.logs || []
+            };
+          }
+        });
+        return newSessions;
+      });
+    });
+
+    // 2. Real-time users listener — Firebase is source of truth for user profiles
+    const unsubUsers = subscribeToUsers((firebaseUsers) => {
+      if (firebaseUsers.length > 0) {
+        // Merge: Firebase data wins for every field it has
+        setUsers(prev => {
+          const merged = firebaseUsers.map(fu => {
+            const local = prev.find(u => u.id === fu.id);
+            return { ...local, ...fu };
+          });
+          return merged;
+        });
+      } else {
+        // Firebase users collection empty — seed it from current users list
+        console.log('Firebase users empty — seeding from local list...');
+        usersRef.current.forEach(u => firebaseSaveUser(u).catch(() => { }));
+      }
+    });
+
+    return () => {
+      unsubSessions();
+      unsubUsers();
+    };
+  }, [authToken]); // Add users to dependency to ensure mapping works when users list changes
 
   // Handle Role-based Tab Restrictions
   useEffect(() => {
@@ -287,36 +351,35 @@ const App: React.FC = () => {
   };
 
   const handleUpdateUser = async (updatedUser: User) => {
-    // Mark local update time so sync doesn't overwrite this
     lastUserUpdateRef.current = Date.now();
-
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-
-    // Also update active session if this user is logged in
     setActiveSessions(prev => {
       if (prev[updatedUser.id]) {
-        return {
-          ...prev,
-          [updatedUser.id]: {
-            ...prev[updatedUser.id],
-            user: updatedUser
-          }
-        };
+        return { ...prev, [updatedUser.id]: { ...prev[updatedUser.id], user: updatedUser } };
       }
       return prev;
     });
 
-    // Sync to Replit
+    // Primary: Save to Firebase
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseSaveUser(updatedUser);
+        alert(`✅ ${updatedUser.name}'s profile saved successfully!`);
+        return; // Firebase succeeded — done
+      } catch (err) {
+        console.error('Firebase save user failed:', err);
+      }
+    }
+
+    // Fallback: Save to Replit
     const replitUrl = localStorage.getItem('replitAppUrl');
     if (replitUrl && authToken) {
       try {
         const { supplyWatchService } = await import('./services/supplyWatchService');
-        // Map fields
         const firstName = updatedUser.name.split(' ')[0];
         const lastName = updatedUser.name.split(' ').slice(1).join(' ');
         await supplyWatchService.updateUser(replitUrl, authToken, updatedUser.id, {
-          firstName,
-          lastName,
+          firstName, lastName,
           role: updatedUser.role,
           pin: updatedUser.pin,
           primaryDepartment: updatedUser.primaryDepartment,
@@ -332,11 +395,10 @@ const App: React.FC = () => {
           correctionNotes: updatedUser.correctionNotes,
           permissions: updatedUser.permissions
         });
-        // Success — profile saved to backend
         alert(`✅ ${updatedUser.name}'s profile saved successfully!`);
       } catch (err) {
-        console.error("Failed to sync user update to Replit:", err);
-        alert(`⚠️ Profile saved locally but failed to sync to the server. Changes may not appear on other devices. Please check your connection.`);
+        console.error('Replit save user failed:', err);
+        alert(`⚠️ Profile saved locally but failed to sync. Changes may not appear on other devices.`);
       }
     }
   };
@@ -348,68 +410,75 @@ const App: React.FC = () => {
   const handleClockIn = async (user: User) => {
     const now = Date.now();
 
-    // Optimistic local update
+    // Optimistic local update (UI feels instant)
     setActiveSessions(prev => ({
       ...prev,
-      [user.id]: {
-        userId: user.id,
-        user: user,
-        startTime: now,
-        lastLogTime: now,
-        logs: []
-      }
+      [user.id]: { userId: user.id, user, startTime: now, lastLogTime: now, logs: [] }
     }));
 
-    // Sync to Replit
+    // Primary: Write to Firebase (broadcasts to ALL devices instantly)
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseClockIn(user);
+      } catch (err) {
+        console.error('Firebase clock-in failed:', err);
+      }
+    }
+
+    // Secondary: Sync to Replit
     const replitUrl = localStorage.getItem('replitAppUrl');
     if (replitUrl && authToken) {
-      try {
-        const { supplyWatchService } = await import('./services/supplyWatchService');
-        await supplyWatchService.clockIn(replitUrl, authToken, user.id, user.primaryDepartment);
-      } catch (err) {
-        console.error("Failed to sync clock-in to Replit:", err);
-      }
+      import('./services/supplyWatchService').then(({ supplyWatchService }) => {
+        supplyWatchService.clockIn(replitUrl, authToken!, user.id, user.primaryDepartment).catch(() => { });
+      });
     }
   };
 
   const handleClockOut = async (user: User) => {
     const session = activeSessions[user.id];
-    if (session) {
-      const now = Date.now();
-      const totalHours = (now - session.startTime) / (1000 * 60 * 60);
+    if (!session) return;
 
+    // Optimistic local removal
+    setActiveSessions(prev => {
+      const next = { ...prev };
+      delete next[user.id];
+      return next;
+    });
+
+    // Primary: Write to Firebase (broadcasts to ALL devices instantly)
+    if (isFirebaseConfigured()) {
+      try {
+        const timeCard = await firebaseClockOut(user.id, session);
+        import('./services/storageService').then(({ storageService }) => {
+          storageService.saveTimeCard(timeCard);
+        });
+      } catch (err) {
+        console.error('Firebase clock-out failed:', err);
+      }
+    } else {
+      // Fallback: save locally
+      const now = Date.now();
       const timeCard: DailyTimeCard = {
         id: crypto.randomUUID(),
         userId: user.id,
         date: new Date(session.startTime).toISOString().split('T')[0],
         clockIn: session.startTime,
         clockOut: now,
-        totalHours: totalHours,
+        totalHours: (now - session.startTime) / (1000 * 60 * 60),
         status: 'Complete'
       };
-
-      // Save to permanent local storage
       import('./services/storageService').then(({ storageService }) => {
         storageService.saveTimeCard(timeCard);
       });
-
-      // Sync to Replit
-      const replitUrl = localStorage.getItem('replitAppUrl');
-      if (replitUrl && authToken) {
-        try {
-          const { supplyWatchService } = await import('./services/supplyWatchService');
-          await supplyWatchService.clockOut(replitUrl, authToken, user.id);
-        } catch (err) {
-          console.error("Failed to sync clock-out to Replit:", err);
-        }
-      }
     }
 
-    setActiveSessions(prev => {
-      const newSessions = { ...prev };
-      delete newSessions[user.id];
-      return newSessions;
-    });
+    // Secondary: Sync to Replit
+    const replitUrl = localStorage.getItem('replitAppUrl');
+    if (replitUrl && authToken) {
+      import('./services/supplyWatchService').then(({ supplyWatchService }) => {
+        supplyWatchService.clockOut(replitUrl, authToken!, user.id).catch(() => { });
+      });
+    }
   };
 
   const handleLogSubmit = (userId: string, logData: Omit<WorkLog, 'id' | 'timestamp' | 'periodStart' | 'periodEnd' | 'userId' | 'userName'>) => {
@@ -431,12 +500,17 @@ const App: React.FC = () => {
         periodEnd: now
       };
 
-      // Save to permanent storage asynchronously (fire and forget for UI)
+      // Primary: Write to Firebase
+      if (isFirebaseConfigured()) {
+        firebaseAddLog(userId, newLog).catch(err => console.error('Firebase log failed:', err));
+      }
+
+      // Save locally as backup
       import('./services/storageService').then(({ storageService }) => {
         storageService.saveLog(newLog);
       });
 
-      // Sync to Replit (Real-time sync)
+      // Secondary: Sync to Replit
       import('./services/supplyWatchService').then(({ supplyWatchService }) => {
         const replitUrl = localStorage.getItem('replitAppUrl');
         if (replitUrl && authToken) {
@@ -457,7 +531,12 @@ const App: React.FC = () => {
 
   const deleteLog = (userId: string, logId: string) => {
     if (confirm('Are you sure you want to delete this entry?')) {
-      // Delete from storage
+      // Primary: Delete from Firebase
+      if (isFirebaseConfigured()) {
+        firebaseDeleteLog(logId).catch(err => console.error('Firebase delete log failed:', err));
+      }
+
+      // Also delete locally
       import('./services/storageService').then(({ storageService }) => {
         storageService.deleteLog(logId);
       });
@@ -467,10 +546,7 @@ const App: React.FC = () => {
         if (!session) return prev;
         return {
           ...prev,
-          [userId]: {
-            ...session,
-            logs: session.logs.filter(l => l.id !== logId)
-          }
+          [userId]: { ...session, logs: session.logs.filter(l => l.id !== logId) }
         };
       });
     }
