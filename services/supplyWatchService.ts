@@ -96,26 +96,28 @@ export const supplyWatchService = {
      * Fetches daily schedule and blocks for a specific date
      */
     getDailySchedule: async (replitUrl: string, token: string, date: Date) => {
-        try {
-            const baseUrl = replitUrl.replace(/\/$/, '');
-            const dateStr = date.toISOString();
+        const baseUrl = replitUrl.replace(/\/$/, '');
+        const dateISO = date.toISOString().split('T')[0];
+        const dateLocale = date.toLocaleDateString('en-CA'); // YYYY-MM-DD
 
-            const response = await fetch(`${baseUrl}/api/daily-schedules/date/${dateStr}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
+        const tryEndpoints = [
+            `/api/daily-planner?date=${dateLocale}`,
+            `/api/daily-planner?date=${dateISO}`,
+            `/api/daily-schedules/date/${dateLocale}`,
+            `/api/daily-schedules/date/${dateISO}`
+        ];
 
-            if (!response.ok) {
-                if (response.status === 404) return null; // No schedule for this date
-                throw new Error(`Failed to fetch schedule: ${response.statusText}`);
+        for (const endpoint of tryEndpoints) {
+            try {
+                const response = await fetch(`${baseUrl}${endpoint}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) return await response.json();
+            } catch (e) {
+                console.warn(`[ReplitSync] Failed to fetch schedule from ${endpoint}`);
             }
-
-            return await response.json();
-        } catch (error) {
-            console.error("Failed to fetch daily schedule:", error);
-            throw error;
         }
+        return null;
     },
 
     /**
@@ -408,9 +410,7 @@ export const supplyWatchService = {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                if (!response.ok) {
-                    return { ok: false, status: response.status };
-                }
+                if (!response.ok) return { ok: false, status: response.status };
 
                 const contentType = response.headers.get('content-type');
                 if (contentType && !contentType.includes('application/json')) {
@@ -425,82 +425,72 @@ export const supplyWatchService = {
         };
 
         try {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yestStr = yesterday.toISOString().split('T')[0];
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            const todayLocale = today.toLocaleDateString('en-CA'); // YYYY-MM-DD
 
-            // Aggressive search for the right endpoint
-            const endpoints = [
-                // Primary Paths (including date-specific variations)
+            // 1. Try flat log endpoints first
+            const logEndpoints = [
                 `/api/daily-planner/logs`,
-                `/api/daily-planner/logs?date=${todayStr}`,
                 `/api/daily-planner/check-ins`,
-                `/api/daily-planner/check-ins?date=${todayStr}`,
-                `/api/daily-planner/time-cards`,
-                `/api/daily-planner/time-cards?date=${todayStr}`,
-                `/api/daily-planner/work-logs`,
-                `/api/daily-planner/work-logs?date=${todayStr}`,
-
-                // Daily Schedules variations
-                `/api/daily-schedules/logs`,
-                `/api/daily-schedules/check-ins`,
-                `/api/daily-schedules/date/${todayStr}/logs`,
-                `/api/daily-schedules/logs/today`,
-
-                // Generic Backend Paths
-                '/api/check-ins',
-                '/api/check-ins/today',
-                '/api/logs',
-                '/api/logs/today',
-                '/api/time-cards',
-                '/api/work-logs',
-                '/api/activity-logs',
-                '/api/checks',
-                '/api/daily-checkins',
-
-                // Non-API prefixed fallbacks
-                '/daily-planner/logs',
-                '/daily-planner/check-ins',
-                '/logs',
-                '/check-ins'
+                `/api/logs`,
+                `/api/check-ins`
             ];
 
-            for (const endpoint of endpoints) {
+            for (const endpoint of logEndpoints) {
                 const result = await tryFetch(endpoint);
                 if (result.ok) {
-                    console.log(`[ReplitSync] Success using endpoint: ${endpoint}`);
+                    console.log(`[ReplitSync] Success using flat endpoint: ${endpoint}`);
                     let data = result.data;
-                    if (!Array.isArray(data)) {
-                        data = data.logs || data.checkIns || data.checkins || data.timeCards || data.data || [];
-                    }
-                    if (Array.isArray(data)) return data;
+                    if (!Array.isArray(data)) data = data.logs || data.checkIns || data.checkins || data.data || [];
+                    if (Array.isArray(data) && data.length > 0) return data;
                 }
             }
 
-            // FINAL FALLBACK: Fetch the schedule and extract check-ins from blocks
-            console.log("[ReplitSync] No flat logs endpoint found. Falling back to Schedule Block extraction...");
-            const scheduleRes = await tryFetch(`/api/daily-schedules/date/${todayStr}`);
-            if (scheduleRes.ok && scheduleRes.data?.blocks) {
-                const extractedLogs: any[] = [];
-                for (const block of scheduleRes.data.blocks) {
-                    // Check for nested check-ins inside the block (common in Replit templates)
-                    const checkIns = block.checkIns || block.checkins || block.logs || block.activity || [];
-                    if (Array.isArray(checkIns)) {
-                        checkIns.forEach((ci: any) => {
-                            extractedLogs.push({
-                                ...ci,
-                                userName: ci.userName || block.assignedToName || ci.name,
-                                task: block.title,
-                                userId: ci.userId || block.assignedTo
-                            });
-                        });
+            // 2. FALLBACK: Fetch schedule and extract check-ins from blocks
+            const scheduleEndpoints = [
+                `/api/daily-planner?date=${todayLocale}`,
+                `/api/daily-planner?date=${todayStr}`,
+                `/api/daily-schedules/date/${todayLocale}`,
+                `/api/daily-schedules/date/${todayStr}`,
+                `/api/daily-planner`,
+                `/api/schedules`
+            ];
+
+            for (const endpoint of scheduleEndpoints) {
+                const res = await tryFetch(endpoint);
+                if (res.ok) {
+                    console.log(`[ReplitSync] Extracting from schedule endpoint: ${endpoint}`);
+                    const extractedLogs: any[] = [];
+
+                    // The data might be an object with .blocks or just a list of blocks
+                    const blocks = res.data?.blocks || (Array.isArray(res.data) ? res.data : []);
+
+                    if (Array.isArray(blocks)) {
+                        for (const block of blocks) {
+                            // Check for nested check-ins inside the block
+                            const checkIns = block.checkIns || block.checkins || block.logs || block.activity || [];
+                            if (Array.isArray(checkIns)) {
+                                checkIns.forEach((ci: any) => {
+                                    // Robust mapping from block/check-in to log
+                                    extractedLogs.push({
+                                        ...ci,
+                                        id: ci.id || `block-${block.id}-${ci.time || ci.timestamp}`,
+                                        userName: ci.userName || ci.name || block.assignedToName || block.userName,
+                                        userId: ci.userId || block.assignedTo || block.userId,
+                                        task: block.title || block.task || 'Staff Check-in',
+                                        timestamp: ci.timestamp || ci.time || ci.createdAt || ci.created_at,
+                                        notes: ci.notes || ci.note || block.description || 'Schedule Check-in'
+                                    });
+                                });
+                            }
+                        }
                     }
+                    if (extractedLogs.length > 0) return extractedLogs;
                 }
-                if (extractedLogs.length > 0) return extractedLogs;
             }
 
-            throw new Error(`Connection failed. No data found at ${endpoints.length} endpoints, and Schedule extraction yielded no results. Ensure your Replit Daily Planner is running and you have check-ins saved.`);
+            throw new Error(`Connection failed. Tried logs and team schedule endpoints, but no check-ins found. Ensure your Replit is active.`);
         } catch (error) {
             console.error("Deep search sync failed:", error);
             throw error;
