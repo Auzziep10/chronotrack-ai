@@ -15,6 +15,7 @@ interface Props {
   isSyncingReplit?: boolean;
   lastSyncTime?: number;
   syncError?: string | null;
+  replitUrl?: string;
 }
 
 export const ActivityTracker: React.FC<Props> = ({
@@ -25,7 +26,8 @@ export const ActivityTracker: React.FC<Props> = ({
   onManualSync,
   isSyncingReplit = false,
   lastSyncTime = 0,
-  syncError = null
+  syncError = null,
+  replitUrl = ''
 }) => {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
@@ -175,21 +177,29 @@ export const ActivityTracker: React.FC<Props> = ({
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px]">
+                  <div className="flex items-center justify-between text-[10px] mt-1">
+                    <div className="text-gray-500 truncate max-w-[200px]">
+                      {replitUrl ? `URL: ${replitUrl.replace('https://', '')}` : 'Missing Replit URL'}
+                    </div>
                     <div className="text-gray-500">
                       {lastSyncTime > 0 ? (
                         <span>Last match: {new Date(lastSyncTime).toLocaleTimeString()}</span>
                       ) : (
-                        <span>No historical matches found for this session</span>
+                        <span>No matches yet</span>
                       )}
                     </div>
-                    {syncError && (
-                      <div className="text-red-500 flex items-center gap-1 font-medium">
-                        <AlertCircle className="w-3 h-3" />
-                        {syncError.includes('JSON') ? 'Check URL' : 'Sync Error'}
-                      </div>
-                    )}
                   </div>
+
+                  {syncError && (
+                    <div className="mt-2 p-2 bg-red-50 rounded border border-red-100 flex items-center gap-2 text-[10px] text-red-600 font-medium animate-shake">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <div className="flex-1">
+                        {syncError.includes('HTML')
+                          ? 'Connection Error: Server returned a webpage instead of data. Check your Replit App URL.'
+                          : `Sync Error: ${syncError}`}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
