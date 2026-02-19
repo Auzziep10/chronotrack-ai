@@ -257,6 +257,70 @@ const App: React.FC = () => {
       unsubUsers();
     };
   }, [authToken]); // Add users to dependency to ensure mapping works when users list changes
+  // ─── REPLIT -> FIREBASE LOG BRIDGE ──────────────────────────────────────────
+  // Sync hourly check-ins from Replit Supply Watch into ChronoTrack Firebase
+  useEffect(() => {
+    if (!authToken || !isFirebaseConfigured()) return;
+
+    const syncReplitLogs = async () => {
+      const replitUrl = localStorage.getItem('replitAppUrl');
+      if (!replitUrl) return;
+
+      try {
+        const { supplyWatchService } = await import('./services/supplyWatchService');
+        const remoteLogs = await supplyWatchService.getLogs(replitUrl, authToken);
+
+        if (Array.isArray(remoteLogs)) {
+          // Get today's date in local ISO format to filter
+          const todayStr = new Date().toISOString().split('T')[0];
+
+          for (const rLog of remoteLogs) {
+            // Only process logs from today to keep it efficient
+            const logDateStr = new Date(rLog.startTime || rLog.timestamp).toISOString().split('T')[0];
+            if (logDateStr !== todayStr) continue;
+
+            // Find matching user in ChronoTrack
+            const sessionUser = usersRef.current.find(u =>
+              u.id === String(rLog.userId) ||
+              u.username === rLog.username ||
+              u.name === rLog.userName
+            );
+
+            if (sessionUser) {
+              const logId = rLog.id ? `replit-${rLog.id}` : `replit-${sessionUser.id}-${new Date(rLog.startTime).getTime()}`;
+
+              const chronoLog: WorkLog = {
+                id: logId,
+                userId: sessionUser.id,
+                userName: sessionUser.name,
+                department: (rLog.department as Department) || Department.Production,
+                task: rLog.task || 'Staff Check-in',
+                notes: rLog.notes || 'Imported from Replit',
+                timestamp: new Date(rLog.timestamp || rLog.startTime).getTime(),
+                periodStart: new Date(rLog.startTime || rLog.timestamp).getTime(),
+                periodEnd: new Date(rLog.endTime || rLog.timestamp).getTime(),
+                productionData: rLog.productionQuantity ? {
+                  quantity: rLog.productionQuantity,
+                  projectName: rLog.projectReference || ''
+                } : undefined
+              };
+
+              // Push to Firebase — if the user is active, this also resets their timer
+              await firebaseAddLog(sessionUser.id, chronoLog);
+            }
+          }
+        }
+      } catch (err) {
+        // Silent fail for background sync to avoid annoying user
+        console.debug("Replit log bridge background sync:", err);
+      }
+    };
+
+    // Run once on load, then every minute
+    syncReplitLogs();
+    const interval = setInterval(syncReplitLogs, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [authToken]);
 
   // Handle Role-based Tab Restrictions
   useEffect(() => {

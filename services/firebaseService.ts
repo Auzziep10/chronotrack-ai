@@ -7,6 +7,7 @@ import {
     onSnapshot,
     collection,
     getDocs,
+    updateDoc,
     serverTimestamp,
     Timestamp
 } from 'firebase/firestore';
@@ -112,10 +113,16 @@ export const firebaseAddLog = async (userId: string, log: WorkLog): Promise<void
         createdAt: serverTimestamp()
     });
 
-    await setDoc(doc(db, SESSIONS_COL, userId), {
-        lastLogTime: log.periodEnd,
-        updatedAt: serverTimestamp()
-    }, { merge: true });
+    // Update session's lastLogTime ONLY if they are already clocked in
+    try {
+        await updateDoc(doc(db, SESSIONS_COL, userId), {
+            lastLogTime: log.periodEnd,
+            updatedAt: serverTimestamp()
+        });
+    } catch (e) {
+        // Ignore if document doesn't exist (user not clocked in)
+        console.debug("User not clocked in, skipping session timer update.");
+    }
 };
 
 /** Delete a work log from Firestore */
