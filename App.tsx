@@ -362,14 +362,14 @@ const App: React.FC = () => {
           if (sessionUser) {
             const activeSession = currentSessions[sessionUser.id];
             if (activeSession) {
-              const logId = `replit-${rawLogId}`;
+              const logId = `replit-${rLog.id}`;
 
               const isDuplicate = activeSession.logs?.some(l =>
                 l.id === logId || (Math.abs(l.timestamp - logTime) < 10000 && norm(l.task) === norm(rLog.task))
               );
 
               if (isDuplicate) {
-                syncedLogIdsRef.current.add(rawLogId);
+                syncedLogIdsRef.current.add(rLog.id);
                 continue;
               }
 
@@ -393,9 +393,14 @@ const App: React.FC = () => {
                 } : undefined
               };
 
-              console.log(`[ReplitSync] Mapping success for ${sessionUser.name}: "${chronoLog.task}"`);
+              console.log(`[ReplitSync] Mapping success for ${sessionUser.name}: "${chronoLog.task}". Resume & Log.`);
+
+              // Force a resume call to ensure the UI unlocks immediately
+              const { firebaseResumeSession } = await import('./services/firebaseService');
+              await firebaseResumeSession(sessionUser.id, activeSession);
               await firebaseAddLog(sessionUser.id, chronoLog);
-              syncedLogIdsRef.current.add(rawLogId);
+
+              syncedLogIdsRef.current.add(rLog.id);
               foundMatch = true;
             }
           }

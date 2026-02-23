@@ -476,10 +476,14 @@ export const supplyWatchService = {
             const parseReplitTime = (str: any) => {
                 if (!str) return Date.now();
                 const s = String(str);
+
+                // 1. ISO/Timestamp
                 if (s.includes('T') || (s.length > 10 && !isNaN(Number(s)))) {
                     const d = new Date(isNaN(Number(s)) ? s : Number(s));
                     if (!isNaN(d.getTime())) return d.getTime();
                 }
+
+                // 2. Relative time regex (9:13 AM)
                 const match = s.match(/(\d{1,2}):(\d{2})(\s*[AaPp][Mm])?/);
                 if (match) {
                     const now = new Date();
@@ -491,8 +495,13 @@ export const supplyWatchService = {
                     now.setHours(h, m, 0, 0);
                     return now.getTime();
                 }
+
+                // 3. Fallback to start of today for stability
                 const d = new Date(s);
-                return isNaN(d.getTime()) ? Date.now() : d.getTime();
+                if (!isNaN(d.getTime())) return d.getTime();
+                const today = new Date();
+                today.setHours(8, 0, 0, 0); // Default to 8am today
+                return today.getTime();
             };
 
             for (const endpoint of scheduleEndpoints) {
@@ -500,7 +509,6 @@ export const supplyWatchService = {
                 if (res.ok) {
                     const d = res.data;
                     const blocks = d?.blocks || (Array.isArray(d) ? d : []);
-                    console.log(`[ReplitSync] Found ${blocks.length} blocks in ${endpoint}`);
 
                     if (Array.isArray(blocks)) {
                         for (const block of blocks) {
@@ -508,6 +516,7 @@ export const supplyWatchService = {
                             const bOwnerId = block.assignedTo || block.assigned_to || block.userId || block.owner;
                             const bTask = block.title || block.task || block.name || 'Assigned Task';
 
+                            // Part 1: Real Check-ins
                             const checkIns = block.checkIns || block.checkins || block.logs || block.activity || block.history || block.updates || block.statusHistory || [];
                             if (Array.isArray(checkIns) && checkIns.length > 0) {
                                 checkIns.forEach((ci: any, idx: number) => {
@@ -517,8 +526,7 @@ export const supplyWatchService = {
 
                                     const ts = parseReplitTime(ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt);
                                     combinedLogs.push({
-                                        ...ci,
-                                        id: ci.id || `replit-ci-${block.id}-${idx}-${ts}`,
+                                        id: ci.id || `ci-${block.id}-${idx}-${ts}`,
                                         userName: logOwnerName,
                                         userId: logOwnerId,
                                         task: bTask,
@@ -529,12 +537,13 @@ export const supplyWatchService = {
                                 });
                             }
 
+                            // Part 2: State-based Logs (Stable ID)
                             const currentStatus = String(block.status || '').toLowerCase();
                             if (['active', 'in_progress', 'completed', 'in progress'].includes(currentStatus)) {
                                 if (bOwnerName && !['staff', 'team', 'member', 'admin', 'unassigned'].includes(bOwnerName.toLowerCase())) {
                                     const ts = parseReplitTime(block.updatedAt || block.updated_at || block.endTime || block.startTime);
                                     combinedLogs.push({
-                                        id: `vlog-${block.id}-${currentStatus}-${ts}`,
+                                        id: `vlog-${block.id}-${currentStatus}`, // Deterministic ID
                                         userName: bOwnerName,
                                         userId: bOwnerId,
                                         task: bTask,
@@ -552,16 +561,15 @@ export const supplyWatchService = {
 
             if (combinedLogs.length > 0) {
                 const seen = new Set();
-                const unique = combinedLogs
-                    .map(l => ({ ...l, timestamp: typeof l.timestamp === 'number' ? l.timestamp : parseReplitTime(l.timestamp) }))
-                    .filter(l => {
-                        const id = l.id || `bridge-${l.timestamp}-${l.task}`;
-                        if (seen.has(id)) return false;
-                        seen.add(id);
-                        return true;
-                    });
-                return unique;
+                return combinedLogs.filter(l => {
+                    const id = l.id;
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
             }
+
+            return [];
 
             return [];
         } catch (error) {
