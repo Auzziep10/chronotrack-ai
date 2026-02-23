@@ -129,7 +129,7 @@ export const supplyWatchService = {
     /**
      * Fetches daily schedule and blocks for a specific date
      */
-    getDailySchedule: async (replitUrl: string, token: string, date: Date) => {
+    getDailySchedule: async function (replitUrl: string, token: string, date: Date) {
         const baseUrl = replitUrl.replace(/\/$/, '');
         const dateISO = date.toISOString().split('T')[0];
         const dateLocale = date.toLocaleDateString('en-CA'); // YYYY-MM-DD
@@ -150,13 +150,45 @@ export const supplyWatchService = {
                     const data = await response.json();
                     if (data && data.blocks && Array.isArray(data.blocks)) {
                         data.blocks = data.blocks.map((b: any) => {
-                            const rawCheckIns = b.checkIns || b.checkins || b.logs || b.activity || b.history || b.updates || b.statusHistory || [];
-                            const normalizedCheckIns = Array.isArray(rawCheckIns) ? rawCheckIns.map((ci: any) => ({
-                                ...ci,
-                                timestamp: this.parseReplitTime(ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt),
-                                status: ci.status || ci.text || ci.comment || (ci.progress !== undefined ? `Active (${ci.progress}%)` : 'Check-in'),
-                                notes: ci.notes || ci.note || ci.comment || ci.text || ''
-                            })) : [];
+                            // Extract check-ins from any possible field name
+                            const rawCheckIns = b.checkIns || b.checkins || b.check_ins || b.updates || b.history || b.logs || b.activity || b.statusHistory || b.status_history || b.activity_log || b.reports || b.comments || b.feed || [];
+
+                            if (Array.isArray(rawCheckIns) && rawCheckIns.length === 0) {
+                                // Last ditch: search for ANY array field that looks like it might have check-ins
+                                for (const key in b) {
+                                    if (Array.isArray(b[key]) && b[key].length > 0 && typeof b[key][0] === 'object') {
+                                        const first = b[key][0];
+                                        if (first.timestamp || first.time || first.createdAt || first.text || first.status) {
+                                            (rawCheckIns as any) = b[key];
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            const normalizedCheckIns = Array.isArray(rawCheckIns) ? rawCheckIns.map((ci: any) => {
+                                if (typeof ci === 'string') {
+                                    return {
+                                        timestamp: this.parseReplitTime(ci),
+                                        status: ci,
+                                        notes: ''
+                                    };
+                                }
+
+                                const ts = this.parseReplitTime(ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt);
+                                let status = ci.status || ci.text || ci.comment || (ci.progress !== undefined ? `Active (${ci.progress}%)` : 'Check-in');
+
+                                if (status.toLowerCase() === 'active' && ci.progress !== undefined) {
+                                    status = `Active (${ci.progress}%)`;
+                                }
+
+                                return {
+                                    ...ci,
+                                    timestamp: ts,
+                                    status: status,
+                                    notes: ci.notes || ci.note || ci.comment || ci.text || ''
+                                };
+                            }) : [];
 
                             return {
                                 ...b,
