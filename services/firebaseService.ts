@@ -139,25 +139,20 @@ export const firebaseAddLog = async (userId: string, log: WorkLog): Promise<void
     try {
         const sessionRef = doc(db, SESSIONS_COL, userId);
 
-        // Calculate accrued idle time if they were paused
-        let idleUpdate: any = {
-            lastLogTime: log.periodEnd,
+        // When adding a log, we ALWAYS clear paused status and update the last activity time.
+        // This ensures that even if a background sync adds a log, the user is "resumed" automatically.
+        const updateData: any = {
+            lastLogTime: log.periodEnd || log.timestamp || now,
             logs: arrayUnion(cleanLog),
+            isPaused: false,
+            currentIdleStartTime: null,
             updatedAt: serverTimestamp()
         };
 
-        // If they were paused, finish the idle period
-        // Note: we'd ideally read the doc first, but we can rely on local state logic 
-        // to pass us a session or just do a partial update. 
-        // For robustness, we check if they are paused.
-        if (log.notes?.includes("Resumed from Idle")) {
-            // This logic will be handled better by the caller in App.tsx passing correct values,
-            // but we'll add the atomic resume here.
-        }
-
-        await updateDoc(sessionRef, idleUpdate);
+        await updateDoc(sessionRef, updateData);
     } catch (e) {
         // Ignore if document doesn't exist (user not clocked in)
+        console.warn("[Firebase] Failed to update session after log add:", e);
     }
 };
 

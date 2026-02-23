@@ -326,50 +326,37 @@ const App: React.FC = () => {
         // Helper to normalize strings for robust matching
         const norm = (s: any) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, '');
 
-        // Sort logs ascending so the latest one is processed last (and thus sets the final lastLogTime)
         const sortedLogs = [...logs].sort((a, b) => {
-          const tA = new Date(a.timestamp || a.startTime || a.createdAt || a.time).getTime();
-          const tB = new Date(b.timestamp || b.startTime || b.createdAt || b.time).getTime();
+          const tA = Number(a.timestamp || a.startTime || a.createdAt || 0);
+          const tB = Number(b.timestamp || b.startTime || b.createdAt || 0);
           return tA - tB;
         });
 
+        let foundMatch = false;
         for (const rLog of sortedLogs) {
-          const logTimeStr = rLog.timestamp || rLog.startTime || rLog.createdAt || rLog.created_at || rLog.time;
-          const logTime = new Date(logTimeStr).getTime();
+          const logTime = Number(rLog.timestamp || rLog.startTime || rLog.createdAt || Date.now());
 
           if (isNaN(logTime) || logTime < twelveHoursAgo) continue;
 
           const rawLogId = rLog.id || `check-${rLog.userId || rLog.username}-${logTime}`;
           if (syncedLogIdsRef.current.has(rawLogId)) continue;
 
-          const cleanRName = norm(rLog.userName || rLog.user_name || rLog.name);
-          const cleanRUser = norm(rLog.username || rLog.user_username);
-
           const sessionUser = usersRef.current.find(u => {
             const uName = norm(u.name);
             const uUser = norm(u.username);
             const rName = norm(rLog.userName || rLog.user_name || rLog.name);
             const rUser = norm(rLog.username || rLog.user_username);
-
-            // 1. Strict ID Match
             if (rLog.userId && String(u.id) === String(rLog.userId)) return true;
-
-            // 2. Exact Username Match
             if (rUser && uUser === rUser) return true;
-
-            // 3. Exact Full Name Match
             if (rName && uName === rName) return true;
-
-            // 4. Fuzzy Match (Start of name, or name contains)
             const isGeneric = ['admin', 'staff', 'team', 'member'].includes(uName);
             if (!isGeneric && rName && uName && (uName.startsWith(rName) || rName.startsWith(uName))) return true;
-
             return false;
           });
 
           if (sessionUser) {
             const logId = `replit-${rawLogId}`;
-            const pEndRaw = new Date(rLog.endTime || rLog.timestamp || rLog.startTime).getTime();
+            const pEndRaw = Number(rLog.endTime || rLog.timestamp || rLog.startTime);
             let pEnd = isNaN(pEndRaw) ? logTime : pEndRaw;
             if (pEnd < logTime) pEnd = logTime;
 
@@ -381,7 +368,7 @@ const App: React.FC = () => {
               task: rLog.task || 'Staff Check-in',
               notes: rLog.notes || 'Imported from Replit',
               timestamp: logTime,
-              periodStart: new Date(rLog.startTime || rLog.timestamp).getTime() || logTime,
+              periodStart: Number(rLog.startTime || rLog.timestamp) || logTime,
               periodEnd: pEnd,
               productionData: rLog.productionQuantity ? {
                 quantity: rLog.productionQuantity,
@@ -389,32 +376,18 @@ const App: React.FC = () => {
               } : undefined
             };
 
-            // BRIDGE LOG: If user is currently paused/locked, we RESUME them automatically
+            // Use the ref to check active session status
             const activeSession = activeSessionsRef.current[sessionUser.id];
-            const isPaused = activeSession?.isPaused || (activeSession && (Date.now() - activeSession.lastLogTime >= 60 * 60 * 1000));
-
-            if (isPaused) {
-              console.log(`[ReplitSync] User ${sessionUser.name} is paused/locked. Proactively resuming via Replit activity.`);
-              const { firebaseResumeSession } = await import('./services/firebaseService');
-
-              // If they are locked but not "isPaused" in DB, we need to pass a mock currentIdleStartTime for retroactive fix
-              let effectiveSession = activeSession;
-              if (!activeSession.isPaused) {
-                effectiveSession = {
-                  ...activeSession,
-                  isPaused: true,
-                  currentIdleStartTime: activeSession.lastLogTime + (70 * 60 * 1000)
-                };
-              }
-              await firebaseResumeSession(sessionUser.id, effectiveSession);
+            if (activeSession) {
+              console.log(`[ReplitSync] Bridging for ${sessionUser.name}. Session will auto-resume via firebaseAddLog.`);
+              await firebaseAddLog(sessionUser.id, chronoLog);
+              syncedLogIdsRef.current.add(rawLogId);
+              foundMatch = true;
             }
-
-            await firebaseAddLog(sessionUser.id, chronoLog);
-            syncedLogIdsRef.current.add(rawLogId);
-            console.log(`[ReplitSync] Successfully bridged "${chronoLog.task}" for ${sessionUser.name}`);
           }
         }
-        setLastReplitSync(Date.now());
+
+        if (foundMatch) setLastReplitSync(Date.now());
       } catch (err: any) {
         console.warn("[ReplitSync] Sync issue:", err);
         setReplitSyncError(err.message || String(err));
