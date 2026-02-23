@@ -333,53 +333,62 @@ const App: React.FC = () => {
         });
 
         let foundMatch = false;
+        const currentUsers = usersRef.current;
+        const currentSessions = activeSessionsRef.current;
+
         for (const rLog of sortedLogs) {
           const logTime = Number(rLog.timestamp || rLog.startTime || rLog.createdAt || Date.now());
-
           if (isNaN(logTime) || logTime < twelveHoursAgo) continue;
 
           const rawLogId = rLog.id || `check-${rLog.userId || rLog.username}-${logTime}`;
           if (syncedLogIdsRef.current.has(rawLogId)) continue;
 
-          const sessionUser = usersRef.current.find(u => {
+          const sessionUser = currentUsers.find(u => {
             const uName = norm(u.name);
-            const uUser = norm(u.username);
             const rName = norm(rLog.userName || rLog.user_name || rLog.name);
             const rUser = norm(rLog.username || rLog.user_username);
             if (rLog.userId && String(u.id) === String(rLog.userId)) return true;
-            if (rUser && uUser === rUser) return true;
-            if (rName && uName === rName) return true;
-            const isGeneric = ['admin', 'staff', 'team', 'member'].includes(uName);
-            if (!isGeneric && rName && uName && (uName.startsWith(rName) || rName.startsWith(uName))) return true;
+            if (rUser && norm(u.username) === rUser) return true;
+            if (rName && (uName.includes(rName) || rName.includes(uName))) return true;
             return false;
           });
 
           if (sessionUser) {
-            const logId = `replit-${rawLogId}`;
-            const pEndRaw = Number(rLog.endTime || rLog.timestamp || rLog.startTime);
-            let pEnd = isNaN(pEndRaw) ? logTime : pEndRaw;
-            if (pEnd < logTime) pEnd = logTime;
-
-            const chronoLog: WorkLog = {
-              id: logId,
-              userId: sessionUser.id,
-              userName: sessionUser.name,
-              department: (rLog.department as Department) || Department.Production,
-              task: rLog.task || 'Staff Check-in',
-              notes: rLog.notes || 'Imported from Replit',
-              timestamp: logTime,
-              periodStart: Number(rLog.startTime || rLog.timestamp) || logTime,
-              periodEnd: pEnd,
-              productionData: rLog.productionQuantity ? {
-                quantity: rLog.productionQuantity,
-                projectName: rLog.projectReference || ''
-              } : undefined
-            };
-
-            // Use the ref to check active session status
-            const activeSession = activeSessionsRef.current[sessionUser.id];
+            const activeSession = currentSessions[sessionUser.id];
             if (activeSession) {
-              console.log(`[ReplitSync] Bridging for ${sessionUser.name}. Session will auto-resume via firebaseAddLog.`);
+              const logId = `replit-${rawLogId}`;
+
+              // Check if we already have this log in the local session history
+              const hasLog = activeSession.logs?.some(l =>
+                l.id === logId || (Math.abs(l.timestamp - logTime) < 5000 && l.task === (rLog.task || 'Staff Check-in'))
+              );
+
+              if (hasLog) {
+                syncedLogIdsRef.current.add(rawLogId);
+                continue;
+              }
+
+              const pEndRaw = Number(rLog.endTime || rLog.timestamp || rLog.startTime);
+              let pEnd = isNaN(pEndRaw) ? logTime : pEndRaw;
+              if (pEnd < logTime) pEnd = logTime;
+
+              const chronoLog: WorkLog = {
+                id: logId,
+                userId: sessionUser.id,
+                userName: sessionUser.name,
+                department: (rLog.department as Department) || Department.Production,
+                task: rLog.task || 'Staff Check-in',
+                notes: rLog.notes || 'Imported from Replit',
+                timestamp: logTime,
+                periodStart: Number(rLog.startTime || rLog.timestamp) || logTime,
+                periodEnd: pEnd,
+                productionData: rLog.productionQuantity ? {
+                  quantity: rLog.productionQuantity,
+                  projectName: rLog.projectReference || ''
+                } : undefined
+              };
+
+              console.log(`[ReplitSync] Bridging Activity: ${sessionUser.name} - ${chronoLog.task}`);
               await firebaseAddLog(sessionUser.id, chronoLog);
               syncedLogIdsRef.current.add(rawLogId);
               foundMatch = true;

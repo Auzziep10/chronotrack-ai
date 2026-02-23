@@ -488,8 +488,8 @@ export const supplyWatchService = {
                 const res = await tryFetch(endpoint);
                 if (res.ok) {
                     const d = res.data;
-                    console.log(`[ReplitSync] Extracting logs from ${endpoint}...`);
                     const blocks = d?.blocks || (Array.isArray(d) ? d : []);
+                    console.log(`[ReplitSync] Found ${blocks.length} blocks in ${endpoint}`);
 
                     if (Array.isArray(blocks)) {
                         for (const block of blocks) {
@@ -503,6 +503,7 @@ export const supplyWatchService = {
                                     const logOwnerName = ci.userName || ci.name || ci.user_name || bOwnerName;
                                     const logOwnerId = ci.userId || ci.user_id || bOwnerId;
                                     if (!logOwnerName || ['staff', 'team', 'member', 'admin', 'unassigned'].includes(logOwnerName.toLowerCase())) return;
+
                                     const ts = parseReplitTime(ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt);
                                     combinedLogs.push({
                                         ...ci,
@@ -511,7 +512,7 @@ export const supplyWatchService = {
                                         userId: logOwnerId,
                                         task: bTask,
                                         timestamp: ts,
-                                        notes: ci.notes || ci.note || ci.comment || `Progress: ${ci.progress || 0}%`,
+                                        notes: ci.notes || ci.note || ci.comment || ci.text || `Progress: ${ci.progress || 0}%`,
                                         department: block.department || block.dept
                                     });
                                 });
