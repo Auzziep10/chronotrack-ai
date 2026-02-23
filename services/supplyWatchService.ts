@@ -7,6 +7,40 @@ import { WorkLog, Department } from '../types';
 export const supplyWatchService = {
 
     /**
+     * Helper to parse messy Replit time strings into numeric timestamps
+     */
+    parseReplitTime: (str: any) => {
+        if (!str) return Date.now();
+        const s = String(str);
+
+        // 1. ISO/Timestamp
+        if (s.includes('T') || (s.length > 10 && !isNaN(Number(s)))) {
+            const d = new Date(isNaN(Number(s)) ? s : Number(s));
+            if (!isNaN(d.getTime())) return d.getTime();
+        }
+
+        // 2. Relative time regex (9:13 AM)
+        const match = s.match(/(\d{1,2}):(\d{2})(\s*[AaPp][Mm])?/);
+        if (match) {
+            const now = new Date();
+            let h = parseInt(match[1]);
+            const m = parseInt(match[2]);
+            const ampm = match[3]?.trim().toLowerCase();
+            if (ampm === 'pm' && h < 12) h += 12;
+            if (ampm === 'am' && h === 12) h = 0;
+            now.setHours(h, m, 0, 0);
+            return now.getTime();
+        }
+
+        // 3. Fallback to start of today for stability
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return d.getTime();
+        const today = new Date();
+        today.setHours(8, 0, 0, 0); // Default to 8am today
+        return today.getTime();
+    },
+
+    /**
      * Syncs an activity log to the Replit backend
      */
     syncLog: async (log: WorkLog, replitUrl: string, token?: string) => {
@@ -115,11 +149,21 @@ export const supplyWatchService = {
                 if (response.ok) {
                     const data = await response.json();
                     if (data && data.blocks && Array.isArray(data.blocks)) {
-                        data.blocks = data.blocks.map((b: any) => ({
-                            ...b,
-                            assignedToName: b.assignedToName || b.assigned_to_name || b.userName || b.username || b.ownerName,
-                            checkIns: b.checkIns || b.checkins || b.logs || b.activity || b.history || b.updates || b.statusHistory || []
-                        }));
+                        data.blocks = data.blocks.map((b: any) => {
+                            const rawCheckIns = b.checkIns || b.checkins || b.logs || b.activity || b.history || b.updates || b.statusHistory || [];
+                            const normalizedCheckIns = Array.isArray(rawCheckIns) ? rawCheckIns.map((ci: any) => ({
+                                ...ci,
+                                timestamp: this.parseReplitTime(ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt),
+                                status: ci.status || ci.text || ci.comment || (ci.progress !== undefined ? `Active (${ci.progress}%)` : 'Check-in'),
+                                notes: ci.notes || ci.note || ci.comment || ci.text || ''
+                            })) : [];
+
+                            return {
+                                ...b,
+                                assignedToName: b.assignedToName || b.assigned_to_name || b.userName || b.username || b.ownerName,
+                                checkIns: normalizedCheckIns
+                            };
+                        });
                     }
                     return data;
                 }
@@ -410,7 +454,10 @@ export const supplyWatchService = {
     /**
      * Fetches work logs from Replit
      */
-    getLogs: async (replitUrl: string, token: string) => {
+    /**
+     * Fetches work logs from Replit
+     */
+    getLogs: async function (replitUrl: string, token: string) {
         const tryFetch = async (endpoint: string) => {
             let baseUrl = replitUrl.replace(/\/$/, '');
             if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
@@ -455,7 +502,7 @@ export const supplyWatchService = {
                     if (!Array.isArray(data)) data = data.logs || data.checkIns || data.checkins || data.data || [];
                     if (Array.isArray(data) && data.length > 0) {
                         data.forEach((l: any) => {
-                            const ts = parseReplitTime(l.timestamp || l.time || l.createdAt || l.created_at || l.updatedAt);
+                            const ts = this.parseReplitTime(l.timestamp || l.time || l.createdAt || l.created_at || l.updatedAt);
                             combinedLogs.push({
                                 ...l,
                                 id: l.id || `flat-${ts}-${l.userId || l.user_id || l.username}`,
@@ -473,7 +520,6 @@ export const supplyWatchService = {
             }
 
             // 2. Method B: Fetch schedule and extract/generate logs from blocks
-            // We ALWAYS do this now to capture "virtual" logs from status changes
             const scheduleEndpoints = [
                 `/api/daily-planner?date=${todayLocale}`,
                 `/api/daily-planner?date=${todayStr}`,
@@ -482,37 +528,6 @@ export const supplyWatchService = {
                 `/api/daily-planner`,
                 `/api/schedules`
             ];
-
-            const parseReplitTime = (str: any) => {
-                if (!str) return Date.now();
-                const s = String(str);
-
-                // 1. ISO/Timestamp
-                if (s.includes('T') || (s.length > 10 && !isNaN(Number(s)))) {
-                    const d = new Date(isNaN(Number(s)) ? s : Number(s));
-                    if (!isNaN(d.getTime())) return d.getTime();
-                }
-
-                // 2. Relative time regex (9:13 AM)
-                const match = s.match(/(\d{1,2}):(\d{2})(\s*[AaPp][Mm])?/);
-                if (match) {
-                    const now = new Date();
-                    let h = parseInt(match[1]);
-                    const m = parseInt(match[2]);
-                    const ampm = match[3]?.trim().toLowerCase();
-                    if (ampm === 'pm' && h < 12) h += 12;
-                    if (ampm === 'am' && h === 12) h = 0;
-                    now.setHours(h, m, 0, 0);
-                    return now.getTime();
-                }
-
-                // 3. Fallback to start of today for stability
-                const d = new Date(s);
-                if (!isNaN(d.getTime())) return d.getTime();
-                const today = new Date();
-                today.setHours(8, 0, 0, 0); // Default to 8am today
-                return today.getTime();
-            };
 
             for (const endpoint of scheduleEndpoints) {
                 const res = await tryFetch(endpoint);
@@ -534,7 +549,7 @@ export const supplyWatchService = {
                                     const logOwnerId = ci.userId || ci.user_id || bOwnerId;
                                     if (!logOwnerName || ['staff', 'team', 'member', 'admin', 'unassigned'].includes(logOwnerName.toLowerCase())) return;
 
-                                    const ts = parseReplitTime(ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt);
+                                    const ts = this.parseReplitTime(ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt);
                                     combinedLogs.push({
                                         id: ci.id || `ci-${block.id}-${idx}-${ts}`,
                                         userName: logOwnerName,
@@ -551,7 +566,7 @@ export const supplyWatchService = {
                             const currentStatus = String(block.status || '').toLowerCase();
                             if (['active', 'in_progress', 'completed', 'in progress'].includes(currentStatus)) {
                                 if (bOwnerName && !['staff', 'team', 'member', 'admin', 'unassigned'].includes(bOwnerName.toLowerCase())) {
-                                    const ts = parseReplitTime(block.updatedAt || block.updated_at || block.endTime || block.startTime);
+                                    const ts = this.parseReplitTime(block.updatedAt || block.updated_at || block.endTime || block.startTime);
                                     combinedLogs.push({
                                         id: `vlog-${block.id}-${currentStatus}`, // Deterministic ID
                                         userName: bOwnerName,
@@ -578,8 +593,6 @@ export const supplyWatchService = {
                     return true;
                 });
             }
-
-            return [];
 
             return [];
         } catch (error) {

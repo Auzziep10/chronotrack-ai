@@ -201,8 +201,8 @@ const App: React.FC = () => {
     };
 
     initAuthenticatedData();
-    // Still poll schedule every 5 minutes
-    const interval = setInterval(initAuthenticatedData, 5 * 60 * 1000);
+    // Poll schedule every 25 seconds to keep check-ins fresh
+    const interval = setInterval(initAuthenticatedData, 25 * 1000);
     return () => clearInterval(interval);
   }, [authToken]);
 
