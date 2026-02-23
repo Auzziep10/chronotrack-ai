@@ -336,6 +336,10 @@ const App: React.FC = () => {
         const currentUsers = usersRef.current;
         const currentSessions = activeSessionsRef.current;
 
+        if (logs.length > 0) {
+          console.log(`[ReplitSync] Processing ${logs.length} remote logs...`);
+        }
+
         for (const rLog of sortedLogs) {
           const logTime = Number(rLog.timestamp || Date.now());
           if (isNaN(logTime) || logTime < twelveHoursAgo) continue;
@@ -352,24 +356,28 @@ const App: React.FC = () => {
             const rName = norm(rLog.userName || rLog.user_name || rLog.name);
             const rUser = norm(rLog.username || rLog.user_username || rLog.user?.username);
 
+            // Match by exact ID or exactly matching both parts of the name
             if (rId && uId === rId) return true;
             if (rId && (uName === norm(rId) || uUser === norm(rId))) return true;
             if (rUser && uUser === rUser) return true;
-            if (rName && (uName.includes(rName) || rName.includes(uName))) return true;
+
+            // Austin Patterson logic: if uName is "austinpatterson" and rName contains "austin", it's a match
+            if (rName && uName && (uName.includes(rName) || rName.includes(uName))) return true;
+
             return false;
           });
 
           if (sessionUser) {
             const activeSession = currentSessions[sessionUser.id];
             if (activeSession) {
-              const logId = `replit-${rLog.id}`;
+              const logId = `replit-${rLog.id || rawLogId}`;
 
               const isDuplicate = activeSession.logs?.some(l =>
                 l.id === logId || (Math.abs(l.timestamp - logTime) < 10000 && norm(l.task) === norm(rLog.task))
               );
 
               if (isDuplicate) {
-                syncedLogIdsRef.current.add(rLog.id);
+                syncedLogIdsRef.current.add(rLog.id || rawLogId);
                 continue;
               }
 
@@ -393,16 +401,20 @@ const App: React.FC = () => {
                 } : undefined
               };
 
-              console.log(`[ReplitSync] Mapping success for ${sessionUser.name}: "${chronoLog.task}". Resume & Log.`);
+              console.log(`[ReplitSync] SUCCESS: Bridging "${chronoLog.task}" for ${sessionUser.name} @ ${new Date(logTime).toLocaleTimeString()}`);
 
-              // Force a resume call to ensure the UI unlocks immediately
               const { firebaseResumeSession } = await import('./services/firebaseService');
               await firebaseResumeSession(sessionUser.id, activeSession);
               await firebaseAddLog(sessionUser.id, chronoLog);
 
-              syncedLogIdsRef.current.add(rLog.id);
+              syncedLogIdsRef.current.add(rLog.id || rawLogId);
               foundMatch = true;
+            } else {
+              console.log(`[ReplitSync] SKIP: Found activity for ${sessionUser.name} but they are NOT clocked in.`);
             }
+          } else {
+            // Optional trace for unmapped logs
+            // console.log(`[ReplitSync] UNMAPPED LOG: "${rLog.task}" for "${rLog.userName || rLog.username}"`);
           }
         }
 

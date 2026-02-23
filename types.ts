@@ -89,6 +89,7 @@ export interface ScheduleBlock {
   id: string;
   scheduleId: string;
   assignedTo: string; // userId
+  assignedToName?: string; // Mapped for easier display
   title: string;
   description?: string;
   startTime: string; // ISO date string
@@ -96,6 +97,14 @@ export interface ScheduleBlock {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   status: 'pending' | 'in_progress' | 'completed' | 'delayed';
   location?: string;
+  checkIns?: Array<{
+    id?: string;
+    timestamp: any;
+    notes?: string;
+    status?: string;
+    progress?: number;
+    userName?: string;
+  }>;
 }
 
 export interface DailySchedule {

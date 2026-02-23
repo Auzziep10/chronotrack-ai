@@ -112,7 +112,17 @@ export const supplyWatchService = {
                 const response = await fetch(`${baseUrl}${endpoint}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (response.ok) return await response.json();
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.blocks && Array.isArray(data.blocks)) {
+                        data.blocks = data.blocks.map((b: any) => ({
+                            ...b,
+                            assignedToName: b.assignedToName || b.assigned_to_name || b.userName || b.username || b.ownerName,
+                            checkIns: b.checkIns || b.checkins || b.logs || b.activity || b.history || b.updates || b.statusHistory || []
+                        }));
+                    }
+                    return data;
+                }
             } catch (e) {
                 console.warn(`[ReplitSync] Failed to fetch schedule from ${endpoint}`);
             }
