@@ -234,7 +234,10 @@ const App: React.FC = () => {
             user,
             startTime: data.startTime,
             lastLogTime: data.lastLogTime,
-            logs: data.logs || []
+            logs: data.logs || [],
+            isPaused: data.isPaused || false,
+            currentIdleStartTime: data.currentIdleStartTime || null,
+            totalIdleTimeMs: data.totalIdleTimeMs || 0
           };
         });
         return newSessions;
@@ -799,7 +802,7 @@ const App: React.FC = () => {
             // Lazy load nicely or just static
             <DailyPlanner users={users} currentUser={currentUser} />
           ) : (
-            <ActivityManager users={users} settings={appSettings} />
+            <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} />
           )}
         </div>
       </main>

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Department, WorkLog, DailyTimeCard, User, AppSettings } from '../types';
+import { Department, WorkLog, DailyTimeCard, User, AppSettings, UserSession } from '../types';
 import {
   BarChart3, Users, Clock, Calendar, ChevronDown, Download,
   Briefcase, CalendarRange, Sparkles, Zap, ListTodo, RefreshCw,
@@ -103,9 +103,10 @@ const getPayPeriods = (settings: AppSettings) => {
 interface Props {
   users: User[];
   settings: AppSettings;
+  activeSessions?: Record<string, UserSession>;
 }
 
-export const ActivityManager: React.FC<Props> = ({ users, settings }) => {
+export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessions = {} }) => {
   const [activeView, setActiveView] = useState<'departments' | 'users' | 'timecards' | 'planning'>('departments');
   const [selectedDept, setSelectedDept] = useState<Department | 'All'>('All');
   const [selectedUser, setSelectedUser] = useState<string | 'All'>('All');
@@ -190,12 +191,27 @@ export const ActivityManager: React.FC<Props> = ({ users, settings }) => {
 
   const filteredTimeCards = useMemo(() => {
     if (!currentPeriod) return [];
-    return timeCards.filter(card => {
-      const cardDate = new Date(card.date);
-      cardDate.setHours(12, 0, 0, 0);
+
+    // Merge database cards with current active sessions
+    const activeCards: DailyTimeCard[] = (Object.values(activeSessions) as UserSession[]).map(session => ({
+      id: `active-${session.userId}`,
+      userId: session.userId,
+      date: new Date(session.startTime).toISOString().split('T')[0],
+      clockIn: session.startTime,
+      clockOut: null,
+      totalHours: (Date.now() - session.startTime) / (1000 * 60 * 60),
+      totalIdleHours: (session.totalIdleTimeMs || 0) / (1000 * 60 * 60),
+      status: 'Active'
+    }));
+
+    const allCards = [...activeCards, ...timeCards];
+
+    return allCards.filter(card => {
+      const [y, m, d] = card.date.split('-').map(Number);
+      const cardDate = new Date(y, m - 1, d, 12, 0, 0);
       return cardDate >= currentPeriod.start && cardDate <= currentPeriod.end;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [timeCards, currentPeriod]);
+  }, [timeCards, activeSessions, currentPeriod]);
 
   const handleSyncPlan = async () => {
     if (!externalPlanRaw.trim()) return;
@@ -462,14 +478,33 @@ export const ActivityManager: React.FC<Props> = ({ users, settings }) => {
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-gray-200">
-                  <h3 className="font-bold text-gray-800">Payment & Cycles</h3>
-                  <button
-                    onClick={handleExportCSV}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-bold transition-all"
-                  >
-                    <Download className="w-4 h-4" /> Export All Data
-                  </button>
+                <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-gray-200">
+                  <div className="flex items-center gap-4 w-full lg:w-auto">
+                    <div className="p-2 bg-blue-50 rounded-lg">
+                      <CalendarRange className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Current Cycle</label>
+                      <select
+                        value={selectedPeriodIdx}
+                        onChange={(e) => setSelectedPeriodIdx(parseInt(e.target.value))}
+                        className="font-bold text-gray-800 bg-transparent border-none p-0 focus:ring-0 cursor-pointer text-sm"
+                      >
+                        {periods.map((p, i) => (
+                          <option key={i} value={i}>{p.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 w-full lg:w-auto border-t lg:border-t-0 pt-4 lg:pt-0">
+                    <button
+                      onClick={handleExportCSV}
+                      className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-100 hover:bg-slate-800 transition-all"
+                    >
+                      <Download className="w-4 h-4" /> Export Cycle
+                    </button>
+                  </div>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <table className="w-full text-left text-sm">

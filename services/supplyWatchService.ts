@@ -429,25 +429,30 @@ export const supplyWatchService = {
             const todayStr = today.toISOString().split('T')[0];
             const todayLocale = today.toLocaleDateString('en-CA'); // YYYY-MM-DD
 
-            // 1. Try flat log endpoints first
             const logEndpoints = [
                 `/api/daily-planner/logs`,
                 `/api/daily-planner/check-ins`,
                 `/api/logs`,
                 `/api/check-ins`
             ];
+            let combinedLogs: any[] = [];
 
+            // 1. Method A: Try "flat" log endpoints first
             for (const endpoint of logEndpoints) {
                 const result = await tryFetch(endpoint);
                 if (result.ok) {
                     console.log(`[ReplitSync] Success using flat endpoint: ${endpoint}`);
                     let data = result.data;
                     if (!Array.isArray(data)) data = data.logs || data.checkIns || data.checkins || data.data || [];
-                    if (Array.isArray(data) && data.length > 0) return data;
+                    if (Array.isArray(data) && data.length > 0) {
+                        combinedLogs = [...data];
+                        break; // Stop at first successful source for flat logs
+                    }
                 }
             }
 
-            // 2. FALLBACK: Fetch schedule and extract check-ins from blocks
+            // 2. Method B: Fetch schedule and extract/generate logs from blocks
+            // We ALWAYS do this now to capture "virtual" logs from status changes
             const scheduleEndpoints = [
                 `/api/daily-planner?date=${todayLocale}`,
                 `/api/daily-planner?date=${todayStr}`,
@@ -460,17 +465,14 @@ export const supplyWatchService = {
             for (const endpoint of scheduleEndpoints) {
                 const res = await tryFetch(endpoint);
                 if (res.ok) {
-                    const extractedLogs: any[] = [];
                     const d = res.data;
-
-                    // RAW DATA DUMP: This is the most important log for me to see!
                     console.log(`[ReplitSync] RAW DATA DUMP for ${endpoint}:`, d);
 
                     const blocks = d?.blocks || (Array.isArray(d) ? d : []);
 
                     if (Array.isArray(blocks)) {
                         for (const block of blocks) {
-                            // Method A: Check for explicit check-in arrays
+                            // Part 1: Check-in arrays inside blocks
                             const checkIns = block.checkIns || block.checkins || block.logs ||
                                 block.activity || block.history || block.updates ||
                                 block.statusHistory || [];
@@ -480,10 +482,9 @@ export const supplyWatchService = {
                                     const logOwnerName = ci.userName || ci.name || block.assignedToName;
                                     const logOwnerId = ci.userId || block.assignedTo;
 
-                                    // Skip if no clear owner or generic "Staff" owner
                                     if (!logOwnerName || ['staff', 'team', 'member', 'admin'].includes(logOwnerName.toLowerCase())) return;
 
-                                    extractedLogs.push({
+                                    combinedLogs.push({
                                         ...ci,
                                         id: ci.id || `block-${block.id}-${ci.time || ci.timestamp}`,
                                         userName: logOwnerName,
@@ -494,34 +495,56 @@ export const supplyWatchService = {
                                     });
                                 });
                             }
-                            // Method B: If no check-ins BUT task is completed/active, create a virtual log
-                            else if (block.status === 'completed' || block.status === 'active' || block.status === 'in_progress') {
-                                // CRITICAL: Use assignedToName ONLY. Do NOT fall back to block.userName (which is the creator)
-                                const logOwnerName = block.assignedToName;
-                                const logOwnerId = block.assignedTo;
 
-                                if (logOwnerName && !['staff', 'team', 'member', 'admin'].includes(logOwnerName.toLowerCase())) {
-                                    const virtualTime = block.updatedAt || block.endTime || block.startTime || Date.now();
-                                    extractedLogs.push({
-                                        id: `vlog-${block.id}-${virtualTime}`,
+                            // Part 2: Virtual logs for Active/In-Progress/Completed tasks
+                            // This bridges the gap when someone changes status but doesn't log a check-in
+                            const currentStatus = String(block.status || '').toLowerCase();
+                            const isWorking = ['active', 'in_progress', 'completed', 'in progress'].includes(currentStatus);
+
+                            if (isWorking) {
+                                // Try multiple fields for owner
+                                const logOwnerName = block.assignedToName || block.assigned_to_name || block.userName || block.username;
+                                const logOwnerId = block.assignedTo || block.assigned_to || block.userId;
+
+                                if (logOwnerName && !['staff', 'team', 'member', 'admin', 'unassigned'].includes(logOwnerName.toLowerCase())) {
+                                    // Use updatedAt if available to show when they started/finished
+                                    const virtualTime = block.updatedAt || block.updated_at || block.endTime || block.startTime || Date.now();
+
+                                    // Map Replit 'active' to ChronoTrack 'In Progress' terminology if needed
+                                    const displayStatus = currentStatus === 'active' ? 'Started Working' :
+                                        currentStatus === 'completed' ? 'Completed' : 'In Progress';
+
+                                    combinedLogs.push({
+                                        id: `vlog-${block.id}-${currentStatus}-${virtualTime}`,
                                         userName: logOwnerName,
                                         userId: logOwnerId,
-                                        task: block.title || block.task || 'Completed Task',
+                                        task: block.title || block.task || 'Assigned Task',
                                         timestamp: virtualTime,
-                                        notes: `Status updated to ${block.status}`
+                                        notes: `Status: ${displayStatus}`,
+                                        department: block.department || block.dept
                                     });
                                 }
                             }
                         }
                     }
-                    if (extractedLogs.length > 0) {
-                        console.log(`[ReplitSync] Successfully extracted ${extractedLogs.length} logs from schedule.`);
-                        return extractedLogs;
-                    }
+                    break;
                 }
             }
 
-            throw new Error(`Connection failed. No check-ins found for today. Make sure you've submitted a check-in or marked a task as complete in Replit.`);
+            if (combinedLogs.length > 0) {
+                // De-duplicate by ID just in case
+                const seen = new Set();
+                const unique = combinedLogs.filter(l => {
+                    const id = l.id || `temp-${l.timestamp}-${l.task}`;
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+                console.log(`[ReplitSync] Returning ${unique.length} unique combined logs.`);
+                return unique;
+            }
+
+            return [];
         } catch (error) {
             console.error("Deep search sync failed:", error);
             throw error;
