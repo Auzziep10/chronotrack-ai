@@ -35,9 +35,22 @@ export const ActivityTracker: React.FC<Props> = ({
   const activeUsers = Object.values(activeSessions) as UserSession[];
   const selectedSession = selectedUserId ? activeSessions[selectedUserId] : null;
 
-  // Filter tasks for the selected user
+  // Filter tasks for the selected user with robust matching
   const userTasks = selectedSession
-    ? scheduledTasks.filter(task => task.assignedTo === selectedSession.userId)
+    ? scheduledTasks.filter(task => {
+      const userId = String(selectedSession.userId);
+      const userName = selectedSession.user.name.toLowerCase();
+      const userUser = selectedSession.user.username?.toLowerCase();
+
+      // Match by ID
+      if (task.assignedTo && String(task.assignedTo) === userId) return true;
+
+      // Match by Name fallback (if Replit API uses names in assignedTo)
+      const assignedToName = String(task.assignedTo || '').toLowerCase();
+      if (assignedToName === userName || (userUser && assignedToName === userUser)) return true;
+
+      return false;
+    })
     : [];
 
   // Auto-select if only one user (convenience)

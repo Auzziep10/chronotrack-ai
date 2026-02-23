@@ -477,11 +477,17 @@ export const supplyWatchService = {
 
                             if (Array.isArray(checkIns) && checkIns.length > 0) {
                                 checkIns.forEach((ci: any) => {
+                                    const logOwnerName = ci.userName || ci.name || block.assignedToName;
+                                    const logOwnerId = ci.userId || block.assignedTo;
+
+                                    // Skip if no clear owner or generic "Staff" owner
+                                    if (!logOwnerName || ['staff', 'team', 'member', 'admin'].includes(logOwnerName.toLowerCase())) return;
+
                                     extractedLogs.push({
                                         ...ci,
                                         id: ci.id || `block-${block.id}-${ci.time || ci.timestamp}`,
-                                        userName: ci.userName || ci.name || block.assignedToName || block.userName,
-                                        userId: ci.userId || block.assignedTo || block.userId,
+                                        userName: logOwnerName,
+                                        userId: logOwnerId,
                                         task: block.title || block.task || 'Staff Check-in',
                                         timestamp: ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt,
                                         notes: ci.notes || ci.note || block.description || 'Schedule Check-in'
@@ -490,15 +496,21 @@ export const supplyWatchService = {
                             }
                             // Method B: If no check-ins BUT task is completed/active, create a virtual log
                             else if (block.status === 'completed' || block.status === 'active' || block.status === 'in_progress') {
-                                const virtualTime = block.updatedAt || block.endTime || block.startTime || Date.now();
-                                extractedLogs.push({
-                                    id: `vlog-${block.id}-${virtualTime}`,
-                                    userName: block.assignedToName || block.userName,
-                                    userId: block.assignedTo || block.userId,
-                                    task: block.title || block.task || 'Completed Task',
-                                    timestamp: virtualTime,
-                                    notes: `Status updated to ${block.status}`
-                                });
+                                // CRITICAL: Use assignedToName ONLY. Do NOT fall back to block.userName (which is the creator)
+                                const logOwnerName = block.assignedToName;
+                                const logOwnerId = block.assignedTo;
+
+                                if (logOwnerName && !['staff', 'team', 'member', 'admin'].includes(logOwnerName.toLowerCase())) {
+                                    const virtualTime = block.updatedAt || block.endTime || block.startTime || Date.now();
+                                    extractedLogs.push({
+                                        id: `vlog-${block.id}-${virtualTime}`,
+                                        userName: logOwnerName,
+                                        userId: logOwnerId,
+                                        task: block.title || block.task || 'Completed Task',
+                                        timestamp: virtualTime,
+                                        notes: `Status updated to ${block.status}`
+                                    });
+                                }
                             }
                         }
                     }

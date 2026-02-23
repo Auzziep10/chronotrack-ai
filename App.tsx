@@ -336,14 +336,23 @@ const App: React.FC = () => {
             const uName = norm(u.name);
             const uUser = norm(u.username);
 
+            // 1. Strict ID Match (Strongest)
             const matchId = rLog.userId && String(u.id) === String(rLog.userId);
-            const matchUser = cleanRUser && (uUser === cleanRUser);
-            const matchName = cleanRName && (uName === cleanRName);
+            if (matchId) return true;
 
-            return matchId || matchUser || matchName;
+            // 2. Exact Username Match
+            const matchUser = cleanRUser && (uUser === cleanRUser);
+            if (matchUser) return true;
+
+            // 3. Strict Name Match (Only if name is not something generic like "Admin")
+            const isGenericName = ['admin', 'staff', 'team', 'member'].includes(uName);
+            const matchName = !isGenericName && cleanRName && (uName === cleanRName);
+
+            return matchName;
           });
 
           if (sessionUser) {
+            console.log(`[ReplitSync] Bridging log "${rLog.task}" for ${sessionUser.name} (Matched by ${rLog.userId && String(sessionUser.id) === String(rLog.userId) ? 'ID' : 'Name'})`);
             const logId = `replit-${rawLogId}`;
             const pEndRaw = new Date(rLog.endTime || rLog.timestamp || rLog.startTime).getTime();
             let pEnd = isNaN(pEndRaw) ? logTime : pEndRaw;
