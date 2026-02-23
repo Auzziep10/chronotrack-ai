@@ -462,65 +462,72 @@ export const supplyWatchService = {
                 `/api/schedules`
             ];
 
+            const parseReplitTime = (str: any) => {
+                if (!str) return Date.now();
+                const s = String(str);
+                if (s.includes('T') || (s.length > 10 && !isNaN(Number(s)))) {
+                    const d = new Date(isNaN(Number(s)) ? s : Number(s));
+                    if (!isNaN(d.getTime())) return d.getTime();
+                }
+                const match = s.match(/(\d{1,2}):(\d{2})(\s*[AaPp][Mm])?/);
+                if (match) {
+                    const now = new Date();
+                    let h = parseInt(match[1]);
+                    const m = parseInt(match[2]);
+                    const ampm = match[3]?.trim().toLowerCase();
+                    if (ampm === 'pm' && h < 12) h += 12;
+                    if (ampm === 'am' && h === 12) h = 0;
+                    now.setHours(h, m, 0, 0);
+                    return now.getTime();
+                }
+                const d = new Date(s);
+                return isNaN(d.getTime()) ? Date.now() : d.getTime();
+            };
+
             for (const endpoint of scheduleEndpoints) {
                 const res = await tryFetch(endpoint);
                 if (res.ok) {
                     const d = res.data;
-                    console.log(`[ReplitSync] RAW DATA DUMP for ${endpoint}:`, d);
-
+                    console.log(`[ReplitSync] Extracting logs from ${endpoint}...`);
                     const blocks = d?.blocks || (Array.isArray(d) ? d : []);
 
                     if (Array.isArray(blocks)) {
                         for (const block of blocks) {
-                            // Part 1: Check-in arrays inside blocks
-                            const checkIns = block.checkIns || block.checkins || block.logs ||
-                                block.activity || block.history || block.updates ||
-                                block.statusHistory || [];
+                            const bOwnerName = block.assignedToName || block.assigned_to_name || block.userName || block.username || block.ownerName;
+                            const bOwnerId = block.assignedTo || block.assigned_to || block.userId || block.owner;
+                            const bTask = block.title || block.task || block.name || 'Assigned Task';
 
+                            const checkIns = block.checkIns || block.checkins || block.logs || block.activity || block.history || block.updates || block.statusHistory || [];
                             if (Array.isArray(checkIns) && checkIns.length > 0) {
-                                checkIns.forEach((ci: any) => {
-                                    const logOwnerName = ci.userName || ci.name || block.assignedToName;
-                                    const logOwnerId = ci.userId || block.assignedTo;
-
-                                    if (!logOwnerName || ['staff', 'team', 'member', 'admin'].includes(logOwnerName.toLowerCase())) return;
-
+                                checkIns.forEach((ci: any, idx: number) => {
+                                    const logOwnerName = ci.userName || ci.name || ci.user_name || bOwnerName;
+                                    const logOwnerId = ci.userId || ci.user_id || bOwnerId;
+                                    if (!logOwnerName || ['staff', 'team', 'member', 'admin', 'unassigned'].includes(logOwnerName.toLowerCase())) return;
+                                    const ts = parseReplitTime(ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt);
                                     combinedLogs.push({
                                         ...ci,
-                                        id: ci.id || `block-${block.id}-${ci.time || ci.timestamp}`,
+                                        id: ci.id || `replit-ci-${block.id}-${idx}-${ts}`,
                                         userName: logOwnerName,
                                         userId: logOwnerId,
-                                        task: block.title || block.task || 'Staff Check-in',
-                                        timestamp: ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt,
-                                        notes: ci.notes || ci.note || block.description || 'Schedule Check-in'
+                                        task: bTask,
+                                        timestamp: ts,
+                                        notes: ci.notes || ci.note || ci.comment || `Progress: ${ci.progress || 0}%`,
+                                        department: block.department || block.dept
                                     });
                                 });
                             }
 
-                            // Part 2: Virtual logs for Active/In-Progress/Completed tasks
-                            // This bridges the gap when someone changes status but doesn't log a check-in
                             const currentStatus = String(block.status || '').toLowerCase();
-                            const isWorking = ['active', 'in_progress', 'completed', 'in progress'].includes(currentStatus);
-
-                            if (isWorking) {
-                                // Try multiple fields for owner
-                                const logOwnerName = block.assignedToName || block.assigned_to_name || block.userName || block.username;
-                                const logOwnerId = block.assignedTo || block.assigned_to || block.userId;
-
-                                if (logOwnerName && !['staff', 'team', 'member', 'admin', 'unassigned'].includes(logOwnerName.toLowerCase())) {
-                                    // Use updatedAt if available to show when they started/finished
-                                    const virtualTime = block.updatedAt || block.updated_at || block.endTime || block.startTime || Date.now();
-
-                                    // Map Replit 'active' to ChronoTrack 'In Progress' terminology if needed
-                                    const displayStatus = currentStatus === 'active' ? 'Started Working' :
-                                        currentStatus === 'completed' ? 'Completed' : 'In Progress';
-
+                            if (['active', 'in_progress', 'completed', 'in progress'].includes(currentStatus)) {
+                                if (bOwnerName && !['staff', 'team', 'member', 'admin', 'unassigned'].includes(bOwnerName.toLowerCase())) {
+                                    const ts = parseReplitTime(block.updatedAt || block.updated_at || block.endTime || block.startTime);
                                     combinedLogs.push({
-                                        id: `vlog-${block.id}-${currentStatus}-${virtualTime}`,
-                                        userName: logOwnerName,
-                                        userId: logOwnerId,
-                                        task: block.title || block.task || 'Assigned Task',
-                                        timestamp: virtualTime,
-                                        notes: `Status: ${displayStatus}`,
+                                        id: `vlog-${block.id}-${currentStatus}-${ts}`,
+                                        userName: bOwnerName,
+                                        userId: bOwnerId,
+                                        task: bTask,
+                                        timestamp: ts,
+                                        notes: `Replit Status: ${currentStatus === 'completed' ? 'Completed' : 'Started/Active'}`,
                                         department: block.department || block.dept
                                     });
                                 }
@@ -532,15 +539,15 @@ export const supplyWatchService = {
             }
 
             if (combinedLogs.length > 0) {
-                // De-duplicate by ID just in case
                 const seen = new Set();
-                const unique = combinedLogs.filter(l => {
-                    const id = l.id || `temp-${l.timestamp}-${l.task}`;
-                    if (seen.has(id)) return false;
-                    seen.add(id);
-                    return true;
-                });
-                console.log(`[ReplitSync] Returning ${unique.length} unique combined logs.`);
+                const unique = combinedLogs
+                    .map(l => ({ ...l, timestamp: typeof l.timestamp === 'number' ? l.timestamp : parseReplitTime(l.timestamp) }))
+                    .filter(l => {
+                        const id = l.id || `bridge-${l.timestamp}-${l.task}`;
+                        if (seen.has(id)) return false;
+                        seen.add(id);
+                        return true;
+                    });
                 return unique;
             }
 

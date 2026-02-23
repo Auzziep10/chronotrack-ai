@@ -348,13 +348,23 @@ const App: React.FC = () => {
           const sessionUser = usersRef.current.find(u => {
             const uName = norm(u.name);
             const uUser = norm(u.username);
-            const matchId = rLog.userId && String(u.id) === String(rLog.userId);
-            if (matchId) return true;
-            const matchUser = cleanRUser && (uUser === cleanRUser);
-            if (matchUser) return true;
-            const isGenericName = ['admin', 'staff', 'team', 'member'].includes(uName);
-            const matchName = !isGenericName && cleanRName && (uName === cleanRName);
-            return matchName;
+            const rName = norm(rLog.userName || rLog.user_name || rLog.name);
+            const rUser = norm(rLog.username || rLog.user_username);
+
+            // 1. Strict ID Match
+            if (rLog.userId && String(u.id) === String(rLog.userId)) return true;
+
+            // 2. Exact Username Match
+            if (rUser && uUser === rUser) return true;
+
+            // 3. Exact Full Name Match
+            if (rName && uName === rName) return true;
+
+            // 4. Fuzzy Match (Start of name, or name contains)
+            const isGeneric = ['admin', 'staff', 'team', 'member'].includes(uName);
+            if (!isGeneric && rName && uName && (uName.startsWith(rName) || rName.startsWith(uName))) return true;
+
+            return false;
           });
 
           if (sessionUser) {
