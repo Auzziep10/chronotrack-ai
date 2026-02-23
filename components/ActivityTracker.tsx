@@ -3,7 +3,8 @@ import { WorkLog, UserSession, ScheduleBlock } from '../types';
 import { WorkLogForm } from './WorkLogForm';
 import { HistoryLog } from './HistoryLog';
 import { AiSummary } from './AiSummary';
-import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw } from 'lucide-react';
+import { Timer } from './Timer';
+import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw, Play } from 'lucide-react';
 import { LOG_INTERVAL_MS } from '../constants';
 
 interface Props {
@@ -174,7 +175,16 @@ export const ActivityTracker: React.FC<Props> = ({
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-b-xl shadow-2xl overflow-hidden p-1">
+            <div className="bg-white shadow-2xl overflow-hidden p-1">
+              <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-500 uppercase">Elapsed Shift (Paused)</span>
+                <Timer
+                  startTime={selectedSession.startTime}
+                  isActive={false}
+                  totalIdleTimeMs={selectedSession.totalIdleTimeMs}
+                  currentIdleStartTime={selectedSession.currentIdleStartTime}
+                />
+              </div>
               <WorkLogForm
                 onSubmit={(data) => {
                   onLogSubmit(selectedUserId, data);
@@ -224,6 +234,13 @@ export const ActivityTracker: React.FC<Props> = ({
                   )}
                 </div>
               )}
+
+              {selectedSession.isPaused && (
+                <div className="px-6 py-3 bg-amber-50 border-t border-amber-100 flex items-center gap-2 text-[10px] text-amber-700 font-bold justify-center rounded-b-xl">
+                  <Play className="w-3 h-3 animate-pulse" />
+                  SUBMIT LOG BELOW TO RESUME PAID TIME
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -239,7 +256,17 @@ export const ActivityTracker: React.FC<Props> = ({
             <div className="font-bold text-gray-900 leading-none">{selectedSession.user.name}</div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-6">
+          <div className="flex flex-col items-end">
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Shift Time</div>
+            <Timer
+              startTime={selectedSession.startTime}
+              isActive={!selectedSession.isPaused}
+              totalIdleTimeMs={selectedSession.totalIdleTimeMs}
+              currentIdleStartTime={selectedSession.currentIdleStartTime}
+            />
+          </div>
+          <div className="h-10 w-px bg-gray-100"></div>
           <AiSummary logs={selectedSession.logs} />
           <button
             onClick={() => setSelectedUserId('')}

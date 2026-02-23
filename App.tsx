@@ -606,8 +606,22 @@ const App: React.FC = () => {
       // Primary: Write to Firebase
       if (isFirebaseConfigured()) {
         import('./services/firebaseService').then(async (mod) => {
-          if (session.isPaused) {
-            await mod.firebaseResumeSession(userId, session);
+          const IDLE_THRESHOLD_MS = 70 * 60 * 1000;
+          const isOverdueForPause = (now - session.lastLogTime) >= IDLE_THRESHOLD_MS;
+
+          if (session.isPaused || isOverdueForPause) {
+            // If they weren't officially "paused" yet but were overdue, 
+            // we treat them as paused since the 70m mark.
+            let effectiveSession = session;
+            if (!session.isPaused && isOverdueForPause) {
+              // Mock a session state that currentIdleStartTime was at 70m mark
+              effectiveSession = {
+                ...session,
+                isPaused: true,
+                currentIdleStartTime: session.lastLogTime + IDLE_THRESHOLD_MS
+              };
+            }
+            await mod.firebaseResumeSession(userId, effectiveSession);
           }
           await mod.firebaseAddLog(userId, newLog);
         });

@@ -164,9 +164,14 @@ export const firebaseAddLog = async (userId: string, log: WorkLog): Promise<void
 /** Atomic Resume: Calculates accumulated idle time and resumes tracking */
 export const firebaseResumeSession = async (userId: string, currentSession: any): Promise<void> => {
     const now = Date.now();
-    if (!currentSession.isPaused) return;
+    const isActuallyPaused = currentSession.isPaused;
 
-    const accruedIdle = now - (currentSession.currentIdleStartTime || now);
+    // Safety check: if they aren't paused and don't have an idle start time, nothing to do
+    if (!isActuallyPaused && !currentSession.currentIdleStartTime) return;
+
+    // Use the stored idle start time, OR fallback to now (which shouldn't happen if paused)
+    const idleStart = currentSession.currentIdleStartTime || now;
+    const accruedIdle = Math.max(0, now - idleStart);
     const newTotalIdle = (currentSession.totalIdleTimeMs || 0) + accruedIdle;
 
     await updateDoc(doc(db, SESSIONS_COL, userId), {
