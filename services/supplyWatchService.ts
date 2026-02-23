@@ -441,12 +441,23 @@ export const supplyWatchService = {
             for (const endpoint of logEndpoints) {
                 const result = await tryFetch(endpoint);
                 if (result.ok) {
-                    console.log(`[ReplitSync] Success using flat endpoint: ${endpoint}`);
                     let data = result.data;
                     if (!Array.isArray(data)) data = data.logs || data.checkIns || data.checkins || data.data || [];
                     if (Array.isArray(data) && data.length > 0) {
-                        combinedLogs = [...data];
-                        break; // Stop at first successful source for flat logs
+                        data.forEach((l: any) => {
+                            const ts = parseReplitTime(l.timestamp || l.time || l.createdAt || l.created_at || l.updatedAt);
+                            combinedLogs.push({
+                                ...l,
+                                id: l.id || `flat-${ts}-${l.userId || l.user_id || l.username}`,
+                                userName: l.userName || l.user_name || l.name || l.ownerName || l.assignedToName,
+                                userId: l.userId || l.user_id || l.assignedTo,
+                                task: l.task || l.title || l.taskTitle || 'Check-in',
+                                timestamp: ts,
+                                notes: l.notes || l.note || l.comment || l.text || `Progress: ${l.progress || 0}%`,
+                                department: l.department || l.dept
+                            });
+                        });
+                        break; // Stop at first successful source
                     }
                 }
             }

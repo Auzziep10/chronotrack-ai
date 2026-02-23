@@ -337,18 +337,24 @@ const App: React.FC = () => {
         const currentSessions = activeSessionsRef.current;
 
         for (const rLog of sortedLogs) {
-          const logTime = Number(rLog.timestamp || rLog.startTime || rLog.createdAt || Date.now());
+          const logTime = Number(rLog.timestamp || Date.now());
           if (isNaN(logTime) || logTime < twelveHoursAgo) continue;
 
-          const rawLogId = rLog.id || `check-${rLog.userId || rLog.username}-${logTime}`;
+          const rawLogId = rLog.id || `check-${rLog.userId || rLog.userName || rLog.username}-${logTime}`;
           if (syncedLogIdsRef.current.has(rawLogId)) continue;
 
           const sessionUser = currentUsers.find(u => {
+            const uId = String(u.id);
             const uName = norm(u.name);
+            const uUser = norm(u.username);
+
+            const rId = String(rLog.userId || '');
             const rName = norm(rLog.userName || rLog.user_name || rLog.name);
-            const rUser = norm(rLog.username || rLog.user_username);
-            if (rLog.userId && String(u.id) === String(rLog.userId)) return true;
-            if (rUser && norm(u.username) === rUser) return true;
+            const rUser = norm(rLog.username || rLog.user_username || rLog.user?.username);
+
+            if (rId && uId === rId) return true;
+            if (rId && (uName === norm(rId) || uUser === norm(rId))) return true;
+            if (rUser && uUser === rUser) return true;
             if (rName && (uName.includes(rName) || rName.includes(uName))) return true;
             return false;
           });
@@ -358,17 +364,16 @@ const App: React.FC = () => {
             if (activeSession) {
               const logId = `replit-${rawLogId}`;
 
-              // Check if we already have this log in the local session history
-              const hasLog = activeSession.logs?.some(l =>
-                l.id === logId || (Math.abs(l.timestamp - logTime) < 5000 && l.task === (rLog.task || 'Staff Check-in'))
+              const isDuplicate = activeSession.logs?.some(l =>
+                l.id === logId || (Math.abs(l.timestamp - logTime) < 10000 && norm(l.task) === norm(rLog.task))
               );
 
-              if (hasLog) {
+              if (isDuplicate) {
                 syncedLogIdsRef.current.add(rawLogId);
                 continue;
               }
 
-              const pEndRaw = Number(rLog.endTime || rLog.timestamp || rLog.startTime);
+              const pEndRaw = Number(rLog.endTime || rLog.timestamp);
               let pEnd = isNaN(pEndRaw) ? logTime : pEndRaw;
               if (pEnd < logTime) pEnd = logTime;
 
@@ -388,7 +393,7 @@ const App: React.FC = () => {
                 } : undefined
               };
 
-              console.log(`[ReplitSync] Bridging Activity: ${sessionUser.name} - ${chronoLog.task}`);
+              console.log(`[ReplitSync] Mapping success for ${sessionUser.name}: "${chronoLog.task}"`);
               await firebaseAddLog(sessionUser.id, chronoLog);
               syncedLogIdsRef.current.add(rawLogId);
               foundMatch = true;
