@@ -65,9 +65,12 @@ const App: React.FC = () => {
   // Track when we last made a local user update (to avoid sync overwriting unsaved data)
   const lastUserUpdateRef = useRef<number>(0);
 
-  // Ref to always-current users list — used inside Firebase callbacks to avoid stale closures
   const usersRef = useRef<User[]>(users);
   useEffect(() => { usersRef.current = users; }, [users]);
+
+  // Ref to always-current active sessions list
+  const activeSessionsRef = useRef<Record<string, UserSession>>(activeSessions);
+  useEffect(() => { activeSessionsRef.current = activeSessions; }, [activeSessions]);
 
   // Daily Schedule State
   const [todaySchedule, setTodaySchedule] = useState<any>(null);
@@ -323,7 +326,14 @@ const App: React.FC = () => {
         // Helper to normalize strings for robust matching
         const norm = (s: any) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, '');
 
-        for (const rLog of logs) {
+        // Sort logs ascending so the latest one is processed last (and thus sets the final lastLogTime)
+        const sortedLogs = [...logs].sort((a, b) => {
+          const tA = new Date(a.timestamp || a.startTime || a.createdAt || a.time).getTime();
+          const tB = new Date(b.timestamp || b.startTime || b.createdAt || b.time).getTime();
+          return tA - tB;
+        });
+
+        for (const rLog of sortedLogs) {
           const logTimeStr = rLog.timestamp || rLog.startTime || rLog.createdAt || rLog.created_at || rLog.time;
           const logTime = new Date(logTimeStr).getTime();
 
@@ -338,28 +348,19 @@ const App: React.FC = () => {
           const sessionUser = usersRef.current.find(u => {
             const uName = norm(u.name);
             const uUser = norm(u.username);
-
-            // 1. Strict ID Match (Strongest)
             const matchId = rLog.userId && String(u.id) === String(rLog.userId);
             if (matchId) return true;
-
-            // 2. Exact Username Match
             const matchUser = cleanRUser && (uUser === cleanRUser);
             if (matchUser) return true;
-
-            // 3. Strict Name Match (Only if name is not something generic like "Admin")
             const isGenericName = ['admin', 'staff', 'team', 'member'].includes(uName);
             const matchName = !isGenericName && cleanRName && (uName === cleanRName);
-
             return matchName;
           });
 
           if (sessionUser) {
-            console.log(`[ReplitSync] Bridging log "${rLog.task}" for ${sessionUser.name} (Matched by ${rLog.userId && String(sessionUser.id) === String(rLog.userId) ? 'ID' : 'Name'})`);
             const logId = `replit-${rawLogId}`;
             const pEndRaw = new Date(rLog.endTime || rLog.timestamp || rLog.startTime).getTime();
             let pEnd = isNaN(pEndRaw) ? logTime : pEndRaw;
-
             if (pEnd < logTime) pEnd = logTime;
 
             const chronoLog: WorkLog = {
@@ -378,9 +379,29 @@ const App: React.FC = () => {
               } : undefined
             };
 
+            // BRIDGE LOG: If user is currently paused/locked, we RESUME them automatically
+            const activeSession = activeSessionsRef.current[sessionUser.id];
+            const isPaused = activeSession?.isPaused || (activeSession && (Date.now() - activeSession.lastLogTime >= 60 * 60 * 1000));
+
+            if (isPaused) {
+              console.log(`[ReplitSync] User ${sessionUser.name} is paused/locked. Proactively resuming via Replit activity.`);
+              const { firebaseResumeSession } = await import('./services/firebaseService');
+
+              // If they are locked but not "isPaused" in DB, we need to pass a mock currentIdleStartTime for retroactive fix
+              let effectiveSession = activeSession;
+              if (!activeSession.isPaused) {
+                effectiveSession = {
+                  ...activeSession,
+                  isPaused: true,
+                  currentIdleStartTime: activeSession.lastLogTime + (70 * 60 * 1000)
+                };
+              }
+              await firebaseResumeSession(sessionUser.id, effectiveSession);
+            }
+
             await firebaseAddLog(sessionUser.id, chronoLog);
             syncedLogIdsRef.current.add(rawLogId);
-            console.log(`[ReplitSync] Bridged check-in for ${sessionUser.name}`);
+            console.log(`[ReplitSync] Successfully bridged "${chronoLog.task}" for ${sessionUser.name}`);
           }
         }
         setLastReplitSync(Date.now());
