@@ -39,7 +39,8 @@ const App: React.FC = () => {
   // Global State: Users (Initialize from localStorage or defaults)
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem('chronoUsers');
-    return saved ? JSON.parse(saved) : DEFAULT_USERS;
+    const initial = saved ? JSON.parse(saved) : DEFAULT_USERS;
+    return initial.filter((u: any) => u.role?.trim().toLowerCase() !== 'client');
   });
 
   // Global State: Settings
@@ -147,7 +148,7 @@ const App: React.FC = () => {
                   secondaryDepartment: rUser.secondaryDepartment || existingLocal?.secondaryDepartment,
                   permissions: rUser.permissions || existingLocal?.permissions || []
                 };
-              });
+              }).filter((u: User) => u.role?.trim().toLowerCase() !== 'client');
 
               // Only update state if something actually changed
               if (JSON.stringify(mappedRemoteUsers) !== JSON.stringify(prevUsers)) {
@@ -252,16 +253,20 @@ const App: React.FC = () => {
       if (firebaseUsers.length > 0) {
         // Merge: Firebase data wins for every field it has
         setUsers(prev => {
-          const merged = firebaseUsers.map(fu => {
-            const local = prev.find(u => u.id === fu.id);
-            return { ...local, ...fu };
-          });
+          const merged = firebaseUsers
+            .filter(fu => fu.role?.trim().toLowerCase() !== 'client')
+            .map(fu => {
+              const local = prev.find(u => u.id === fu.id);
+              return { ...local, ...fu };
+            });
           return merged;
         });
       } else {
-        // Firebase users collection empty — seed it from current users list
+        // Firebase users collection empty — seed it from current users list (internal only)
         console.log('Firebase users empty — seeding from local list...');
-        usersRef.current.forEach(u => firebaseSaveUser(u).catch(() => { }));
+        usersRef.current
+          .filter(u => u.role?.trim().toLowerCase() !== 'client')
+          .forEach(u => firebaseSaveUser(u).catch(() => { }));
       }
     });
 
@@ -378,6 +383,17 @@ const App: React.FC = () => {
 
               if (isDuplicate) {
                 syncedLogIdsRef.current.add(rLog.id || rawLogId);
+
+                // CRITICAL FIX: Even if it's a duplicate, if it's RECENT activity, 
+                // we should ensure the session is resumed if it's currently paused.
+                // This prevents the "long task idle lock" where the user is working but 
+                // IDs don't change because the task status is the same.
+                if (activeSession.isPaused && (nowTs - logTime) < (45 * 60 * 1000)) {
+                  console.log(`[ReplitSync] RESUME (Pulse): Activity detected for ${sessionUser.name}. ID: ${logId}`);
+                  const { firebaseResumeSession } = await import('./services/firebaseService');
+                  await firebaseResumeSession(sessionUser.id, activeSession);
+                  foundMatch = true;
+                }
                 continue;
               }
 
@@ -403,7 +419,7 @@ const App: React.FC = () => {
 
               console.log(`[ReplitSync] SUCCESS: Bridging "${chronoLog.task}" for ${sessionUser.name} @ ${new Date(logTime).toLocaleTimeString()}`);
 
-              const { firebaseResumeSession } = await import('./services/firebaseService');
+              const { firebaseResumeSession, firebaseAddLog } = await import('./services/firebaseService');
               await firebaseResumeSession(sessionUser.id, activeSession);
               await firebaseAddLog(sessionUser.id, chronoLog);
 
@@ -858,6 +874,16 @@ const App: React.FC = () => {
             delete newSessions[userId];
             return newSessions;
           });
+
+          // Delete from Firebase to prevent reappearing
+          if (isFirebaseConfigured()) {
+            try {
+              const { firebaseDeleteUser } = await import('./services/firebaseService');
+              await firebaseDeleteUser(userId);
+            } catch (err) {
+              console.error("Failed to delete user from Firebase:", err);
+            }
+          }
 
           // Sync to Replit
           const replitUrl = localStorage.getItem('replitAppUrl');

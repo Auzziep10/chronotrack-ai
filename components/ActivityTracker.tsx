@@ -330,7 +330,8 @@ export const ActivityTracker: React.FC<Props> = ({
                               {task.checkIns.map((ci, idx) => {
                                 const ts = ci.timestamp ? (typeof ci.timestamp === 'number' ? ci.timestamp : new Date(ci.timestamp).getTime()) : null;
                                 const timeStr = ts && !isNaN(ts) ? new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '??:??';
-                                const status = ci.status || (ci.progress ? `Progress: ${ci.progress}%` : 'Update');
+                                const progress = ci.progressPercent !== undefined ? ci.progressPercent : ci.progress;
+                                const status = ci.status || (progress !== undefined ? `Progress: ${progress}%` : 'Update');
                                 return (
                                   <div key={idx} className="flex items-center gap-2 text-xs bg-gray-50/50 p-1.5 rounded border border-gray-100/50">
                                     <span className="text-gray-400 font-medium w-14">{timeStr}</span>

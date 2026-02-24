@@ -151,7 +151,7 @@ export const supplyWatchService = {
                     if (data && data.blocks && Array.isArray(data.blocks)) {
                         data.blocks = data.blocks.map((b: any) => {
                             // Extract check-ins from any possible field name
-                            const rawCheckIns = b.checkIns || b.checkins || b.check_ins || b.updates || b.history || b.logs || b.activity || b.statusHistory || b.status_history || b.activity_log || b.reports || b.comments || b.feed || [];
+                            let rawCheckIns = b.checkIns || b.checkins || b.check_ins || b.updates || b.history || b.logs || b.activity || b.statusHistory || b.status_history || b.activity_log || b.reports || b.comments || b.feed || [];
 
                             if (Array.isArray(rawCheckIns) && rawCheckIns.length === 0) {
                                 // Last ditch: search for ANY array field that looks like it might have check-ins
@@ -159,7 +159,7 @@ export const supplyWatchService = {
                                     if (Array.isArray(b[key]) && b[key].length > 0 && typeof b[key][0] === 'object') {
                                         const first = b[key][0];
                                         if (first.timestamp || first.time || first.createdAt || first.text || first.status) {
-                                            (rawCheckIns as any) = b[key];
+                                            rawCheckIns = b[key];
                                             break;
                                         }
                                     }
@@ -175,11 +175,16 @@ export const supplyWatchService = {
                                     };
                                 }
 
-                                const ts = this.parseReplitTime(ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt);
-                                let status = ci.status || ci.text || ci.comment || (ci.progress !== undefined ? `Active (${ci.progress}%)` : 'Check-in');
+                                const ts = this.parseReplitTime(ci.createdAt || ci.timestamp || ci.time || ci.created_at || ci.updatedAt);
+                                let status = ci.status || ci.text || ci.comment || 'Check-in';
 
-                                if (status.toLowerCase() === 'active' && ci.progress !== undefined) {
-                                    status = `Active (${ci.progress}%)`;
+                                // Normalize status labels from Catalyst-Dashboard
+                                if (status === 'on_track') status = 'On Track';
+                                if (status === 'in_progress' || status === 'active') status = 'Active';
+
+                                const progress = ci.progressPercent !== undefined ? ci.progressPercent : ci.progress;
+                                if (progress !== undefined && progress > 0 && progress < 100) {
+                                    status = `${status} (${progress}%)`;
                                 }
 
                                 return {
@@ -535,6 +540,7 @@ export const supplyWatchService = {
                     if (Array.isArray(data) && data.length > 0) {
                         data.forEach((l: any) => {
                             const ts = this.parseReplitTime(l.timestamp || l.time || l.createdAt || l.created_at || l.updatedAt);
+                            const progress = l.progressPercent !== undefined ? l.progressPercent : (l.progress !== undefined ? l.progress : 0);
                             combinedLogs.push({
                                 ...l,
                                 id: l.id || `flat-${ts}-${l.userId || l.user_id || l.username}`,
@@ -542,7 +548,7 @@ export const supplyWatchService = {
                                 userId: l.userId || l.user_id || l.assignedTo,
                                 task: l.task || l.title || l.taskTitle || 'Check-in',
                                 timestamp: ts,
-                                notes: l.notes || l.note || l.comment || l.text || `Progress: ${l.progress || 0}%`,
+                                notes: l.notes || l.note || l.comment || l.text || `Progress: ${progress}%`,
                                 department: l.department || l.dept
                             });
                         });
@@ -569,7 +575,7 @@ export const supplyWatchService = {
 
                     if (Array.isArray(blocks)) {
                         for (const block of blocks) {
-                            const bOwnerName = block.assignedToName || block.assigned_to_name || block.userName || block.username || block.ownerName;
+                            const bOwnerName = block.assignedToName || block.assigned_to_name || block.userName || block.username || block.ownerName || '';
                             const bOwnerId = block.assignedTo || block.assigned_to || block.userId || block.owner;
                             const bTask = block.title || block.task || block.name || 'Assigned Task';
 
@@ -579,16 +585,36 @@ export const supplyWatchService = {
                                 checkIns.forEach((ci: any, idx: number) => {
                                     const logOwnerName = ci.userName || ci.name || ci.user_name || bOwnerName;
                                     const logOwnerId = ci.userId || ci.user_id || bOwnerId;
-                                    if (!logOwnerName || ['staff', 'team', 'member', 'admin', 'unassigned'].includes(logOwnerName.toLowerCase())) return;
+
+                                    // If we have neither name nor ID, we can't map this log
+                                    if (!logOwnerName && !logOwnerId) return;
+
+                                    // Skip generic staff names if name is present
+                                    if (logOwnerName && ['staff', 'team', 'member', 'admin', 'unassigned'].includes(logOwnerName.toLowerCase())) {
+                                        if (!logOwnerId) return;
+                                    }
 
                                     const ts = this.parseReplitTime(ci.timestamp || ci.time || ci.createdAt || ci.created_at || ci.updatedAt);
+
+                                    // Robust progress extraction
+                                    const progress = ci.progressPercent !== undefined ? ci.progressPercent : (ci.progress !== undefined ? ci.progress : 0);
+                                    let displayNote = ci.notes || ci.note || ci.comment || ci.text;
+
+                                    // If no note, format the status and progress
+                                    if (!displayNote) {
+                                        let status = ci.status || 'Active';
+                                        if (status === 'on_track') status = 'On Track';
+                                        if (status === 'in_progress' || status === 'active') status = 'Active';
+                                        displayNote = `${status} (${progress}%)`;
+                                    }
+
                                     combinedLogs.push({
                                         id: ci.id || `ci-${block.id}-${idx}-${ts}`,
                                         userName: logOwnerName,
                                         userId: logOwnerId,
                                         task: bTask,
                                         timestamp: ts,
-                                        notes: ci.notes || ci.note || ci.comment || ci.text || `Progress: ${ci.progress || 0}%`,
+                                        notes: displayNote,
                                         department: block.department || block.dept
                                     });
                                 });
@@ -597,10 +623,10 @@ export const supplyWatchService = {
                             // Part 2: State-based Logs (Stable ID)
                             const currentStatus = String(block.status || '').toLowerCase();
                             if (['active', 'in_progress', 'completed', 'in progress'].includes(currentStatus)) {
-                                if (bOwnerName && !['staff', 'team', 'member', 'admin', 'unassigned'].includes(bOwnerName.toLowerCase())) {
+                                if (bOwnerId || (bOwnerName && !['staff', 'team', 'member', 'admin', 'unassigned'].includes(bOwnerName.toLowerCase()))) {
                                     const ts = this.parseReplitTime(block.updatedAt || block.updated_at || block.endTime || block.startTime);
                                     combinedLogs.push({
-                                        id: `vlog-${block.id}-${currentStatus}`, // Deterministic ID
+                                        id: `vlog-${block.id}-${currentStatus}-${ts}`, // timestamped ID to avoid duplicate filtering if status stays same but updated
                                         userName: bOwnerName,
                                         userId: bOwnerId,
                                         task: bTask,
@@ -612,7 +638,6 @@ export const supplyWatchService = {
                             }
                         }
                     }
-                    break;
                 }
             }
 

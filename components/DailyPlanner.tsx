@@ -246,7 +246,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     }, {} as Record<string, ScheduleBlock[]>);
 
     // Filter out clients - only show team members (non-client users)
-    const teamMembers = users.filter(u => u.role !== 'client' && u.username);
+    const teamMembers = users.filter(u => u.role?.trim().toLowerCase() !== 'client' && u.username);
 
     // If user is not admin, manager, or a public terminal, only show their own row
     const canSeeAll = currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentUser?.role === 'terminal' || currentUser?.username?.toLowerCase() === 'warehouse';

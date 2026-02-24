@@ -192,7 +192,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
               {/* Simple User List */}
               <div className="mt-4">
                 <p className="text-xs font-semibold text-gray-500 mb-2 uppercase">Existing Team Members ({users.length})</p>
-                <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-md bg-white divide-y divide-gray-100">
+                <div className="max-h-[600px] overflow-y-auto border border-gray-200 rounded-md bg-white divide-y divide-gray-100 scrollbar-thin scrollbar-thumb-gray-300">
                   {users.map(u => (
                     <div key={u.id} className="px-4 py-2 flex justify-between items-center text-sm group hover:bg-gray-50 transition-colors">
                       <div className="flex items-center gap-3">
