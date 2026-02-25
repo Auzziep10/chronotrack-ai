@@ -50,6 +50,13 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [isDuplicating, setIsDuplicating] = useState(false);
     const [duplicateTargetDate, setDuplicateTargetDate] = useState('');
 
+    // Edit Block State
+    const [editingBlock, setEditingBlock] = useState<ScheduleBlock | null>(null);
+    const [editStart, setEditStart] = useState('');
+    const [editEnd, setEditEnd] = useState('');
+    const [editNotes, setEditNotes] = useState('');
+    const [isUpdating, setIsUpdating] = useState(false);
+
     const isAdminOrManager = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && currentUser?.username?.toLowerCase() !== 'warehouse';
 
     // Time marker for current time
@@ -192,6 +199,60 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             alert("Failed to duplicate schedule. Ensure you are connected.");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleBlockClick = (block: ScheduleBlock) => {
+        if (!isAdminOrManager) return;
+        setEditingBlock(block);
+
+        const start = new Date(block.startTime);
+        setEditStart(`${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`);
+
+        const end = new Date(block.endTime);
+        setEditEnd(`${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`);
+
+        setEditNotes(block.description || '');
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingBlock) return;
+        setIsUpdating(true);
+        try {
+            const replitUrl = localStorage.getItem('replitAppUrl');
+            const token = localStorage.getItem('chronoAuthToken');
+            if (replitUrl && token) {
+                const bStart = new Date(editingBlock.startTime);
+                const [sh, sm] = editStart.split(':').map(Number);
+                bStart.setHours(sh, sm, 0, 0);
+
+                const bEnd = new Date(editingBlock.endTime);
+                const [eh, em] = editEnd.split(':').map(Number);
+                bEnd.setHours(eh, em, 0, 0);
+
+                const blockData = {
+                    title: editingBlock.title,
+                    description: editNotes,
+                    startTime: bStart.toISOString(),
+                    endTime: bEnd.toISOString(),
+                    assignedTo: editingBlock.assignedTo,
+                    status: editingBlock.status,
+                    priority: editingBlock.priority || 'medium'
+                };
+
+                const updatedBlock = await supplyWatchService.updateScheduleBlock(replitUrl, token, editingBlock.id, blockData);
+
+                setSchedule(prev => prev ? {
+                    ...prev,
+                    blocks: prev.blocks.map(b => b.id === editingBlock.id ? updatedBlock : b)
+                } : null);
+
+                setEditingBlock(null);
+            }
+        } catch (err) {
+            alert("Failed to update schedule block.");
+        } finally {
+            setIsUpdating(false);
         }
     };
 
@@ -732,8 +793,9 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             return (
                                                 <div
                                                     key={block.id}
+                                                    onClick={() => handleBlockClick(block)}
                                                     style={{ left: styles.left, width: styles.width }}
-                                                    className={styles.className + " group"}
+                                                    className={styles.className + " group " + (isAdminOrManager ? "cursor-pointer" : "")}
                                                     title={`${block.title} (${new Date(block.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${new Date(block.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`}
                                                 >
                                                     {block.title}
@@ -783,6 +845,74 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                     </div>
                 ))}
             </div>
+
+            {/* Edit Block Dialog */}
+            {editingBlock && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-fade-in">
+                        <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                            <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                <Clock className="w-5 h-5 text-indigo-600" />
+                                {editingBlock.title.startsWith('[SHIFT]') ? 'Edit Expected Shift' : 'Edit Task Block'}
+                            </h3>
+                            <button onClick={() => setEditingBlock(null)} className="p-1 hover:bg-gray-200 rounded text-gray-500 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-6 flex flex-col gap-4">
+                            <div className="text-sm font-medium text-gray-700 bg-gray-50 p-2 rounded border border-gray-100">
+                                {editingBlock.title}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Start Time</label>
+                                    <input
+                                        type="time"
+                                        value={editStart}
+                                        onChange={(e) => setEditStart(e.target.value)}
+                                        className="w-full text-sm p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">End Time</label>
+                                    <input
+                                        type="time"
+                                        value={editEnd}
+                                        onChange={(e) => setEditEnd(e.target.value)}
+                                        className="w-full text-sm p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Notes / Description</label>
+                                <textarea
+                                    value={editNotes}
+                                    onChange={(e) => setEditNotes(e.target.value)}
+                                    placeholder="Add any notes relevant to this schedule schedule..."
+                                    className="w-full h-24 p-2 border border-gray-300 rounded resize-none text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                ></textarea>
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+                            <button
+                                onClick={() => setEditingBlock(null)}
+                                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveEdit}
+                                disabled={isUpdating}
+                                className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow transition-colors flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {isUpdating ? 'Saving...' : 'Save Changes'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
