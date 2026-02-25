@@ -90,9 +90,28 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     }, []);
 
     useEffect(() => {
-        // Subscribe to shifts purely from Firebase
+        // Subscribe to shifts purely from Firebase and actively trim duplicates
         const unsubscribe = subscribeToShiftBlocks((blocks: any[]) => {
-            setShiftBlocks(blocks);
+            const seen = new Set<string>();
+            const uniqueBlocks: ScheduleBlock[] = [];
+            const toDelete: string[] = [];
+
+            blocks.forEach(b => {
+                const key = `${b.assignedTo}-${b.startTime}-${b.endTime}`;
+                if (seen.has(key)) {
+                    toDelete.push(b.id);
+                } else {
+                    seen.add(key);
+                    uniqueBlocks.push(b as ScheduleBlock);
+                }
+            });
+
+            // Automatically clean up any duplicate entries exactly overlapping
+            toDelete.forEach(id => {
+                firebaseDeleteShiftBlock(id).catch(() => { });
+            });
+
+            setShiftBlocks(uniqueBlocks);
         });
         return () => unsubscribe();
     }, []);
@@ -239,16 +258,25 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                     const newEnd = new Date(tDate);
                     newEnd.setHours(bEnd.getHours(), bEnd.getMinutes(), 0, 0);
 
-                    await firebaseSaveShiftBlock({
-                        title: shift.title,
-                        description: shift.description || '',
-                        startTime: newStart.toISOString(),
-                        endTime: newEnd.toISOString(),
-                        assignedTo: shift.assignedTo,
-                        status: 'pending',
-                        priority: 'medium'
-                    });
-                    totalCopies++;
+                    // Skip duplicating if they already have this exact shift
+                    const exists = shiftBlocks.some(b =>
+                        b.assignedTo === shift.assignedTo &&
+                        new Date(b.startTime).getTime() === newStart.getTime() &&
+                        new Date(b.endTime).getTime() === newEnd.getTime()
+                    );
+
+                    if (!exists) {
+                        await firebaseSaveShiftBlock({
+                            title: shift.title,
+                            description: shift.description || '',
+                            startTime: newStart.toISOString(),
+                            endTime: newEnd.toISOString(),
+                            assignedTo: shift.assignedTo,
+                            status: 'pending',
+                            priority: 'medium'
+                        });
+                        totalCopies++;
+                    }
                 }
             }
 
