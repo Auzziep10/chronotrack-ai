@@ -49,6 +49,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     // Duplicate State
     const [isDuplicating, setIsDuplicating] = useState(false);
     const [duplicateTargetDate, setDuplicateTargetDate] = useState('');
+    const [duplicateWholeWeek, setDuplicateWholeWeek] = useState(false);
 
     // Edit Block State
     const [editingBlock, setEditingBlock] = useState<ScheduleBlock | null>(null);
@@ -146,7 +147,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     const handleDuplicateSchedule = async () => {
         if (!duplicateTargetDate || !schedule?.blocks?.length) return;
-        if (!confirm(`Are you sure you want to copy today's entire schedule to ${duplicateTargetDate}?`)) return;
+        if (!confirm(`Are you sure you want to copy today's entire schedule to ${duplicateWholeWeek ? 'the entire work week' : duplicateTargetDate}?`)) return;
 
         try {
             const replitUrl = localStorage.getItem('replitAppUrl');
@@ -155,45 +156,65 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
             setLoading(true);
 
-            // Create target day's schedule to get its ID using the backend
             const [y, m, d] = duplicateTargetDate.split('-');
-            const targetDateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 12, 0, 0); // Need time to avoid timezone slips
+            const targetDateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 12, 0, 0);
 
-            // Generate an initial schedule container for the chosen date
-            const targetGenResult = await supplyWatchService.generateSchedule(replitUrl, token, "Initialize schedule structure", targetDateObj);
-            const targetScheduleId = targetGenResult.schedule?.id;
-            if (!targetScheduleId) throw new Error("Could not initialize target schedule.");
+            // Determine target dates
+            const targetDates: Date[] = [];
+            if (duplicateWholeWeek) {
+                // Find Monday of the week for the selected date
+                const day = targetDateObj.getDay();
+                const diffToMonday = targetDateObj.getDate() - day + (day === 0 ? -6 : 1);
 
-            let copies = 0;
-            // Iterate all scheduled blocks from current day and copy them (Shift + regular tasks)
-            for (const block of schedule.blocks) {
-                const bStart = new Date(block.startTime);
-                const bEnd = new Date(block.endTime);
-
-                const newStart = new Date(targetDateObj);
-                newStart.setHours(bStart.getHours(), bStart.getMinutes(), 0, 0);
-
-                const newEnd = new Date(targetDateObj);
-                newEnd.setHours(bEnd.getHours(), bEnd.getMinutes(), 0, 0);
-
-                const blockData = {
-                    title: block.title,
-                    description: block.description || '',
-                    startTime: newStart.toISOString(),
-                    endTime: newEnd.toISOString(),
-                    assignedTo: block.assignedTo,
-                    // Keep copied tasks as pending initially
-                    status: 'pending',
-                    priority: block.priority || 'medium'
-                };
-
-                await supplyWatchService.createScheduleBlock(replitUrl, token, targetScheduleId, blockData);
-                copies++;
+                for (let i = 0; i < 5; i++) {
+                    const nextDate = new Date(targetDateObj);
+                    nextDate.setDate(diffToMonday + i);
+                    nextDate.setHours(12, 0, 0, 0);
+                    targetDates.push(nextDate);
+                }
+            } else {
+                targetDates.push(targetDateObj);
             }
 
-            alert(`Successfully duplicated ${copies} blocks to ${targetDateObj.toLocaleDateString()}!`);
+            let totalCopies = 0;
+
+            for (const tDate of targetDates) {
+                // Generate an initial schedule container for the chosen date
+                const targetGenResult = await supplyWatchService.generateSchedule(replitUrl, token, "Initialize schedule structure", tDate);
+                const targetScheduleId = targetGenResult.schedule?.id;
+                if (!targetScheduleId) throw new Error(`Could not initialize target schedule for ${tDate.toLocaleDateString()}`);
+
+                // Iterate all scheduled blocks from current day and copy them (Shift + regular tasks)
+                for (const block of schedule.blocks) {
+                    const bStart = new Date(block.startTime);
+                    const bEnd = new Date(block.endTime);
+
+                    const newStart = new Date(tDate);
+                    newStart.setHours(bStart.getHours(), bStart.getMinutes(), 0, 0);
+
+                    const newEnd = new Date(tDate);
+                    newEnd.setHours(bEnd.getHours(), bEnd.getMinutes(), 0, 0);
+
+                    const blockData = {
+                        title: block.title,
+                        description: block.description || '',
+                        startTime: newStart.toISOString(),
+                        endTime: newEnd.toISOString(),
+                        assignedTo: block.assignedTo,
+                        // Keep copied tasks as pending initially
+                        status: 'pending',
+                        priority: block.priority || 'medium'
+                    };
+
+                    await supplyWatchService.createScheduleBlock(replitUrl, token, targetScheduleId, blockData);
+                    totalCopies++;
+                }
+            }
+
+            alert(`Successfully duplicated ${totalCopies} blocks!`);
             setIsDuplicating(false);
             setDuplicateTargetDate('');
+            setDuplicateWholeWeek(false);
         } catch (err) {
             console.error("Failed to duplicate schedule:", err);
             alert("Failed to duplicate schedule. Ensure you are connected.");
@@ -541,6 +562,15 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             onChange={(e) => setDuplicateTargetDate(e.target.value)}
                                             className="w-full text-sm p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                                         />
+                                        <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={duplicateWholeWeek}
+                                                onChange={(e) => setDuplicateWholeWeek(e.target.checked)}
+                                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                            />
+                                            Apply to entire work week (Mon-Fri)
+                                        </label>
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={() => setIsDuplicating(false)}
