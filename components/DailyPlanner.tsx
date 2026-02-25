@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy } from 'lucide-react';
 import { User, DailySchedule, ScheduleBlock } from '../types';
 import { supplyWatchService } from '../services/supplyWatchService';
 
@@ -45,6 +45,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [shiftUser, setShiftUser] = useState('');
     const [shiftStart, setShiftStart] = useState('09:00');
     const [shiftEnd, setShiftEnd] = useState('17:00');
+
+    // Duplicate State
+    const [isDuplicating, setIsDuplicating] = useState(false);
+    const [duplicateTargetDate, setDuplicateTargetDate] = useState('');
 
     const isAdminOrManager = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && currentUser?.username?.toLowerCase() !== 'warehouse';
 
@@ -130,6 +134,64 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             setError("AI generation failed. Please try again.");
         } finally {
             setIsGenerating(false);
+        }
+    };
+
+    const handleDuplicateSchedule = async () => {
+        if (!duplicateTargetDate || !schedule?.blocks?.length) return;
+        if (!confirm(`Are you sure you want to copy today's entire schedule to ${duplicateTargetDate}?`)) return;
+
+        try {
+            const replitUrl = localStorage.getItem('replitAppUrl');
+            const token = localStorage.getItem('chronoAuthToken');
+            if (!replitUrl || !token) return;
+
+            setLoading(true);
+
+            // Create target day's schedule to get its ID using the backend
+            const [y, m, d] = duplicateTargetDate.split('-');
+            const targetDateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 12, 0, 0); // Need time to avoid timezone slips
+
+            // Generate an initial schedule container for the chosen date
+            const targetGenResult = await supplyWatchService.generateSchedule(replitUrl, token, "Initialize schedule structure", targetDateObj);
+            const targetScheduleId = targetGenResult.schedule?.id;
+            if (!targetScheduleId) throw new Error("Could not initialize target schedule.");
+
+            let copies = 0;
+            // Iterate all scheduled blocks from current day and copy them (Shift + regular tasks)
+            for (const block of schedule.blocks) {
+                const bStart = new Date(block.startTime);
+                const bEnd = new Date(block.endTime);
+
+                const newStart = new Date(targetDateObj);
+                newStart.setHours(bStart.getHours(), bStart.getMinutes(), 0, 0);
+
+                const newEnd = new Date(targetDateObj);
+                newEnd.setHours(bEnd.getHours(), bEnd.getMinutes(), 0, 0);
+
+                const blockData = {
+                    title: block.title,
+                    description: block.description || '',
+                    startTime: newStart.toISOString(),
+                    endTime: newEnd.toISOString(),
+                    assignedTo: block.assignedTo,
+                    // Keep copied tasks as pending initially
+                    status: 'pending',
+                    priority: block.priority || 'medium'
+                };
+
+                await supplyWatchService.createScheduleBlock(replitUrl, token, targetScheduleId, blockData);
+                copies++;
+            }
+
+            alert(`Successfully duplicated ${copies} blocks to ${targetDateObj.toLocaleDateString()}!`);
+            setIsDuplicating(false);
+            setDuplicateTargetDate('');
+        } catch (err) {
+            console.error("Failed to duplicate schedule:", err);
+            alert("Failed to duplicate schedule. Ensure you are connected.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -390,12 +452,54 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                         </button>
                     </div>
 
-                    <button
-                        onClick={() => { setCurrentDate(new Date()) }}
-                        className={`text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${isToday(currentDate) ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        Today
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => { setCurrentDate(new Date()) }}
+                            className={`text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${isToday(currentDate) ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            Today
+                        </button>
+
+                        {isAdminOrManager && (
+                            <div className="relative">
+                                <button
+                                    onClick={() => setIsDuplicating(!isDuplicating)}
+                                    className={`text-xs px-2 py-2 rounded-lg border font-medium transition-colors flex items-center gap-1 ${isDuplicating ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                                    title="Duplicate Schedule"
+                                >
+                                    <Copy className="w-4 h-4" />
+                                </button>
+
+                                {isDuplicating && (
+                                    <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 p-3 rounded-xl shadow-xl z-50 min-w-[250px] animate-fade-in flex flex-col gap-3">
+                                        <div className="text-sm font-bold text-gray-800">Duplicate Schedule</div>
+                                        <div className="text-xs text-gray-500 mb-2">Select a date to copy all task and shift blocks from this day.</div>
+                                        <input
+                                            type="date"
+                                            value={duplicateTargetDate}
+                                            onChange={(e) => setDuplicateTargetDate(e.target.value)}
+                                            className="w-full text-sm p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setIsDuplicating(false)}
+                                                className="flex-1 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-300"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={handleDuplicateSchedule}
+                                                disabled={!duplicateTargetDate || !schedule?.blocks?.length}
+                                                className="flex-1 px-3 py-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg font-bold transition-colors shadow-sm"
+                                            >
+                                                Confirm
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -579,10 +683,16 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                         {/* Users Rows */}
                         <div className="flex-1 relative">
                             {/* Vertical Grid Lines (Background) */}
-                            <div className="absolute inset-0 flex pl-48 pointer-events-none">
-                                {Array.from({ length: TOTAL_HOURS + 1 }).map((_, i) => (
-                                    <div key={i} className="flex-1 border-l border-gray-100 h-full last:border-r" />
-                                ))}
+                            <div className="absolute inset-0 pl-48 pointer-events-none">
+                                <div className="relative w-full h-full">
+                                    {Array.from({ length: TOTAL_HOURS + 1 }).map((_, i) => (
+                                        <div
+                                            key={i}
+                                            className="absolute top-0 bottom-0 border-l border-gray-100"
+                                            style={{ left: `${(i / TOTAL_HOURS) * 100}%` }}
+                                        />
+                                    ))}
+                                </div>
                             </div>
 
                             {/* Current Time Indicator */}
