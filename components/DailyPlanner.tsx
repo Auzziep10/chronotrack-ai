@@ -321,7 +321,15 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         ? teamMembers
         : teamMembers.filter(u => u.id === currentUser?.id);
 
-    const sortedUsers = [...visibleUsers].sort((a, b) => a.name.localeCompare(b.name));
+    const sortedUsers = [...visibleUsers].sort((a, b) => {
+        const aHasBlocks = (userBlocks[a.id] || []).length > 0;
+        const bHasBlocks = (userBlocks[b.id] || []).length > 0;
+
+        if (aHasBlocks && !bHasBlocks) return -1;
+        if (!aHasBlocks && bHasBlocks) return 1;
+
+        return a.name.localeCompare(b.name);
+    });
 
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden">
