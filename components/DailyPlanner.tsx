@@ -181,8 +181,25 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     };
 
     const handleDuplicateSchedule = async () => {
-        if (!duplicateTargetDate || !schedule?.blocks?.length) return;
-        if (!confirm(`Are you sure you want to copy today's entire schedule to ${duplicateWholeWeek ? 'the entire work week' : duplicateTargetDate}?`)) return;
+        const todayShifts = shiftBlocks.filter((b) => {
+            const bDate = new Date(b.startTime);
+            return bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
+        });
+
+        const hasTasks = (schedule?.blocks?.filter(b => !b.title.startsWith('[SHIFT]'))?.length || 0) > 0;
+        const hasShifts = todayShifts.length > 0;
+
+        if (!duplicateTargetDate) return;
+        if (activeView === 'shifts' && !hasShifts) {
+            alert("No shifts to duplicate today.");
+            return;
+        }
+        if (activeView === 'tasks' && !hasTasks) {
+            alert("No tasks to duplicate today.");
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to copy today's entire ${activeView === 'shifts' ? 'shift schedule' : 'task schedule'} to ${duplicateWholeWeek ? 'the entire work week' : duplicateTargetDate}?`)) return;
 
         try {
             const replitUrl = localStorage.getItem('replitAppUrl');
@@ -214,68 +231,66 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             let totalCopies = 0;
 
             for (const tDate of targetDates) {
-                // Generate an initial schedule container for the chosen date
-                const targetGenResult = await supplyWatchService.generateSchedule(replitUrl, token, "Initialize schedule structure", tDate);
-                const targetScheduleId = targetGenResult.schedule?.id;
-                if (!targetScheduleId) throw new Error(`Could not initialize target schedule for ${tDate.toLocaleDateString()}`);
+                if (activeView === 'tasks') {
+                    // Generate an initial schedule container for the chosen date
+                    const targetGenResult = await supplyWatchService.generateSchedule(replitUrl, token, "Initialize schedule structure", tDate);
+                    const targetScheduleId = targetGenResult.schedule?.id;
+                    if (!targetScheduleId) throw new Error(`Could not initialize target schedule for ${tDate.toLocaleDateString()}`);
 
-                // Iterate all scheduled blocks from current day and copy them
-                for (const block of schedule.blocks) {
-                    const bStart = new Date(block.startTime);
-                    const bEnd = new Date(block.endTime);
+                    // Iterate all scheduled blocks from current day and copy them
+                    for (const block of schedule.blocks) {
+                        if (block.title.startsWith('[SHIFT]')) continue; // Skip legacy shifts
 
-                    const newStart = new Date(tDate);
-                    newStart.setHours(bStart.getHours(), bStart.getMinutes(), 0, 0);
+                        const bStart = new Date(block.startTime);
+                        const bEnd = new Date(block.endTime);
 
-                    const newEnd = new Date(tDate);
-                    newEnd.setHours(bEnd.getHours(), bEnd.getMinutes(), 0, 0);
+                        const newStart = new Date(tDate);
+                        newStart.setHours(bStart.getHours(), bStart.getMinutes(), 0, 0);
 
-                    const blockData = {
-                        title: block.title,
-                        description: block.description || '',
-                        startTime: newStart.toISOString(),
-                        endTime: newEnd.toISOString(),
-                        assignedTo: block.assignedTo,
-                        status: 'pending',
-                        priority: block.priority || 'medium'
-                    };
+                        const newEnd = new Date(tDate);
+                        newEnd.setHours(bEnd.getHours(), bEnd.getMinutes(), 0, 0);
 
-                    await supplyWatchService.createScheduleBlock(replitUrl, token, targetScheduleId, blockData);
-                    totalCopies++;
-                }
-
-                // Iterate Firebase shift blocks for that day and duplicate them
-                const todayShifts = shiftBlocks.filter((b) => {
-                    const bDate = new Date(b.startTime);
-                    return bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
-                });
-
-                for (const shift of todayShifts) {
-                    const bStart = new Date(shift.startTime);
-                    const bEnd = new Date(shift.endTime);
-                    const newStart = new Date(tDate);
-                    newStart.setHours(bStart.getHours(), bStart.getMinutes(), 0, 0);
-                    const newEnd = new Date(tDate);
-                    newEnd.setHours(bEnd.getHours(), bEnd.getMinutes(), 0, 0);
-
-                    // Skip duplicating if they already have this exact shift
-                    const exists = shiftBlocks.some(b =>
-                        b.assignedTo === shift.assignedTo &&
-                        new Date(b.startTime).getTime() === newStart.getTime() &&
-                        new Date(b.endTime).getTime() === newEnd.getTime()
-                    );
-
-                    if (!exists) {
-                        await firebaseSaveShiftBlock({
-                            title: shift.title,
-                            description: shift.description || '',
+                        const blockData = {
+                            title: block.title,
+                            description: block.description || '',
                             startTime: newStart.toISOString(),
                             endTime: newEnd.toISOString(),
-                            assignedTo: shift.assignedTo,
+                            assignedTo: block.assignedTo,
                             status: 'pending',
-                            priority: 'medium'
-                        });
+                            priority: block.priority || 'medium'
+                        };
+
+                        await supplyWatchService.createScheduleBlock(replitUrl, token, targetScheduleId, blockData);
                         totalCopies++;
+                    }
+                } else if (activeView === 'shifts') {
+                    for (const shift of todayShifts) {
+                        const bStart = new Date(shift.startTime);
+                        const bEnd = new Date(shift.endTime);
+                        const newStart = new Date(tDate);
+                        newStart.setHours(bStart.getHours(), bStart.getMinutes(), 0, 0);
+                        const newEnd = new Date(tDate);
+                        newEnd.setHours(bEnd.getHours(), bEnd.getMinutes(), 0, 0);
+
+                        // Skip duplicating if they already have this exact shift
+                        const exists = shiftBlocks.some(b =>
+                            b.assignedTo === shift.assignedTo &&
+                            new Date(b.startTime).getTime() === newStart.getTime() &&
+                            new Date(b.endTime).getTime() === newEnd.getTime()
+                        );
+
+                        if (!exists) {
+                            await firebaseSaveShiftBlock({
+                                title: shift.title,
+                                description: shift.description || '',
+                                startTime: newStart.toISOString(),
+                                endTime: newEnd.toISOString(),
+                                assignedTo: shift.assignedTo,
+                                status: 'pending',
+                                priority: 'medium'
+                            });
+                            totalCopies++;
+                        }
                     }
                 }
             }
@@ -624,8 +639,8 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
                                 {isDuplicating && (
                                     <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 p-3 rounded-xl shadow-xl z-50 min-w-[250px] animate-fade-in flex flex-col gap-3">
-                                        <div className="text-sm font-bold text-gray-800">Duplicate Schedule</div>
-                                        <div className="text-xs text-gray-500 mb-2">Select a date to copy all task and shift blocks from this day.</div>
+                                        <div className="text-sm font-bold text-gray-800">Duplicate {activeView === 'shifts' ? 'Shifts' : 'Tasks'}</div>
+                                        <div className="text-xs text-gray-500 mb-2">Select a date to copy all {activeView === 'shifts' ? 'shift schedules' : 'tasks'} from this day.</div>
                                         <input
                                             type="date"
                                             value={duplicateTargetDate}
@@ -650,7 +665,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             </button>
                                             <button
                                                 onClick={handleDuplicateSchedule}
-                                                disabled={!duplicateTargetDate || !schedule?.blocks?.length}
+                                                disabled={!duplicateTargetDate || (activeView === 'tasks' ? !schedule?.blocks?.filter(b => !b.title.startsWith('[SHIFT]')).length : !shiftBlocks.some(b => {
+                                                    const d = new Date(b.startTime);
+                                                    return d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth() && d.getFullYear() === currentDate.getFullYear();
+                                                }))}
                                                 className="flex-1 px-3 py-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg font-bold transition-colors shadow-sm"
                                             >
                                                 Confirm
