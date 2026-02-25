@@ -396,7 +396,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden">
             {/* Header */}
-            <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50 z-20 relative">
+            <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50 z-50 relative">
                 <div className="flex gap-4 items-center">
                     <div>
                         <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
