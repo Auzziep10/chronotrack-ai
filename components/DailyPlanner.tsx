@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy } from 'lucide-react';
 import { User, DailySchedule, ScheduleBlock } from '../types';
 import { supplyWatchService } from '../services/supplyWatchService';
+import { ShiftCalendarViews } from './ShiftCalendarViews';
 
 interface Props {
     users: User[];
@@ -40,6 +41,9 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [transcript, setTranscript] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [unassignedBlocks, setUnassignedBlocks] = useState<any[]>([]);
+
+    // Shift Schedule Timeframe
+    const [shiftTimeframe, setShiftTimeframe] = useState<'day' | 'week' | 'month'>('day');
 
     // Shift Form State
     const [shiftUser, setShiftUser] = useState('');
@@ -535,6 +539,19 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                     </div>
 
                     <div className="flex items-center gap-2">
+                        {activeView === 'shifts' && (
+                            <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                                {['day', 'week', 'month'].map(view => (
+                                    <button
+                                        key={view}
+                                        onClick={() => setShiftTimeframe(view as any)}
+                                        className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-md transition-shadow ${shiftTimeframe === view ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        {view}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                         <button
                             onClick={() => { setCurrentDate(new Date()) }}
                             className={`text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${isToday(currentDate) ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
@@ -739,7 +756,15 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 </div>
             )}
 
-            {!loading && !error && (
+            {!loading && !error && activeView === 'shifts' && shiftTimeframe !== 'day' ? (
+                <ShiftCalendarViews
+                    viewType={shiftTimeframe as 'week' | 'month'}
+                    currentDate={currentDate}
+                    users={users}
+                    currentUser={currentUser}
+                    onBlockClick={handleBlockClick}
+                />
+            ) : (!loading && !error && (
                 <div className="flex-1 overflow-auto bg-white relative flex flex-col">
                     {/* Main Timeline Container */}
                     <div className="min-w-[800px] flex-1 flex flex-col">
@@ -864,17 +889,19 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                         </div>
                     </div>
                 </div>
-            )}
+            ))}
 
             {/* Footer / Legend */}
-            <div className="p-4 border-t border-gray-200 bg-white flex flex-wrap gap-4 text-xs">
-                {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                    <div key={key} className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${STATUS_COLORS[key as keyof typeof STATUS_COLORS].split(' ')[0]}`}></div>
-                        <span className="text-gray-600 font-medium">{label}</span>
-                    </div>
-                ))}
-            </div>
+            {shiftTimeframe === 'day' && (
+                <div className="p-4 border-t border-gray-200 bg-white flex flex-wrap gap-4 text-xs">
+                    {Object.entries(STATUS_LABELS).map(([key, label]) => (
+                        <div key={key} className="flex items-center gap-2">
+                            <div className={`w-3 h-3 rounded-full ${STATUS_COLORS[key as keyof typeof STATUS_COLORS].split(' ')[0]}`}></div>
+                            <span className="text-gray-600 font-medium">{label}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {/* Edit Block Dialog */}
             {editingBlock && (
