@@ -665,7 +665,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             </button>
                                             <button
                                                 onClick={handleDuplicateSchedule}
-                                                disabled={!duplicateTargetDate || (activeView === 'tasks' ? !schedule?.blocks?.filter(b => !b.title.startsWith('[SHIFT]')).length : !shiftBlocks.some(b => {
+                                                disabled={!duplicateTargetDate || (activeView === 'tasks' ? (schedule?.blocks?.filter(b => !b.title.startsWith('[SHIFT]'))?.length || 0) === 0 : !shiftBlocks.some(b => {
                                                     const d = new Date(b.startTime);
                                                     return d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth() && d.getFullYear() === currentDate.getFullYear();
                                                 }))}
