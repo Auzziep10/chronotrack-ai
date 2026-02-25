@@ -105,6 +105,7 @@ export interface ScheduleBlock {
     progress?: number;
     userName?: string;
   }>;
+  isShiftBlock?: boolean; // Flag to differentiate shift schedules from task blocks
 }
 
 export interface DailySchedule {

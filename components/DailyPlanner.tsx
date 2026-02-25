@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save } from 'lucide-react';
 import { User, DailySchedule, ScheduleBlock } from '../types';
 import { supplyWatchService } from '../services/supplyWatchService';
 
@@ -36,9 +36,15 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     // Planning Mode State
     const [isPlanningMode, setIsPlanningMode] = useState(false);
+    const [activeView, setActiveView] = useState<'tasks' | 'shifts'>('tasks');
     const [transcript, setTranscript] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [unassignedBlocks, setUnassignedBlocks] = useState<any[]>([]);
+
+    // Shift Form State
+    const [shiftUser, setShiftUser] = useState('');
+    const [shiftStart, setShiftStart] = useState('09:00');
+    const [shiftEnd, setShiftEnd] = useState('17:00');
 
     const isAdminOrManager = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && currentUser?.username?.toLowerCase() !== 'warehouse';
 
@@ -173,7 +179,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     };
 
     const handleDeleteBlock = async (blockId: string) => {
-        if (!confirm("Delete this task?")) return;
+        if (!confirm("Delete this?")) return;
         try {
             const replitUrl = localStorage.getItem('replitAppUrl');
             const token = localStorage.getItem('chronoAuthToken');
@@ -186,7 +192,64 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 } : null);
             }
         } catch (err) {
-            alert("Failed to delete task.");
+            alert("Failed to delete.");
+        }
+    };
+
+    const handleAddShift = async () => {
+        if (!shiftUser || !shiftStart || !shiftEnd) return;
+        try {
+            const replitUrl = localStorage.getItem('replitAppUrl');
+            const token = localStorage.getItem('chronoAuthToken');
+
+            if (replitUrl && token) {
+                // Ensure we have a schedule for today
+                let targetScheduleId = schedule?.id;
+
+                // If it doesn't exist, generate a dummy schedule or create it.
+                // Replit backend handles assignment by creating the schedule on the fly if needed.
+                // We'll trust the assign-block API to work if scheduleId exists, else we might need one.
+                // Actually the backend `createScheduleBlock` might need an existing schedule ID.
+                if (!targetScheduleId) {
+                    // Try generating a dummy one just to get an ID
+                    const result = await supplyWatchService.generateSchedule(replitUrl, token, "Create empty schedule", currentDate);
+                    targetScheduleId = result.schedule.id;
+                    setSchedule(result.schedule);
+                }
+
+                if (!targetScheduleId) throw new Error("Could not find or create a schedule for the day.");
+
+                const startDateTime = new Date(currentDate);
+                const [sh, sm] = shiftStart.split(':').map(Number);
+                startDateTime.setHours(sh, sm, 0, 0);
+
+                const endDateTime = new Date(currentDate);
+                const [eh, em] = shiftEnd.split(':').map(Number);
+                endDateTime.setHours(eh, em, 0, 0);
+
+                const blockData = {
+                    title: `[SHIFT] Scheduled`,
+                    description: `Total Hours Scheduled`,
+                    startTime: startDateTime.toISOString(),
+                    endTime: endDateTime.toISOString(),
+                    assignedTo: shiftUser,
+                    status: 'pending',
+                    priority: 'medium'
+                };
+
+                const result = await supplyWatchService.createScheduleBlock(replitUrl, token, targetScheduleId, blockData);
+
+                // Add to visible blocks
+                setSchedule(prev => prev ? {
+                    ...prev,
+                    blocks: [...prev.blocks, result]
+                } : null);
+
+                // Reset form partially
+                setShiftUser('');
+            }
+        } catch (err) {
+            alert("Failed to create shift block. Connect Replit first if you haven't.");
         }
     };
 
@@ -238,10 +301,14 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         };
     };
 
-    // Group blocks by user
+    // Group blocks by user and filter based on active view
     const userBlocks = users.reduce((acc, user) => {
-        const blocks = schedule?.blocks.filter(b => b.assignedTo === user.id) || [];
-        acc[user.id] = blocks;
+        const userBlocksRaw = schedule?.blocks.filter(b => b.assignedTo === user.id) || [];
+        if (activeView === 'shifts') {
+            acc[user.id] = userBlocksRaw.filter(b => b.title.startsWith('[SHIFT]'));
+        } else {
+            acc[user.id] = userBlocksRaw.filter(b => !b.title.startsWith('[SHIFT]'));
+        }
         return acc;
     }, {} as Record<string, ScheduleBlock[]>);
 
@@ -259,17 +326,38 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden">
             {/* Header */}
-            <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50">
-                <div>
-                    <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-gray-500" />
-                        Daily Planner
-                    </h2>
-                    <p className="text-xs text-gray-500">AI-powered schedule generation from voice notes</p>
+            <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50 z-20 relative">
+                <div className="flex gap-4 items-center">
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <Calendar className="w-5 h-5 text-gray-500" />
+                            Daily Planner
+                        </h2>
+                        <p className="text-xs text-gray-500">
+                            {activeView === 'tasks' ? 'Task assignment based on workload' : 'Auto-clock out parameters'}
+                        </p>
+                    </div>
+
+                    <div className="flex bg-gray-200 p-1 rounded-lg sm:ml-4 shadow-inner mt-2 sm:mt-0 w-full sm:w-auto">
+                        <button
+                            onClick={() => setActiveView('tasks')}
+                            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${activeView === 'tasks' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            <LayoutGrid className="w-4 h-4 inline-block mr-1" />
+                            Tasks
+                        </button>
+                        <button
+                            onClick={() => setActiveView('shifts')}
+                            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${activeView === 'shifts' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            <Clock className="w-4 h-4 inline-block mr-1" />
+                            Shift Schedules
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {isAdminOrManager && (
+                    {isAdminOrManager && activeView === 'tasks' && (
                         <button
                             onClick={() => setIsPlanningMode(!isPlanningMode)}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border ${isPlanningMode
@@ -303,9 +391,9 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 </div>
             </div>
 
-            {/* AI Planning Panel */}
-            {isPlanningMode && (
-                <div className="bg-orange-50 border-b border-orange-100 p-6 animate-slide-down">
+            {/* AI Planning Panel for Tasks */}
+            {isPlanningMode && activeView === 'tasks' && (
+                <div className="bg-orange-50 border-b border-orange-100 p-6 animate-slide-down relative z-10">
                     <div className="max-w-4xl mx-auto flex flex-col gap-4">
                         <div className="flex items-center justify-between">
                             <div>
@@ -380,6 +468,58 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             </div>
                         )}
                     </div>
+                </div>
+            )}
+
+            {/* Shift Addition Form */}
+            {activeView === 'shifts' && isAdminOrManager && (
+                <div className="bg-indigo-50 border-b border-indigo-100 p-4 shrink-0 relative z-10">
+                    <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-4">
+                        <div className="flex items-center gap-2 text-indigo-900 font-bold shrink-0">
+                            <Clock className="w-5 h-5 text-indigo-600" />
+                            Add Expected Shift
+                        </div>
+
+                        <div className="flex-1 flex flex-wrap gap-2 items-center w-full">
+                            <select
+                                value={shiftUser}
+                                onChange={(e) => setShiftUser(e.target.value)}
+                                className="px-3 py-2 text-sm rounded bg-white border border-indigo-200 focus:ring-2 focus:ring-indigo-500 outline-none min-w-[200px] flex-1 md:flex-none"
+                            >
+                                <option value="" disabled>Select Staff Member...</option>
+                                {teamMembers.map(u => (
+                                    <option key={u.id} value={u.id}>{u.name}</option>
+                                ))}
+                            </select>
+
+                            <div className="flex items-center gap-2 bg-white rounded border border-indigo-200 px-2 py-1 shadow-inner">
+                                <input
+                                    type="time"
+                                    value={shiftStart}
+                                    onChange={(e) => setShiftStart(e.target.value)}
+                                    className="text-sm outline-none px-1"
+                                />
+                                <span className="text-indigo-300 font-bold">to</span>
+                                <input
+                                    type="time"
+                                    value={shiftEnd}
+                                    onChange={(e) => setShiftEnd(e.target.value)}
+                                    className="text-sm outline-none px-1"
+                                />
+                            </div>
+
+                            <button
+                                onClick={handleAddShift}
+                                disabled={!shiftUser || !shiftStart || !shiftEnd}
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow disabled:opacity-50 flex items-center gap-2 transition-colors ml-auto md:ml-0"
+                            >
+                                <Plus className="w-4 h-4" /> Add
+                            </button>
+                        </div>
+                    </div>
+                    <p className="text-xs text-indigo-700 mt-2 text-center md:text-left max-w-4xl mx-auto">
+                        Setting shift hours ensures users are automatically clocked out if they forget, enforcing a correct duration (includes a 10 min grace period after the shift ends).
+                    </p>
                 </div>
             )}
 
@@ -479,11 +619,11 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                     title={`${block.title} (${new Date(block.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${new Date(block.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`}
                                                 >
                                                     {block.title}
-                                                    {/* Tooltip-ish Details on hover could go here */}
+                                                    {/* Tooltip-ish Details */}
                                                     <div className="hidden group-hover:block absolute top-full left-0 bg-gray-800 text-white text-xs p-2 rounded shadow-lg z-50 w-48 mt-1 whitespace-normal">
                                                         <div className="flex justify-between items-start mb-1">
-                                                            <div className="font-bold">{block.title}</div>
-                                                            {isPlanningMode && (
+                                                            <div className="font-bold">{activeView === 'shifts' ? 'Shift Schedule' : block.title}</div>
+                                                            {(isAdminOrManager) && (
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();

@@ -635,6 +635,39 @@ const App: React.FC = () => {
     }
   };
 
+  // ─── AUTO CLOCK-OUT MONITOR ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!authToken || !todaySchedule?.blocks?.length || !isFirebaseConfigured()) return;
+
+    // Only run this on an admin terminal to avoid multiple devices triggering it
+    const isAdminTerminal = currentUser?.role === 'admin' && currentUser?.username?.toLowerCase() !== 'warehouse';
+    if (!isAdminTerminal) return;
+
+    const checkShifts = () => {
+      const now = Date.now();
+      const shiftBlocks = todaySchedule.blocks.filter((b: any) => b.title?.startsWith('[SHIFT]'));
+
+      for (const [userId, session] of Object.entries(activeSessions) as [string, UserSession][]) {
+        // Find if this user has a shift block that ended
+        const userShift = shiftBlocks.find((b: any) => b.assignedTo === userId);
+        if (userShift) {
+          const endTimeRaw = new Date(userShift.endTime).getTime();
+          // Add 10 minutes grace period
+          const forcedClockOutTime = endTimeRaw + (10 * 60 * 1000);
+
+          if (now > forcedClockOutTime) {
+            console.log(`[AutoClockOut] Shift ended for ${session.user.name}. Auto clocking out.`);
+            handleClockOut(session.user);
+          }
+        }
+      }
+    };
+
+    const interval = setInterval(checkShifts, 30 * 1000); // Check every 30 seconds
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authToken, todaySchedule, activeSessions, currentUser]);
+
   const handleLogSubmit = (userId: string, logData: Omit<WorkLog, 'id' | 'timestamp' | 'periodStart' | 'periodEnd' | 'userId' | 'userName'>) => {
     const now = Date.now();
 

@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Department, WorkLog, DailyTimeCard, User, AppSettings, UserSession } from '../types';
 import {
-  BarChart3, Users, Clock, Calendar, ChevronDown, Download,
+  BarChart3, Users, Clock, Calendar, ChevronDown, ChevronRight, Download,
   Briefcase, CalendarRange, Sparkles, Zap, ListTodo, RefreshCw,
   Target, TrendingUp, AlertCircle
 } from 'lucide-react';
@@ -111,6 +111,16 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [selectedDept, setSelectedDept] = useState<Department | 'All'>('All');
   const [selectedUser, setSelectedUser] = useState<string | 'All'>('All');
   const [selectedPeriodIdx, setSelectedPeriodIdx] = useState(0);
+  const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
+
+  const toggleUserExpanded = (userId: string) => {
+    setExpandedUsers(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
 
   // External Plan State
   const [externalPlanRaw, setExternalPlanRaw] = useState('');
@@ -212,6 +222,31 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
       return cardDate >= currentPeriod.start && cardDate <= currentPeriod.end;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [timeCards, activeSessions, currentPeriod]);
+
+  const groupedTimeCards = useMemo(() => {
+    const groups: Record<string, DailyTimeCard[]> = {};
+    filteredTimeCards.forEach(card => {
+      if (!groups[card.userId]) groups[card.userId] = [];
+      groups[card.userId].push(card);
+    });
+    return Object.values(groups).map(cards => {
+      const userId = cards[0].userId;
+      const totalIdle = cards.reduce((sum, c) => sum + (c.totalIdleHours || 0), 0);
+      const totalHours = cards.reduce((sum, c) => sum + c.totalHours, 0);
+      const isComplete = cards.every(c => c.status === 'Complete');
+      return {
+        userId,
+        cards,
+        totalIdle,
+        totalHours,
+        status: isComplete ? 'Complete' : 'Active'
+      };
+    }).sort((a, b) => {
+      const nameA = users.find(u => u.id === a.userId)?.name || '';
+      const nameB = users.find(u => u.id === b.userId)?.name || '';
+      return nameA.localeCompare(nameB);
+    });
+  }, [filteredTimeCards, users]);
 
   const handleSyncPlan = async () => {
     if (!externalPlanRaw.trim()) return;
@@ -519,51 +554,97 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {filteredTimeCards.length === 0 ? (
+                      {groupedTimeCards.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
                             No data found for this period.
                           </td>
                         </tr>
                       ) : (
-                        filteredTimeCards.map(card => {
-                          const user = users.find(u => u.id === card.userId);
+                        groupedTimeCards.map(group => {
+                          const user = users.find(u => u.id === group.userId);
+                          const isExpanded = expandedUsers.has(group.userId);
+
                           return (
-                            <tr key={card.id} className="hover:bg-gray-50 transition-colors">
-                              <td className="px-6 py-4">
-                                <div className="font-bold text-gray-900">{user?.name || 'Unknown'}</div>
-                                <div className="text-[10px] text-gray-500">{user?.role}</div>
-                              </td>
-                              <td className="px-6 py-4 text-gray-600">
-                                {new Date(card.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="text-xs font-medium text-gray-900">
-                                  {new Date(card.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </div>
-                                <div className="text-[10px] text-gray-500">
-                                  {card.clockOut ? new Date(card.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className={`text-xs font-bold ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
-                                  -{card.totalIdleHours?.toFixed(2) || '0.00'} hr
-                                </div>
-                                <div className="text-[10px] text-gray-400">Idle / Missed Logs</div>
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="text-xs font-bold text-blue-600">
-                                  {card.totalHours.toFixed(2)} hr
-                                </div>
-                                <div className="text-[10px] text-gray-400 font-medium">Applied to Payroll</div>
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
-                                  ${card.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                  {card.status}
-                                </span>
-                              </td>
-                            </tr>
+                            <React.Fragment key={group.userId}>
+                              <tr
+                                className="hover:bg-gray-50 transition-colors cursor-pointer"
+                                onClick={() => toggleUserExpanded(group.userId)}
+                              >
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-3">
+                                    {isExpanded ? (
+                                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                                    ) : (
+                                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                                    )}
+                                    <div>
+                                      <div className="font-bold text-gray-900">{user?.name || 'Unknown'}</div>
+                                      <div className="text-[10px] text-gray-500">{user?.role}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-gray-400 text-xs font-medium">
+                                  {group.cards.length} {group.cards.length === 1 ? 'Record' : 'Records'}
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-xs text-gray-400">-</div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className={`text-xs font-bold ${group.totalIdle && group.totalIdle > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                                    -{group.totalIdle.toFixed(2)} hr
+                                  </div>
+                                  <div className="text-[10px] text-gray-400">Cycle Idle</div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-xs font-bold text-blue-600">
+                                    {group.totalHours.toFixed(2)} hr
+                                  </div>
+                                  <div className="text-[10px] text-gray-400 font-medium">Cycle Total</div>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
+                                    ${group.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                    {group.status}
+                                  </span>
+                                </td>
+                              </tr>
+
+                              {isExpanded && group.cards.map(card => (
+                                <tr key={card.id} className="bg-gray-50/50 hover:bg-gray-100/50 transition-colors">
+                                  <td className="px-6 py-3 pl-16">
+                                    <div className="text-xs text-gray-400">Log Entry</div>
+                                  </td>
+                                  <td className="px-6 py-3 text-gray-600">
+                                    {new Date(card.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </td>
+                                  <td className="px-6 py-3">
+                                    <div className="text-xs font-medium text-gray-900">
+                                      {new Date(card.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                    <div className="text-[10px] text-gray-500">
+                                      {card.clockOut ? new Date(card.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-3">
+                                    <div className={`text-xs font-medium ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                                      -{card.totalIdleHours?.toFixed(2) || '0.00'} hr
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-3">
+                                    <div className="text-xs font-medium text-blue-600">
+                                      {card.totalHours.toFixed(2)} hr
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-3 text-right">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
+                                      ${card.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                      {card.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
                           );
                         })
                       )}
