@@ -19,7 +19,8 @@ import {
   firebaseSaveUser,
   firebaseDeleteUser,
   firebaseGetUsers,
-  isFirebaseConfigured
+  isFirebaseConfigured,
+  subscribeToShiftBlocks
 } from './services/firebaseService';
 
 type Tab = 'station' | 'activity' | 'manager' | 'planner';
@@ -55,6 +56,9 @@ const App: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<Tab>('station');
   const [showSettings, setShowSettings] = useState(false);
+
+  // Shift Blocks State (From Firebase)
+  const [shiftBlocks, setShiftBlocks] = useState<any[]>([]);
 
   // Replit Bridge State
   const [lastReplitSync, setLastReplitSync] = useState<number>(0);
@@ -635,9 +639,21 @@ const App: React.FC = () => {
     }
   };
 
+  // ─── SHIFT BLOCKS LISTENER ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!isFirebaseConfigured()) return;
+
+    // Subscribe to shifts purely inside Firebase to bypass Replit
+    const unsubscribe = subscribeToShiftBlocks((blocks: any[]) => {
+      setShiftBlocks(blocks);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   // ─── AUTO CLOCK-OUT MONITOR ──────────────────────────────────────────────
   useEffect(() => {
-    if (!authToken || !todaySchedule?.blocks?.length || !isFirebaseConfigured()) return;
+    if (!authToken || !isFirebaseConfigured()) return;
 
     // Only run this on an admin terminal to avoid multiple devices triggering it
     const isAdminTerminal = currentUser?.role === 'admin' && currentUser?.username?.toLowerCase() !== 'warehouse';
@@ -645,11 +661,16 @@ const App: React.FC = () => {
 
     const checkShifts = () => {
       const now = Date.now();
-      const shiftBlocks = todaySchedule.blocks.filter((b: any) => b.title?.startsWith('[SHIFT]'));
+      const today = new Date();
+
+      const currentShifts = shiftBlocks.filter((b: any) => {
+        const d = new Date(b.endTime);
+        return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+      });
 
       for (const [userId, session] of Object.entries(activeSessions) as [string, UserSession][]) {
         // Find if this user has a shift block that ended
-        const userShift = shiftBlocks.find((b: any) => b.assignedTo === userId);
+        const userShift = currentShifts.find((b: any) => b.assignedTo === userId);
         if (userShift) {
           const endTimeRaw = new Date(userShift.endTime).getTime();
           // Add 10 minutes grace period
@@ -666,7 +687,7 @@ const App: React.FC = () => {
     const interval = setInterval(checkShifts, 30 * 1000); // Check every 30 seconds
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authToken, todaySchedule, activeSessions, currentUser]);
+  }, [authToken, shiftBlocks, activeSessions, currentUser]);
 
   const handleLogSubmit = (userId: string, logData: Omit<WorkLog, 'id' | 'timestamp' | 'periodStart' | 'periodEnd' | 'userId' | 'userName'>) => {
     const now = Date.now();

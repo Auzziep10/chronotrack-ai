@@ -266,4 +266,57 @@ export const firebaseGetLogs = async (): Promise<WorkLog[]> => {
     });
 };
 
+// ─── SHIFT SCHEDULES ────────────────────────────────────────────────────────
+const SHIFTS_COL = 'shiftSchedules';
+
+/** Save or update a shift block in Firestore */
+export const firebaseSaveShiftBlock = async (block: any): Promise<any> => {
+    // Generate an ID if it doesn't have one
+    const id = block.id || `shift-${Date.now()}-${block.assignedTo}`;
+    const cleanBlock = { ...block, id };
+
+    // Remove undefined values
+    const clean: any = {};
+    Object.entries(cleanBlock).forEach(([k, v]) => {
+        if (v !== undefined) clean[k] = v;
+    });
+
+    await setDoc(doc(db, SHIFTS_COL, id), {
+        ...clean,
+        updatedAt: serverTimestamp() // Add or overwrite updatedAt
+    }, { merge: true });
+
+    return clean;
+};
+
+/** Subscribe to all shift blocks */
+export const subscribeToShiftBlocks = (onUpdate: (blocks: any[]) => void) => {
+    return onSnapshot(collection(db, SHIFTS_COL), (snapshot) => {
+        if (snapshot.empty) {
+            onUpdate([]);
+            return;
+        }
+        const blocks = snapshot.docs.map(d => {
+            const data = d.data();
+            const { updatedAt, ...block } = data; // Strip Firestore-specific fields for clean state
+            return block;
+        });
+        onUpdate(blocks);
+    });
+};
+
+/** Fetch blocks once (e.g. for calendar views) */
+export const firebaseGetShiftBlocks = async (): Promise<any[]> => {
+    const snapshot = await getDocs(collection(db, SHIFTS_COL));
+    return snapshot.docs.map(d => {
+        const { updatedAt, ...block } = d.data();
+        return block;
+    });
+};
+
+/** Delete a shift block from Firestore */
+export const firebaseDeleteShiftBlock = async (blockId: string): Promise<void> => {
+    await deleteDoc(doc(db, SHIFTS_COL, blockId));
+};
+
 export { db };

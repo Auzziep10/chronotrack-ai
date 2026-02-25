@@ -8,11 +8,11 @@ interface Props {
     users: User[];
     currentUser: User | null;
     onBlockClick: (block: ScheduleBlock) => void;
+    firebaseShiftBlocks: ScheduleBlock[];
 }
 
-export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, users, currentUser, onBlockClick }) => {
-    const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
-    const [loading, setLoading] = useState(false);
+export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, users, currentUser, onBlockClick, firebaseShiftBlocks }) => {
+    const loading = false;
 
     const START_HOUR = 6;
     const END_HOUR = 20;
@@ -65,44 +65,7 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
 
     const dates = getDatesToRender();
 
-    useEffect(() => {
-        let isCancelled = false;
-        const fetchSchedules = async () => {
-            setLoading(true);
-            try {
-                const replitUrl = localStorage.getItem('replitAppUrl');
-                const token = localStorage.getItem('chronoAuthToken');
-                if (!replitUrl || !token) return;
-
-                const allBlocks: ScheduleBlock[] = [];
-                // Fetch in smaller batches to avoid overloading the backend
-                for (let i = 0; i < dates.length; i += 7) {
-                    const batch = dates.slice(i, i + 7);
-                    const results = await Promise.all(batch.map((d) =>
-                        supplyWatchService.getDailySchedule(replitUrl, token, d)
-                            .catch(() => null)
-                    ));
-                    if (isCancelled) return;
-                    results.forEach((res) => {
-                        if (res && res.blocks) {
-                            allBlocks.push(...res.blocks.filter((b: any) => b.title.startsWith('[SHIFT]')));
-                        }
-                    });
-                }
-
-                if (!isCancelled) {
-                    setBlocks(allBlocks);
-                }
-            } catch (err) {
-                console.error("Failed to fetch calendar block data", err);
-            } finally {
-                if (!isCancelled) setLoading(false);
-            }
-        };
-
-        fetchSchedules();
-        return () => { isCancelled = true; };
-    }, [currentDate, viewType]); // Refresh when viewType or month/week changes
+    // No need to fetch schedules via getDailySchedule anymore, we use firebaseShiftBlocks directly
 
     const isToday = (d: Date) => {
         const today = new Date();
@@ -165,7 +128,7 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
 
                         {dates.map((d, colIndex) => {
                             // Find blocks for this day
-                            const dayBlocks = blocks.filter((b) => {
+                            const dayBlocks = firebaseShiftBlocks.filter((b) => {
                                 const bDate = new Date(b.startTime);
                                 return bDate.getDate() === d.getDate() && bDate.getMonth() === d.getMonth() && bDate.getFullYear() === d.getFullYear();
                             });
@@ -242,7 +205,7 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                         <div key={wIndex} className="flex-1 flex border-b border-gray-200 min-h-[120px]">
                             {week.map((d, dIndex) => {
                                 const isCurrentMonth = d.getMonth() === currentDate.getMonth();
-                                const dayBlocks = blocks.filter((b) => {
+                                const dayBlocks = firebaseShiftBlocks.filter((b) => {
                                     const bDate = new Date(b.startTime);
                                     return bDate.getDate() === d.getDate() && bDate.getMonth() === d.getMonth() && bDate.getFullYear() === d.getFullYear();
                                 });
