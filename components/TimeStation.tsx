@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { UserSession, User } from '../types';
 import { Timer } from './Timer';
 import { PinPad } from './PinPad';
-import { Play, Pause, ShieldCheck, User as UserIcon, LogOut, CheckCircle2 } from 'lucide-react';
+import { Play, Pause, ShieldCheck, User as UserIcon, LogOut, CheckCircle2, QrCode as QrCodeIcon, X } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { LOG_INTERVAL_MS } from '../constants';
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
 
 export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut }) => {
   const [showPinPad, setShowPinPad] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   const [pinMessage, setPinMessage] = useState<string>('');
 
   const handlePinAction = () => {
@@ -74,7 +76,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
           </div>
 
           <div className="p-10 flex-1 flex flex-col items-center justify-center space-y-8">
-            <div className="p-6 bg-blue-50 rounded-full">
+            <div className="p-6 bg-blue-50 rounded-full cursor-pointer hover:bg-blue-100 transition-colors" onClick={handlePinAction}>
               <ShieldCheck className="w-20 h-20 text-blue-600" />
             </div>
 
@@ -84,6 +86,14 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
             >
               <span>Enter PIN</span>
               <span className="text-sm font-normal opacity-80">Clock In / Clock Out</span>
+            </button>
+
+            <button
+              onClick={() => setShowQR(true)}
+              className="w-full max-w-xs flex items-center justify-center gap-3 px-8 py-4 bg-white border-2 border-gray-200 hover:border-slate-800 hover:text-slate-800 hover:bg-slate-50 text-gray-600 rounded-2xl shadow-sm font-bold text-md transition-all active:scale-95"
+            >
+              <QrCodeIcon className="w-5 h-5" />
+              Scan to Login
             </button>
 
             <p className="text-center text-gray-400 text-sm max-w-xs">
@@ -170,6 +180,47 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
           )}
         </div>
       </div>
-    </div>
+      {/* QR Code Dialog */}
+      {
+        showQR && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="p-6 flex justify-between items-center border-b border-gray-100 bg-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="bg-slate-800 p-2 rounded-lg text-white">
+                    <QrCodeIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xl text-gray-900 leading-tight">Staff Portal Login</h3>
+                    <p className="text-xs text-gray-500 font-medium">Scan to open on your device</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowQR(false)} className="text-gray-400 hover:text-gray-800 transition-colors p-2 hover:bg-gray-200 rounded-full">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-10 flex flex-col items-center bg-white justify-center">
+                <div className="p-4 bg-white border-4 border-gray-100 rounded-2xl shadow-inner inline-block mb-6">
+                  <QRCodeSVG
+                    value={window.location.href}
+                    size={256}
+                    level="H"
+                    includeMargin={false}
+                    bgColor="#ffffff"
+                    fgColor="#0f172a"
+                  />
+                </div>
+                <div className="flex items-center gap-2 bg-slate-50 text-slate-700 px-4 py-3 rounded-xl border border-slate-200 max-w-sm">
+                  <QrCodeIcon className="w-6 h-6 shrink-0 text-slate-500" />
+                  <p className="text-sm font-medium leading-snug">
+                    Point your smartphone camera at this code to quickly log into your secure dashboard.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </div >
   );
 };
