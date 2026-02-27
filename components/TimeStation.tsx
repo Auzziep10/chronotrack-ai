@@ -11,15 +11,19 @@ interface Props {
   users: User[];
   onClockIn: (user: User) => void;
   onClockOut: (user: User) => void;
+  onPauseSession?: (user: User) => void;
+  onResumeSession?: (user: User) => void;
 }
 
-export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut }) => {
+export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession }) => {
   const [showPinPad, setShowPinPad] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [pinMessage, setPinMessage] = useState<string>('');
+  const [actionMenuUser, setActionMenuUser] = useState<User | null>(null);
 
   const handlePinAction = () => {
     setPinMessage('');
+    setActionMenuUser(null);
     setShowPinPad(true);
   };
 
@@ -27,20 +31,18 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
     const isClockedIn = !!activeSessions[user.id];
 
     if (isClockedIn) {
-      // Clock Out Logic
-      onClockOut(user);
-      setPinMessage(`Goodbye, ${user.name}! Clocked out successfully.`);
+      // Open the action menu instead of instantly clocking out
+      setActionMenuUser(user);
+      setShowPinPad(false);
     } else {
       // Clock In Logic
       onClockIn(user);
       setPinMessage(`Welcome, ${user.name}! Clocked in successfully.`);
+      setTimeout(() => {
+        setShowPinPad(false);
+        setPinMessage('');
+      }, 1500);
     }
-
-    // Close pad and clear message after delay
-    setTimeout(() => {
-      setShowPinPad(false);
-      setPinMessage('');
-    }, 1500);
   };
 
   if (showPinPad) {
@@ -59,6 +61,79 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
             onCancel={() => setShowPinPad(false)}
           />
         )}
+      </div>
+    );
+  }
+
+  if (actionMenuUser) {
+    const session = activeSessions[actionMenuUser.id];
+    if (!session) {
+      setActionMenuUser(null);
+      return null;
+    }
+
+    const isPaused = session.isPaused;
+
+    return (
+      <div className="max-w-2xl mx-auto py-12 animate-fade-in">
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+          <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-8 text-center text-white">
+            <div className="w-16 h-16 bg-white/10 rounded-full mx-auto flex items-center justify-center text-2xl font-bold mb-4 border border-white/20">
+              {actionMenuUser.avatarInitials}
+            </div>
+            <h2 className="text-3xl font-bold mb-2">Hello, {actionMenuUser.name}</h2>
+            <p className="text-slate-300">What would you like to do?</p>
+          </div>
+          <div className="p-8 space-y-4 bg-slate-50">
+            {isPaused ? (
+              <button
+                onClick={() => {
+                  onResumeSession && onResumeSession(actionMenuUser);
+                  setPinMessage(`Welcome back from lunch, ${actionMenuUser.name}!`);
+                  setActionMenuUser(null);
+                  setShowPinPad(true);
+                  setTimeout(() => { setShowPinPad(false); setPinMessage(''); }, 2000);
+                }}
+                className="w-full bg-green-600 hover:bg-green-700 text-white p-6 rounded-2xl shadow-sm text-xl font-bold transition-transform active:scale-95 flex items-center justify-center gap-3"
+              >
+                <Play className="w-6 h-6" /> Resume Shift (Return from Lunch)
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  onPauseSession && onPauseSession(actionMenuUser);
+                  setPinMessage(`Enjoy your lunch, ${actionMenuUser.name}!`);
+                  setActionMenuUser(null);
+                  setShowPinPad(true);
+                  setTimeout(() => { setShowPinPad(false); setPinMessage(''); }, 2000);
+                }}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white p-6 rounded-2xl shadow-sm text-xl font-bold transition-transform active:scale-95 flex items-center justify-center gap-3"
+              >
+                <Pause className="w-6 h-6" /> Take Lunch Break (Pause Shift)
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                onClockOut(actionMenuUser);
+                setPinMessage(`Goodbye, ${actionMenuUser.name}! Clocked out for the day.`);
+                setActionMenuUser(null);
+                setShowPinPad(true);
+                setTimeout(() => { setShowPinPad(false); setPinMessage(''); }, 2000);
+              }}
+              className="w-full bg-red-600 hover:bg-red-700 text-white p-6 rounded-2xl shadow-sm text-xl font-bold transition-transform active:scale-95 flex items-center justify-center gap-3"
+            >
+              <LogOut className="w-6 h-6" /> Clock Out For the Day
+            </button>
+
+            <button
+              onClick={() => setActionMenuUser(null)}
+              className="w-full mt-4 bg-transparent border-2 border-slate-300 text-slate-500 hover:bg-slate-200 p-4 rounded-2xl font-bold transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

@@ -20,7 +20,9 @@ import {
   firebaseDeleteUser,
   firebaseGetUsers,
   isFirebaseConfigured,
-  subscribeToShiftBlocks
+  subscribeToShiftBlocks,
+  firebasePauseSession,
+  firebaseResumeSession
 } from './services/firebaseService';
 
 type Tab = 'station' | 'activity' | 'manager' | 'planner';
@@ -647,6 +649,51 @@ const App: React.FC = () => {
     }
   };
 
+  const handlePauseSession = async (user: User) => {
+    // Optimistic Update
+    setActiveSessions(prev => ({
+      ...prev,
+      [user.id]: {
+        ...prev[user.id],
+        isPaused: true,
+        currentIdleStartTime: Date.now()
+      }
+    }));
+    if (isFirebaseConfigured()) {
+      try {
+        await firebasePauseSession(user.id);
+      } catch (e) {
+        console.error('Failed to pause session for lunch:', e);
+      }
+    }
+  };
+
+  const handleResumeSession = async (user: User) => {
+    const session = activeSessions[user.id];
+    if (!session || !session.isPaused) return;
+
+    // Optimistic Update
+    const idleTimeToAdd = session.currentIdleStartTime ? Date.now() - session.currentIdleStartTime : 0;
+    setActiveSessions(prev => ({
+      ...prev,
+      [user.id]: {
+        ...prev[user.id],
+        isPaused: false,
+        totalIdleTimeMs: prev[user.id].totalIdleTimeMs + idleTimeToAdd,
+        currentIdleStartTime: null,
+        lastLogTime: Date.now()
+      }
+    }));
+
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseResumeSession(user.id, session);
+      } catch (e) {
+        console.error('Failed to resume session:', e);
+      }
+    }
+  };
+
   // ─── SHIFT BLOCKS LISTENER ───────────────────────────────────────────────
   useEffect(() => {
     if (!isFirebaseConfigured()) return;
@@ -900,6 +947,8 @@ const App: React.FC = () => {
               users={users}
               onClockIn={handleClockIn}
               onClockOut={handleClockOut}
+              onPauseSession={handlePauseSession}
+              onResumeSession={handleResumeSession}
             />
           ) : activeTab === 'activity' ? (
             <ActivityTracker
