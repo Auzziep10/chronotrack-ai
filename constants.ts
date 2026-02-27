@@ -141,4 +141,5 @@ export const AVAILABLE_PERMISSIONS = [
   { id: 'manage_timecards', label: 'Manage Timecards', description: 'Edit time logs & approve cards' },
   { id: 'view_reports', label: 'View Reports', description: 'Access to productivity & payroll reports' },
   { id: 'manage_settings', label: 'System Settings', description: 'Configure pay periods & app settings' },
+  { id: 'mobile_clock_in', label: 'Remote / Mobile Clock-in', description: 'Can clock in/out directly from their personal device' }
 ];

@@ -130,183 +130,185 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-8">
 
-          {/* Work Information */}
-          <section className="space-y-4">
-            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
-              <Briefcase className="w-4 h-4 text-blue-500" /> Work Information
-            </h4>
+          {/* Work Information - Only visible to admins */}
+          {isViewerAdmin && (
+            <section className="space-y-4">
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
+                <Briefcase className="w-4 h-4 text-blue-500" /> Work Information
+              </h4>
 
-            <div className="grid grid-cols-2 gap-4">
-              {/* Row 1: Primary Dept & Primary Role */}
-              <div className="col-span-1">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Primary Department</label>
-                <select
-                  value={formData.primaryDepartment || ''}
-                  onChange={e => setFormData({ ...formData, primaryDepartment: e.target.value as Department })}
-                  className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
-                >
-                  <option value="" disabled>Select Department</option>
-                  {Object.values(Department).map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-span-1">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Focus Area (System Role)</label>
-                <input
-                  type="text"
-                  value={formData.role}
-                  onChange={e => {
-                    const val = e.target.value;
-                    let currentPerms: string[] = [];
-                    if (Array.isArray(formData.permissions)) {
-                      currentPerms = formData.permissions;
-                    } else if (typeof formData.permissions === 'string') {
-                      try {
-                        const parsed = JSON.parse(formData.permissions);
-                        currentPerms = Array.isArray(parsed) ? parsed : [formData.permissions];
-                      } catch {
-                        currentPerms = formData.permissions.split(',').map(s => s.trim()).filter(Boolean);
-                      }
-                    }
-                    let perms = [...currentPerms];
-
-                    // Auto-sync permissions array based on what they type in the role field
-                    if (val.toLowerCase() === 'admin' && !perms.includes('admin')) {
-                      perms.push('admin');
-                    } else if (val.toLowerCase() !== 'admin' && perms.includes('admin')) {
-                      perms = perms.filter(p => p !== 'admin');
-                    }
-
-                    if (val.toLowerCase() === 'manager' && !perms.includes('manage_team')) {
-                      perms.push('manage_team');
-                    } else if (val.toLowerCase() !== 'manager' && val.toLowerCase() !== 'admin' && perms.includes('manage_team')) {
-                      perms = perms.filter(p => p !== 'manage_team');
-                    }
-
-                    setFormData({ ...formData, role: val, permissions: perms });
-                  }}
-                  className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
-                  placeholder="e.g. Production Lead, manager, admin"
-                />
-              </div>
-
-              {/* Row 2: Secondary Dept & Supporting Role */}
-              <div className="col-span-1">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Secondary Department</label>
-                <select
-                  value={formData.secondaryDepartment || ''}
-                  onChange={e => setFormData({ ...formData, secondaryDepartment: e.target.value as Department })}
-                  className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
-                >
-                  <option value="">None</option>
-                  {Object.values(Department).map(dept => (
-                    <option key={`sec-${dept}`} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-span-1">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Focus Area</label>
-                <input
-                  type="text"
-                  value={formData.supportingRole || ''}
-                  onChange={e => setFormData({ ...formData, supportingRole: e.target.value })}
-                  className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
-                  placeholder="e.g. Backup Driver"
-                />
-              </div>
-
-              {/* Row 3: PIN & Late Days */}
-              <div className="col-span-1">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Access PIN</label>
-                <input
-                  type="text"
-                  maxLength={4}
-                  value={formData.pin}
-                  onChange={e => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '') })}
-                  className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono tracking-widest bg-gray-50"
-                />
-              </div>
-              <div className="col-span-1">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Late Days to Date</label>
-                <div className="relative">
-                  <AlertTriangle className="absolute left-3 top-2.5 w-4 h-4 text-orange-400" />
+              <div className="grid grid-cols-2 gap-4">
+                {/* Row 1: Primary Dept & Primary Role */}
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Primary Department</label>
+                  <select
+                    value={formData.primaryDepartment || ''}
+                    onChange={e => setFormData({ ...formData, primaryDepartment: e.target.value as Department })}
+                    className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                  >
+                    <option value="" disabled>Select Department</option>
+                    {Object.values(Department).map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Focus Area (System Role)</label>
                   <input
-                    type="number"
-                    min="0"
-                    value={formData.lateDays || 0}
-                    onChange={e => setFormData({ ...formData, lateDays: parseInt(e.target.value) || 0 })}
-                    className="w-full pl-9 text-sm border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
+                    type="text"
+                    value={formData.role}
+                    onChange={e => {
+                      const val = e.target.value;
+                      let currentPerms: string[] = [];
+                      if (Array.isArray(formData.permissions)) {
+                        currentPerms = formData.permissions;
+                      } else if (typeof formData.permissions === 'string') {
+                        try {
+                          const parsed = JSON.parse(formData.permissions);
+                          currentPerms = Array.isArray(parsed) ? parsed : [formData.permissions];
+                        } catch {
+                          currentPerms = formData.permissions.split(',').map(s => s.trim()).filter(Boolean);
+                        }
+                      }
+                      let perms = [...currentPerms];
+
+                      // Auto-sync permissions array based on what they type in the role field
+                      if (val.toLowerCase() === 'admin' && !perms.includes('admin')) {
+                        perms.push('admin');
+                      } else if (val.toLowerCase() !== 'admin' && perms.includes('admin')) {
+                        perms = perms.filter(p => p !== 'admin');
+                      }
+
+                      if (val.toLowerCase() === 'manager' && !perms.includes('manage_team')) {
+                        perms.push('manage_team');
+                      } else if (val.toLowerCase() !== 'manager' && val.toLowerCase() !== 'admin' && perms.includes('manage_team')) {
+                        perms = perms.filter(p => p !== 'manage_team');
+                      }
+
+                      setFormData({ ...formData, role: val, permissions: perms });
+                    }}
+                    className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                    placeholder="e.g. Production Lead, manager, admin"
                   />
                 </div>
+
+                {/* Row 2: Secondary Dept & Supporting Role */}
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Secondary Department</label>
+                  <select
+                    value={formData.secondaryDepartment || ''}
+                    onChange={e => setFormData({ ...formData, secondaryDepartment: e.target.value as Department })}
+                    className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  >
+                    <option value="">None</option>
+                    {Object.values(Department).map(dept => (
+                      <option key={`sec-${dept}`} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Focus Area</label>
+                  <input
+                    type="text"
+                    value={formData.supportingRole || ''}
+                    onChange={e => setFormData({ ...formData, supportingRole: e.target.value })}
+                    className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    placeholder="e.g. Backup Driver"
+                  />
+                </div>
+
+                {/* Row 3: PIN & Late Days */}
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Access PIN</label>
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={formData.pin}
+                    onChange={e => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '') })}
+                    className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono tracking-widest bg-gray-50"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Late Days to Date</label>
+                  <div className="relative">
+                    <AlertTriangle className="absolute left-3 top-2.5 w-4 h-4 text-orange-400" />
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.lateDays || 0}
+                      onChange={e => setFormData({ ...formData, lateDays: parseInt(e.target.value) || 0 })}
+                      className="w-full pl-9 text-sm border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Availability Grid */}
-            <div className="mt-4">
-              <label className="block text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-blue-500" /> Weekly Availability
-              </label>
-              <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
-                {ORDERED_DAYS.map((day) => {
-                  const dayData = formData.availability[day] || { active: false, start: '09:00', end: '17:00' };
-                  return (
-                    <div key={day} className="flex items-center gap-3 p-3 border-b border-gray-200 last:border-0 hover:bg-white transition-colors">
-                      <div className="w-28 flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={dayData.active}
-                          onChange={(e) => handleAvailabilityChange(day, 'active', e.target.checked)}
-                          className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                        />
-                        <span className={`text-sm font-medium ${dayData.active ? 'text-gray-900' : 'text-gray-400'}`}>
-                          {day}
-                        </span>
-                      </div>
+              {/* Availability Grid */}
+              <div className="mt-4">
+                <label className="block text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-500" /> Weekly Availability
+                </label>
+                <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                  {ORDERED_DAYS.map((day) => {
+                    const dayData = formData.availability[day] || { active: false, start: '09:00', end: '17:00' };
+                    return (
+                      <div key={day} className="flex items-center gap-3 p-3 border-b border-gray-200 last:border-0 hover:bg-white transition-colors">
+                        <div className="w-28 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={dayData.active}
+                            onChange={(e) => handleAvailabilityChange(day, 'active', e.target.checked)}
+                            className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                          />
+                          <span className={`text-sm font-medium ${dayData.active ? 'text-gray-900' : 'text-gray-400'}`}>
+                            {day}
+                          </span>
+                        </div>
 
-                      <div className="flex-1 flex items-center gap-2">
-                        <select
-                          disabled={!dayData.active}
-                          value={dayData.start}
-                          onChange={(e) => handleAvailabilityChange(day, 'start', e.target.value)}
-                          className="block w-full text-xs border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
-                        >
-                          {TIME_OPTIONS.map(t => (
-                            <option key={`start-${day}-${t.value}`} value={t.value}>{t.label}</option>
-                          ))}
-                        </select>
-                        <span className="text-gray-400">-</span>
-                        <select
-                          disabled={!dayData.active}
-                          value={dayData.end}
-                          onChange={(e) => handleAvailabilityChange(day, 'end', e.target.value)}
-                          className="block w-full text-xs border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
-                        >
-                          {TIME_OPTIONS.map(t => (
-                            <option key={`end-${day}-${t.value}`} value={t.value}>{t.label}</option>
-                          ))}
-                        </select>
+                        <div className="flex-1 flex items-center gap-2">
+                          <select
+                            disabled={!dayData.active}
+                            value={dayData.start}
+                            onChange={(e) => handleAvailabilityChange(day, 'start', e.target.value)}
+                            className="block w-full text-xs border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                          >
+                            {TIME_OPTIONS.map(t => (
+                              <option key={`start-${day}-${t.value}`} value={t.value}>{t.label}</option>
+                            ))}
+                          </select>
+                          <span className="text-gray-400">-</span>
+                          <select
+                            disabled={!dayData.active}
+                            value={dayData.end}
+                            onChange={(e) => handleAvailabilityChange(day, 'end', e.target.value)}
+                            className="block w-full text-xs border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                          >
+                            {TIME_OPTIONS.map(t => (
+                              <option key={`end-${day}-${t.value}`} value={t.value}>{t.label}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            {/* Correction Review Section */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-purple-500" /> Correction Reviews
-              </label>
-              <textarea
-                value={formData.correctionNotes || ''}
-                onChange={e => setFormData({ ...formData, correctionNotes: e.target.value })}
-                placeholder="Log any disciplinary actions, performance corrections, or time card adjustments here..."
-                rows={4}
-                className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 p-3 bg-yellow-50/50"
-              />
-            </div>
-          </section>
+              {/* Correction Review Section */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-purple-500" /> Correction Reviews
+                </label>
+                <textarea
+                  value={formData.correctionNotes || ''}
+                  onChange={e => setFormData({ ...formData, correctionNotes: e.target.value })}
+                  placeholder="Log any disciplinary actions, performance corrections, or time card adjustments here..."
+                  rows={4}
+                  className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 p-3 bg-yellow-50/50"
+                />
+              </div>
+            </section>
+          )}
 
           {/* Permissions Section - Only visible to admins */}
           {isViewerAdmin && (

@@ -7,6 +7,8 @@ import { Timer } from './Timer';
 import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw, Play } from 'lucide-react';
 import { LOG_INTERVAL_MS } from '../constants';
 
+import { UserProfileDialog } from './UserProfileDialog';
+
 interface Props {
   activeSessions: Record<string, UserSession>;
   onLogSubmit: (userId: string, logData: Omit<WorkLog, 'id' | 'timestamp' | 'periodStart' | 'periodEnd' | 'userId' | 'userName'>) => void;
@@ -17,6 +19,10 @@ interface Props {
   lastSyncTime?: number;
   syncError?: string | null;
   replitUrl?: string;
+  currentUser?: any;
+  onClockIn?: (user: any) => void;
+  onClockOut?: (user: any) => void;
+  onUpdateUser?: (updatedUser: any) => void;
 }
 
 export const ActivityTracker: React.FC<Props> = ({
@@ -28,12 +34,27 @@ export const ActivityTracker: React.FC<Props> = ({
   isSyncingReplit = false,
   lastSyncTime = 0,
   syncError = null,
-  replitUrl = ''
+  replitUrl = '',
+  currentUser,
+  onClockIn,
+  onClockOut,
+  onUpdateUser
 }) => {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   const activeUsers = Object.values(activeSessions) as UserSession[];
+
+  // Enforce isolation: if this is a standard staff member (not tablet/admin) 
+  // only show THEIR session.
+  const isDedicatedTerminal = currentUser?.role === 'terminal' || currentUser?.username?.toLowerCase() === 'warehouse';
+  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+
+  const visibleUsers = (isAdminOrManager || isDedicatedTerminal)
+    ? activeUsers
+    : activeUsers.filter(s => s.userId === currentUser?.id);
+
   const selectedSession = selectedUserId ? activeSessions[selectedUserId] : null;
 
   // Filter tasks for the selected user with robust matching
@@ -56,9 +77,15 @@ export const ActivityTracker: React.FC<Props> = ({
 
   // Auto-select if only one user (convenience)
   useEffect(() => {
-    if (activeUsers.length === 1 && !selectedUserId) {
-      setSelectedUserId(activeUsers[0].userId);
+    // If we're a standard user on our own profile, aggressively select ourselves if possible
+    if (!isAdminOrManager && !isDedicatedTerminal && currentUser) {
+      if (activeSessions[currentUser.id] && selectedUserId !== currentUser.id) {
+        setSelectedUserId(currentUser.id);
+      }
+    } else if (visibleUsers.length === 1 && !selectedUserId) {
+      setSelectedUserId(visibleUsers[0].userId);
     }
+
     // If selected user clocks out, reset
     if (selectedUserId && !activeSessions[selectedUserId]) {
       setSelectedUserId('');
@@ -84,7 +111,71 @@ export const ActivityTracker: React.FC<Props> = ({
   }, [selectedSession]);
 
 
-  if (activeUsers.length === 0) {
+  // Standard Staff Not Clocked In View
+  if (!isAdminOrManager && !isDedicatedTerminal && currentUser && !activeSessions[currentUser.id]) {
+    const hasMobileClockIn = Array.isArray(currentUser.permissions)
+      ? currentUser.permissions.includes('mobile_clock_in')
+      : (typeof currentUser.permissions === 'string' && currentUser.permissions.includes('mobile_clock_in'));
+
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[500px] bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center animate-fade-in relative overflow-hidden">
+        {/* Decorative Background */}
+        <div className="absolute top-0 right-0 -mt-16 -mr-16 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 -mb-16 -ml-16 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
+
+        <div className="relative z-10 flex flex-col items-center">
+          <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-3xl font-bold shadow-xl mb-6 border-4 border-white">
+            {currentUser.avatarInitials}
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Welcome, {currentUser.name.split(' ')[0]}!</h2>
+          <p className="text-gray-500 mb-8 max-w-sm">
+            Access your personal dashboard, update your availability, or manage your active shift.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
+            {hasMobileClockIn ? (
+              <button
+                onClick={() => onClockIn && onClockIn(currentUser)}
+                className="flex-1 sm:flex-none w-full sm:w-auto flex items-center justify-center gap-3 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-green-600/20 transition-all hover:scale-105 active:scale-95"
+              >
+                <Play className="w-5 h-5" />
+                Start My Shift
+              </button>
+            ) : (
+              <div className="w-full sm:w-auto bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-center gap-3 text-left">
+                <Lock className="w-6 h-6 text-gray-400 shrink-0" />
+                <div className="text-sm text-gray-600">
+                  <strong>Clock-in Disabled.</strong><br />
+                  Please use the main iPad terminal to start your shift.
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setIsEditingProfile(true)}
+              className="flex-1 sm:flex-none w-full sm:w-auto flex items-center justify-center gap-2 bg-white border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700 font-bold py-3.5 px-6 rounded-xl transition-all shadow-sm"
+            >
+              <UserIcon className="w-4 h-4" />
+              My Profile & Setup
+            </button>
+          </div>
+        </div>
+
+        {isEditingProfile && (
+          <UserProfileDialog
+            isOpen={isEditingProfile}
+            user={currentUser}
+            onClose={() => setIsEditingProfile(false)}
+            onSave={onUpdateUser || (() => { })}
+            isViewerAdmin={false}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Dashboard Empty View (for Admins / Terminals)
+  if (visibleUsers.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-96 bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center animate-fade-in">
         <div className="bg-gray-50 p-6 rounded-full mb-6">
@@ -92,8 +183,7 @@ export const ActivityTracker: React.FC<Props> = ({
         </div>
         <h3 className="text-xl font-bold text-gray-800 mb-2">No Active Shifts</h3>
         <p className="text-gray-500 max-w-md">
-          No team members are currently clocked in.
-          Please go to the <strong>Master Station</strong> tab to start a shift.
+          {(!isAdminOrManager && !isDedicatedTerminal) ? "You are not scheduled or clocked in." : "No team members are currently clocked in."}
         </p>
       </div>
     );
@@ -104,7 +194,7 @@ export const ActivityTracker: React.FC<Props> = ({
       <div className="max-w-3xl mx-auto py-10 animate-fade-in">
         <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Who is using this device?</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {activeUsers.map(session => (
+          {visibleUsers.map(session => (
             <button
               key={session.userId}
               onClick={() => setSelectedUserId(session.userId)}
@@ -268,13 +358,41 @@ export const ActivityTracker: React.FC<Props> = ({
           </div>
           <div className="h-10 w-px bg-gray-100"></div>
           <AiSummary logs={selectedSession.logs} />
-          <button
-            onClick={() => setSelectedUserId('')}
-            className="text-gray-400 hover:text-red-500 p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Switch User"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {(!isAdminOrManager && !isDedicatedTerminal && currentUser?.id === selectedUserId) && (
+              <button
+                onClick={() => setIsEditingProfile(true)}
+                className="text-gray-400 hover:text-blue-500 p-2 hover:bg-gray-100 rounded-lg transition-colors border border-transparent hover:border-blue-200"
+                title="My Profile & Setup"
+              >
+                <UserIcon className="w-5 h-5" />
+              </button>
+            )}
+            {onClockOut && (currentUser?.id === selectedUserId && (
+              Array.isArray(currentUser.permissions) ? currentUser.permissions.includes('mobile_clock_in') : (typeof currentUser.permissions === 'string' && currentUser.permissions.includes('mobile_clock_in'))
+            ) || isAdminOrManager || isDedicatedTerminal) && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to end ${selectedSession.user.name}'s shift?`)) {
+                      onClockOut(selectedSession.user);
+                      setSelectedUserId('');
+                    }
+                  }}
+                  className="bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-3 py-1.5 font-bold rounded-lg transition-colors text-sm border border-red-200"
+                >
+                  Clock Out
+                </button>
+              )}
+            {(isAdminOrManager || isDedicatedTerminal) && (
+              <button
+                onClick={() => setSelectedUserId('')}
+                className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors border border-transparent"
+                title="Switch User Dashboard"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
