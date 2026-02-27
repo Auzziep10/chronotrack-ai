@@ -4,7 +4,7 @@ import { WorkLogForm } from './WorkLogForm';
 import { HistoryLog } from './HistoryLog';
 import { AiSummary } from './AiSummary';
 import { Timer } from './Timer';
-import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw, Play, Calendar } from 'lucide-react';
+import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw, Play, Calendar, Users } from 'lucide-react';
 import { LOG_INTERVAL_MS } from '../constants';
 
 import { UserProfileDialog } from './UserProfileDialog';
@@ -388,9 +388,9 @@ export const ActivityTracker: React.FC<Props> = ({
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
+      <div className="flex flex-col sm:flex-row items-center justify-between mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="w-10 h-10 shrink-0 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
             {selectedSession.user.avatarInitials}
           </div>
           <div>
@@ -398,8 +398,9 @@ export const ActivityTracker: React.FC<Props> = ({
             <div className="font-bold text-gray-900 leading-none">{selectedSession.user.name}</div>
           </div>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="flex flex-col items-end">
+
+        <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full sm:w-auto">
+          <div className="flex flex-col items-center sm:items-end w-full sm:w-auto bg-gray-50 sm:bg-transparent p-2 sm:p-0 rounded-lg">
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Shift Time</div>
             <Timer
               startTime={selectedSession.startTime}
@@ -408,17 +409,31 @@ export const ActivityTracker: React.FC<Props> = ({
               currentIdleStartTime={selectedSession.currentIdleStartTime}
             />
           </div>
-          <div className="h-10 w-px bg-gray-100"></div>
-          <AiSummary logs={selectedSession.logs} />
-          <div className="flex items-center gap-2">
+
+          <div className="hidden sm:block h-10 w-px bg-gray-100"></div>
+
+          <div className="w-full sm:w-auto flex justify-center">
+            <AiSummary logs={selectedSession.logs} />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
             {(!isAdminOrManager && !isDedicatedTerminal && currentUser?.id === selectedUserId) && (
-              <button
-                onClick={() => setIsEditingProfile(true)}
-                className="text-gray-400 hover:text-blue-500 p-2 hover:bg-gray-100 rounded-lg transition-colors border border-transparent hover:border-blue-200"
-                title="My Profile & Setup"
-              >
-                <UserIcon className="w-5 h-5" />
-              </button>
+              <>
+                <button
+                  onClick={() => setIsRequestingTimeOff(true)}
+                  className="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-gray-50 text-gray-700 hover:text-teal-600 px-3 py-1.5 hover:bg-teal-50 rounded-lg transition-colors border border-gray-200 hover:border-teal-200 text-sm font-bold"
+                  title="Request Time Off"
+                >
+                  <Calendar className="w-4 h-4" /> <span className="sm:hidden">Time Off</span>
+                </button>
+                <button
+                  onClick={() => setIsEditingProfile(true)}
+                  className="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-gray-50 text-gray-700 hover:text-blue-600 px-3 py-1.5 hover:bg-blue-50 rounded-lg transition-colors border border-gray-200 hover:border-blue-200 text-sm font-bold"
+                  title="My Profile & Setup"
+                >
+                  <UserIcon className="w-4 h-4" /> <span className="sm:hidden">Profile</span>
+                </button>
+              </>
             )}
             {onClockOut && (currentUser?.id === selectedUserId && (
               Array.isArray(currentUser.permissions) ? currentUser.permissions.includes('mobile_clock_in') : (typeof currentUser.permissions === 'string' && currentUser.permissions.includes('mobile_clock_in'))
@@ -430,18 +445,17 @@ export const ActivityTracker: React.FC<Props> = ({
                       setSelectedUserId('');
                     }
                   }}
-                  className="bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-3 py-1.5 font-bold rounded-lg transition-colors text-sm border border-red-200"
+                  className="flex flex-1 sm:flex-none items-center justify-center gap-2 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-4 py-1.5 font-bold rounded-lg transition-colors text-sm border border-red-200"
                 >
-                  Clock Out
+                  Clock Out <span className="sm:hidden lg:inline"><LogOut className="w-4 h-4" /></span>
                 </button>
               )}
             {(isAdminOrManager || isDedicatedTerminal) && (
               <button
                 onClick={() => setSelectedUserId('')}
-                className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors border border-transparent"
-                title="Switch User Dashboard"
+                className="flex flex-1 sm:flex-none items-center justify-center gap-2 bg-gray-50 text-gray-600 hover:text-gray-900 px-3 py-1.5 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 text-sm font-bold"
               >
-                <LogOut className="w-5 h-5" />
+                <LogOut className="w-4 h-4" /> <span className="sm:hidden lg:inline">Back</span>
               </button>
             )}
           </div>
@@ -537,7 +551,31 @@ export const ActivityTracker: React.FC<Props> = ({
           />
         </div>
 
-        <div className="lg:col-span-5">
+        <div className="lg:col-span-5 flex flex-col gap-6">
+          {/* Active Team Widget for Staff */}
+          {!isAdminOrManager && !isDedicatedTerminal && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+                <Users className="w-4 h-4 text-blue-500" />
+                Active Team Members
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {activeUsers.filter(u => u.userId !== currentUser?.id).map(session => (
+                  <div key={session.userId} className="flex flex-col items-center gap-1 w-[60px]" title={session.user.name}>
+                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs relative border border-blue-200">
+                      {session.user.avatarInitials}
+                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                    </div>
+                    <span className="text-[10px] text-gray-500 font-medium truncate w-full text-center leading-tight">{session.user.name.split(' ')[0]}</span>
+                  </div>
+                ))}
+                {activeUsers.filter(u => u.userId !== currentUser?.id).length === 0 && (
+                  <div className="text-sm text-gray-500 italic">No one else is online right now.</div>
+                )}
+              </div>
+            </div>
+          )}
+
           <HistoryLog logs={selectedSession.logs} onDelete={(id) => onDeleteLog(selectedUserId, id)} />
         </div>
       </div>
