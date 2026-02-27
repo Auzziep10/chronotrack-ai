@@ -464,8 +464,8 @@ const App: React.FC = () => {
       setActiveTab('station');
     }
 
-    // Standard staff cannot visit the station or manager tabs
-    if (!isAdminOrManager && !isTerminal && (activeTab === 'station' || activeTab === 'manager')) {
+    // Standard staff cannot visit the station, manager, or planner tabs
+    if (!isAdminOrManager && !isTerminal && (activeTab === 'station' || activeTab === 'manager' || activeTab === 'planner')) {
       setActiveTab('activity');
     }
   }, [currentUser, activeTab]);
