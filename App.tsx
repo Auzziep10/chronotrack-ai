@@ -455,6 +455,19 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [authToken, replitSyncTrigger]);
 
+  // Keep currentUser state in sync with real-time users list updates (e.g. role demotions)
+  useEffect(() => {
+    if (currentUser && users.length > 0) {
+      const updatedProfile = users.find(u => u.id === currentUser.id);
+      if (updatedProfile) {
+        if (JSON.stringify(updatedProfile) !== JSON.stringify(currentUser)) {
+          setCurrentUser(updatedProfile);
+          localStorage.setItem('chronoCurrentUser', JSON.stringify(updatedProfile));
+        }
+      }
+    }
+  }, [users, currentUser]);
+
   // Handle Role-based Tab Restrictions
   useEffect(() => {
     const isTerminal = currentUser?.role === 'terminal' || currentUser?.username?.toLowerCase() === 'warehouse';
