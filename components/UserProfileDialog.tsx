@@ -70,7 +70,20 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
   const togglePermission = (permId: string) => {
     if (!formData) return;
-    const currentPerms = formData.permissions || [];
+
+    // Safely parse permissions since external databases might return stringified JSON or CSVs
+    let currentPerms: string[] = [];
+    if (Array.isArray(formData.permissions)) {
+      currentPerms = formData.permissions;
+    } else if (typeof formData.permissions === 'string') {
+      try {
+        const parsed = JSON.parse(formData.permissions);
+        currentPerms = Array.isArray(parsed) ? parsed : [formData.permissions];
+      } catch {
+        currentPerms = formData.permissions.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+
     let newPerms: string[];
     let newRole = formData.role;
 
@@ -145,7 +158,18 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                   value={formData.role}
                   onChange={e => {
                     const val = e.target.value;
-                    let perms = [...(formData.permissions || [])];
+                    let currentPerms: string[] = [];
+                    if (Array.isArray(formData.permissions)) {
+                      currentPerms = formData.permissions;
+                    } else if (typeof formData.permissions === 'string') {
+                      try {
+                        const parsed = JSON.parse(formData.permissions);
+                        currentPerms = Array.isArray(parsed) ? parsed : [formData.permissions];
+                      } catch {
+                        currentPerms = formData.permissions.split(',').map(s => s.trim()).filter(Boolean);
+                      }
+                    }
+                    let perms = [...currentPerms];
 
                     // Auto-sync permissions array based on what they type in the role field
                     if (val.toLowerCase() === 'admin' && !perms.includes('admin')) {
@@ -292,7 +316,13 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {AVAILABLE_PERMISSIONS.map(perm => {
-                  const isSelected = (formData.permissions || []).includes(perm.id);
+                  let isSelected = false;
+                  if (Array.isArray(formData.permissions)) {
+                    isSelected = formData.permissions.includes(perm.id);
+                  } else if (typeof formData.permissions === 'string') {
+                    isSelected = formData.permissions.includes(perm.id);
+                  }
+
                   return (
                     <div
                       key={perm.id}
