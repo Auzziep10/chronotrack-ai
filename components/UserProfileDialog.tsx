@@ -71,13 +71,30 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
   const togglePermission = (permId: string) => {
     if (!formData) return;
     const currentPerms = formData.permissions || [];
-    let newPerms;
+    let newPerms: string[];
+    let newRole = formData.role;
+
     if (currentPerms.includes(permId)) {
       newPerms = currentPerms.filter(p => p !== permId);
+
+      // If revoking admin/manager via checkbox, actively strip it from their role
+      if (permId === 'admin' && newRole.toLowerCase() === 'admin') {
+        newRole = 'Staff';
+      } else if (permId === 'manage_team' && newRole.toLowerCase() === 'manager') {
+        newRole = 'Staff';
+      }
     } else {
       newPerms = [...currentPerms, permId];
+
+      // If granting admin/manager via checkbox, force their active role text
+      if (permId === 'admin') {
+        newRole = 'admin';
+      } else if (permId === 'manage_team' && newRole.toLowerCase() !== 'admin') {
+        newRole = 'manager';
+      }
     }
-    setFormData({ ...formData, permissions: newPerms });
+
+    setFormData({ ...formData, permissions: newPerms, role: newRole });
   };
 
   return (
@@ -122,13 +139,31 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 </select>
               </div>
               <div className="col-span-1">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Focus Area</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Focus Area (System Role)</label>
                 <input
                   type="text"
                   value={formData.role}
-                  onChange={e => setFormData({ ...formData, role: e.target.value })}
+                  onChange={e => {
+                    const val = e.target.value;
+                    let perms = [...(formData.permissions || [])];
+
+                    // Auto-sync permissions array based on what they type in the role field
+                    if (val.toLowerCase() === 'admin' && !perms.includes('admin')) {
+                      perms.push('admin');
+                    } else if (val.toLowerCase() !== 'admin' && perms.includes('admin')) {
+                      perms = perms.filter(p => p !== 'admin');
+                    }
+
+                    if (val.toLowerCase() === 'manager' && !perms.includes('manage_team')) {
+                      perms.push('manage_team');
+                    } else if (val.toLowerCase() !== 'manager' && val.toLowerCase() !== 'admin' && perms.includes('manage_team')) {
+                      perms = perms.filter(p => p !== 'manage_team');
+                    }
+
+                    setFormData({ ...formData, role: val, permissions: perms });
+                  }}
                   className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
-                  placeholder="e.g. Production Lead"
+                  placeholder="e.g. Production Lead, manager, admin"
                 />
               </div>
 

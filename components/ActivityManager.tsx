@@ -588,7 +588,18 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                   {group.cards.length} {group.cards.length === 1 ? 'Record' : 'Records'}
                                 </td>
                                 <td className="px-6 py-4">
-                                  <div className="text-xs text-gray-400">-</div>
+                                  {group.cards.length > 0 ? (
+                                    <>
+                                      <div className="text-xs font-medium text-gray-900">
+                                        {new Date(group.cards[0].clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </div>
+                                      <div className="text-[10px] text-gray-500">
+                                        {group.cards[0].clockOut ? new Date(group.cards[0].clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="text-xs text-gray-400">-</div>
+                                  )}
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className={`text-xs font-bold ${group.totalIdle && group.totalIdle > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
