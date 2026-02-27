@@ -136,7 +136,9 @@ const App: React.FC = () => {
                   id: String(rUser.id),
                   name: fullName || existingLocal?.name || 'Unknown',
                   username: rUser.username || existingLocal?.username,
-                  role: rUser.role || existingLocal?.role || 'Staff',
+                  // We prioritize LOCAL role and permissions since edits happen on this platform
+                  role: existingLocal?.role || rUser.role || 'Staff',
+                  permissions: existingLocal?.permissions || rUser.permissions || [],
                   primaryDepartment: rUser.primaryDepartment || existingLocal?.primaryDepartment || Department.Production,
                   avatarInitials: rUser.avatarInitials || existingLocal?.avatarInitials || initials,
                   pin: resolvedPin,
@@ -151,8 +153,7 @@ const App: React.FC = () => {
                   phoneNumber: rUser.phoneNumber || existingLocal?.phoneNumber,
                   address: rUser.address || existingLocal?.address,
                   supportingRole: rUser.supportingRole || existingLocal?.supportingRole,
-                  secondaryDepartment: rUser.secondaryDepartment || existingLocal?.secondaryDepartment,
-                  permissions: rUser.permissions || existingLocal?.permissions || []
+                  secondaryDepartment: rUser.secondaryDepartment || existingLocal?.secondaryDepartment
                 };
               }).filter((u: User) => u.role?.trim().toLowerCase() !== 'client');
 
