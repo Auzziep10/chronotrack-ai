@@ -38,7 +38,6 @@ export interface TimeOffRequest {
   id: string;
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
-  type: 'PTO' | 'Unpaid' | 'Sick';
   status: 'Pending' | 'Approved' | 'Denied';
   reason: string;
   submittedAt: number;

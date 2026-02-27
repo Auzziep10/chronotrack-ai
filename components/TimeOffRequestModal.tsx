@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, TimeOffRequest } from '../types';
-import { X, Calendar, MessageSquare, Tag } from 'lucide-react';
+import { X, Calendar, MessageSquare } from 'lucide-react';
 
 interface Props {
     isOpen: boolean;
@@ -12,7 +12,6 @@ interface Props {
 export const TimeOffRequestModal: React.FC<Props> = ({ isOpen, onClose, user, onSave }) => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [type, setType] = useState<'PTO' | 'Unpaid' | 'Sick'>('Unpaid');
     const [reason, setReason] = useState('');
 
     if (!isOpen) return null;
@@ -25,7 +24,6 @@ export const TimeOffRequestModal: React.FC<Props> = ({ isOpen, onClose, user, on
             id: crypto.randomUUID(),
             startDate,
             endDate,
-            type,
             status: 'Pending',
             reason,
             submittedAt: Date.now()
@@ -82,27 +80,6 @@ export const TimeOffRequestModal: React.FC<Props> = ({ isOpen, onClose, user, on
                                 onChange={e => setEndDate(e.target.value)}
                                 className="w-full text-sm border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 shadow-sm"
                             />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider flex items-center gap-2">
-                            <Tag className="w-3 h-3" /> Request Type
-                        </label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {['Unpaid', 'PTO', 'Sick'].map(t => (
-                                <button
-                                    key={t}
-                                    type="button"
-                                    onClick={() => setType(t as any)}
-                                    className={`py-2 text-sm font-bold rounded-lg border-2 transition-all ${type === t
-                                            ? 'border-teal-500 bg-teal-50 text-teal-700'
-                                            : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    {t}
-                                </button>
-                            ))}
                         </div>
                     </div>
 

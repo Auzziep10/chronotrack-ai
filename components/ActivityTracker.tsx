@@ -180,13 +180,12 @@ export const ActivityTracker: React.FC<Props> = ({
                 {[...currentUser.timeOffRequests].reverse().map((req: any) => (
                   <div key={req.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100 text-xs">
                     <div className="flex flex-col">
-                      <span className="font-bold text-gray-700 block mb-0.5">{req.type}</span>
-                      <span className="text-gray-500">{new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}</span>
+                      <span className="text-gray-900 font-bold">{new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}</span>
                     </div>
                     <div>
                       <span className={`px-2 py-1 rounded-full font-bold ${req.status === 'Approved' ? 'bg-green-100 text-green-700' :
-                          req.status === 'Denied' ? 'bg-red-100 text-red-700' :
-                            'bg-amber-100 text-amber-700'
+                        req.status === 'Denied' ? 'bg-red-100 text-red-700' :
+                          'bg-amber-100 text-amber-700'
                         }`}>{req.status}</span>
                     </div>
                   </div>
