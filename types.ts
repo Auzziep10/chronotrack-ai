@@ -34,6 +34,16 @@ export interface DailyAvailability {
 }
 
 // Reporting Types
+export interface TimeOffRequest {
+  id: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  type: 'PTO' | 'Unpaid' | 'Sick';
+  status: 'Pending' | 'Approved' | 'Denied';
+  reason: string;
+  submittedAt: number;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -53,6 +63,7 @@ export interface User {
   availability: Record<DayOfWeek, DailyAvailability>;
   lateDays?: number;
   correctionNotes?: string;
+  timeOffRequests?: TimeOffRequest[];
 }
 
 export interface UserSession {

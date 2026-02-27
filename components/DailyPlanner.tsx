@@ -389,6 +389,25 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     };
 
     const handleAssignBlock = async (tempBlock: any, userId: string) => {
+        // Time Off Warning
+        const targetUser = users.find(u => u.id === userId);
+        if (targetUser?.timeOffRequests) {
+            const isOff = targetUser.timeOffRequests.some(req => {
+                const reqStart = new Date(req.startDate);
+                reqStart.setHours(0, 0, 0, 0);
+                const reqEnd = new Date(req.endDate);
+                reqEnd.setHours(23, 59, 59, 999);
+                const shiftDate = new Date(currentDate);
+                shiftDate.setHours(12, 0, 0, 0);
+                return (shiftDate >= reqStart && shiftDate <= reqEnd) && req.status !== 'Denied';
+            });
+            if (isOff) {
+                if (!confirm(`Warning: ${targetUser.name} has an active TIME OFF request for this date! Are you sure you want to assign them this task?`)) {
+                    return;
+                }
+            }
+        }
+
         try {
             const replitUrl = localStorage.getItem('replitAppUrl');
             const token = localStorage.getItem('chronoAuthToken');
@@ -437,6 +456,27 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     const handleAddShift = async () => {
         if (!shiftUser || !shiftStart || !shiftEnd) return;
+
+        // Time Off Warning
+        const targetUser = users.find(u => u.id === shiftUser);
+        if (targetUser?.timeOffRequests) {
+            const isOff = targetUser.timeOffRequests.some(req => {
+                const reqStart = new Date(req.startDate);
+                reqStart.setHours(0, 0, 0, 0);
+                const reqEnd = new Date(req.endDate);
+                reqEnd.setHours(23, 59, 59, 999);
+                const shiftDate = new Date(currentDate);
+                shiftDate.setHours(12, 0, 0, 0);
+                return (shiftDate >= reqStart && shiftDate <= reqEnd) && req.status !== 'Denied';
+            });
+
+            if (isOff) {
+                if (!confirm(`Warning: ${targetUser.name} has an active TIME OFF request for this date! Are you sure you want to override their request and schedule them?`)) {
+                    return;
+                }
+            }
+        }
+
         try {
             const startDateTime = new Date(currentDate);
             const [sh, sm] = shiftStart.split(':').map(Number);

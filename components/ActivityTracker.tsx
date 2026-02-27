@@ -4,10 +4,11 @@ import { WorkLogForm } from './WorkLogForm';
 import { HistoryLog } from './HistoryLog';
 import { AiSummary } from './AiSummary';
 import { Timer } from './Timer';
-import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw, Play } from 'lucide-react';
+import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw, Play, Calendar } from 'lucide-react';
 import { LOG_INTERVAL_MS } from '../constants';
 
 import { UserProfileDialog } from './UserProfileDialog';
+import { TimeOffRequestModal } from './TimeOffRequestModal';
 
 interface Props {
   activeSessions: Record<string, UserSession>;
@@ -43,6 +44,7 @@ export const ActivityTracker: React.FC<Props> = ({
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isRequestingTimeOff, setIsRequestingTimeOff] = useState(false);
 
   const activeUsers = Object.values(activeSessions) as UserSession[];
 
@@ -152,6 +154,13 @@ export const ActivityTracker: React.FC<Props> = ({
             )}
 
             <button
+              onClick={() => setIsRequestingTimeOff(true)}
+              className="flex-1 sm:flex-none w-full sm:w-auto flex items-center justify-center gap-2 bg-white border-2 border-gray-200 hover:border-teal-300 hover:bg-teal-50 text-gray-700 font-bold py-3.5 px-6 rounded-xl transition-all shadow-sm"
+            >
+              <Calendar className="w-4 h-4" />
+              Request Time Off
+            </button>
+            <button
               onClick={() => setIsEditingProfile(true)}
               className="flex-1 sm:flex-none w-full sm:w-auto flex items-center justify-center gap-2 bg-white border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700 font-bold py-3.5 px-6 rounded-xl transition-all shadow-sm"
             >
@@ -159,6 +168,32 @@ export const ActivityTracker: React.FC<Props> = ({
               My Profile & Setup
             </button>
           </div>
+
+          {/* List Previous Requests */}
+          {currentUser.timeOffRequests && currentUser.timeOffRequests.length > 0 && (
+            <div className="mt-8 w-full max-w-2xl text-left bg-white p-4 rounded-xl border border-gray-100 shadow-sm relative z-10">
+              <h3 className="text-sm font-bold text-gray-800 mb-3 border-b border-gray-100 pb-2 flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-teal-500" />
+                Your Time-Off history
+              </h3>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                {[...currentUser.timeOffRequests].reverse().map((req: any) => (
+                  <div key={req.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100 text-xs">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-gray-700 block mb-0.5">{req.type}</span>
+                      <span className="text-gray-500">{new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}</span>
+                    </div>
+                    <div>
+                      <span className={`px-2 py-1 rounded-full font-bold ${req.status === 'Approved' ? 'bg-green-100 text-green-700' :
+                          req.status === 'Denied' ? 'bg-red-100 text-red-700' :
+                            'bg-amber-100 text-amber-700'
+                        }`}>{req.status}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {isEditingProfile && (
@@ -168,6 +203,15 @@ export const ActivityTracker: React.FC<Props> = ({
             onClose={() => setIsEditingProfile(false)}
             onSave={onUpdateUser || (() => { })}
             isViewerAdmin={false}
+          />
+        )}
+
+        {isRequestingTimeOff && (
+          <TimeOffRequestModal
+            isOpen={isRequestingTimeOff}
+            onClose={() => setIsRequestingTimeOff(false)}
+            user={currentUser}
+            onSave={onUpdateUser || (() => { })}
           />
         )}
       </div>
