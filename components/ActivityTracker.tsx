@@ -51,7 +51,16 @@ export const ActivityTracker: React.FC<Props> = ({
   // Enforce isolation: if this is a standard staff member (not tablet/admin) 
   // only show THEIR session.
   const isDedicatedTerminal = currentUser?.role === 'terminal' || currentUser?.username?.toLowerCase() === 'warehouse';
-  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+  const isAdminOrManager = (() => {
+    let currentPerms: string[] = [];
+    if (currentUser) {
+      if (Array.isArray(currentUser.permissions)) currentPerms = currentUser.permissions;
+      else if (typeof currentUser.permissions === 'string') currentPerms = currentUser.permissions.split(',').map((s: string) => s.trim());
+    }
+    const hasAdmin = currentPerms.includes('admin') || (currentUser?.role?.toLowerCase() === 'admin' && currentPerms.length === 0);
+    const hasManager = currentPerms.includes('manage_team') || (currentUser?.role?.toLowerCase() === 'manager' && currentPerms.length === 0);
+    return hasAdmin || hasManager;
+  })();
 
   const visibleUsers = (isAdminOrManager || isDedicatedTerminal)
     ? activeUsers

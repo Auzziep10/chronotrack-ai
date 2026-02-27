@@ -468,10 +468,19 @@ const App: React.FC = () => {
     }
   }, [users, currentUser]);
 
+  // Permissions computation for current user
+  const isTerminal = currentUser?.role === 'terminal' || currentUser?.username?.toLowerCase() === 'warehouse';
+  let currentPerms: string[] = [];
+  if (currentUser) {
+    if (Array.isArray(currentUser.permissions)) currentPerms = currentUser.permissions;
+    else if (typeof currentUser.permissions === 'string') currentPerms = currentUser.permissions.split(',').map((s: string) => s.trim());
+  }
+  const isAdmin = currentPerms.includes('admin') || (currentUser?.role?.toLowerCase() === 'admin' && currentPerms.length === 0);
+  const isManager = currentPerms.includes('manage_team') || (currentUser?.role?.toLowerCase() === 'manager' && currentPerms.length === 0);
+  const isAdminOrManager = isAdmin || isManager;
+
   // Handle Role-based Tab Restrictions
   useEffect(() => {
-    const isTerminal = currentUser?.role === 'terminal' || currentUser?.username?.toLowerCase() === 'warehouse';
-    const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
     // Terminals can't visit the activity or manager tabs
     if (isTerminal && (activeTab === 'activity' || activeTab === 'manager')) {
@@ -482,7 +491,7 @@ const App: React.FC = () => {
     if (!isAdminOrManager && !isTerminal && (activeTab === 'station' || activeTab === 'manager' || activeTab === 'planner')) {
       setActiveTab('activity');
     }
-  }, [currentUser, activeTab]);
+  }, [isAdminOrManager, isTerminal, activeTab]);
 
   const handleLoginSuccess = async (token: string, userData: any) => {
     // Ensure ID is always a string to prevent type mismatch with Firebase DB
@@ -888,7 +897,7 @@ const App: React.FC = () => {
               </span>
             </div>
             <div className="h-8 w-px bg-gray-200 mx-2"></div>
-            {currentUser?.role === 'admin' && currentUser?.username?.toLowerCase() !== 'warehouse' && (
+            {isAdmin && !isTerminal && (
               <button
                 onClick={() => setShowSettings(true)}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -912,7 +921,7 @@ const App: React.FC = () => {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
-            {((currentUser?.role === 'admin' || currentUser?.role === 'manager') || (currentUser?.role === 'terminal' || currentUser?.username?.toLowerCase() === 'warehouse')) && (
+            {(isAdminOrManager || isTerminal) && (
               <button
                 onClick={() => setActiveTab('station')}
                 className={`${activeTab === 'station'
@@ -925,7 +934,7 @@ const App: React.FC = () => {
               </button>
             )}
 
-            {(currentUser?.role !== 'terminal' && currentUser?.username?.toLowerCase() !== 'warehouse') && (
+            {!isTerminal && (
               <button
                 onClick={() => setActiveTab('activity')}
                 className={`${activeTab === 'activity'
@@ -949,7 +958,7 @@ const App: React.FC = () => {
               Daily Planner
             </button>
 
-            {((currentUser?.role === 'admin' || currentUser?.role === 'manager') && currentUser?.username?.toLowerCase() !== 'warehouse') && (
+            {(isAdminOrManager && !isTerminal) && (
               <button
                 onClick={() => setActiveTab('manager')}
                 className={`${activeTab === 'manager'

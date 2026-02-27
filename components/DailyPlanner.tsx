@@ -66,7 +66,16 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     // Shift Blocks State (From Firebase)
     const [shiftBlocks, setShiftBlocks] = useState<ScheduleBlock[]>([]);
 
-    const isAdminOrManager = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && currentUser?.username?.toLowerCase() !== 'warehouse';
+    const isAdminOrManager = (() => {
+        let currentPerms: string[] = [];
+        if (currentUser) {
+            if (Array.isArray(currentUser.permissions)) currentPerms = currentUser.permissions;
+            else if (typeof currentUser.permissions === 'string') currentPerms = currentUser.permissions.split(',').map((s: string) => s.trim());
+        }
+        const hasAdmin = currentPerms.includes('admin') || (currentUser?.role?.toLowerCase() === 'admin' && currentPerms.length === 0);
+        const hasManager = currentPerms.includes('manage_team') || (currentUser?.role?.toLowerCase() === 'manager' && currentPerms.length === 0);
+        return (hasAdmin || hasManager) && currentUser?.username?.toLowerCase() !== 'warehouse';
+    })();
 
     // Time marker for current time
     const [currentTimePercentage, setCurrentTimePercentage] = useState<number | null>(null);
