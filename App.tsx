@@ -458,7 +458,7 @@ const App: React.FC = () => {
   // Keep currentUser state in sync with real-time users list updates (e.g. role demotions)
   useEffect(() => {
     if (currentUser && users.length > 0) {
-      const updatedProfile = users.find(u => u.id === currentUser.id);
+      const updatedProfile = users.find(u => String(u.id) === String(currentUser.id));
       if (updatedProfile) {
         if (JSON.stringify(updatedProfile) !== JSON.stringify(currentUser)) {
           setCurrentUser(updatedProfile);
@@ -485,6 +485,10 @@ const App: React.FC = () => {
   }, [currentUser, activeTab]);
 
   const handleLoginSuccess = async (token: string, userData: any) => {
+    // Ensure ID is always a string to prevent type mismatch with Firebase DB
+    if (userData && userData.id) {
+      userData.id = String(userData.id);
+    }
     setAuthToken(token);
     setCurrentUser(userData);
     localStorage.setItem('chronoAuthToken', token);
