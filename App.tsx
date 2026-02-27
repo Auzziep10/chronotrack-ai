@@ -489,6 +489,14 @@ const App: React.FC = () => {
     if (userData && userData.id) {
       userData.id = String(userData.id);
     }
+
+    // Immediately force local role/permissions over the Replit payload if an active local profile exists (stops UI flashing and false permissions on fresh logins)
+    const localUserMatch = users.find(u => String(u.id) === userData.id);
+    if (localUserMatch) {
+      userData.role = localUserMatch.role || userData.role;
+      userData.permissions = localUserMatch.permissions || userData.permissions;
+    }
+
     setAuthToken(token);
     setCurrentUser(userData);
     localStorage.setItem('chronoAuthToken', token);
