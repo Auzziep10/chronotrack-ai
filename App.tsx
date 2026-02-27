@@ -455,8 +455,16 @@ const App: React.FC = () => {
   // Handle Role-based Tab Restrictions
   useEffect(() => {
     const isTerminal = currentUser?.role === 'terminal' || currentUser?.username?.toLowerCase() === 'warehouse';
+    const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+
+    // Terminals can't visit the activity or manager tabs
     if (isTerminal && (activeTab === 'activity' || activeTab === 'manager')) {
       setActiveTab('station');
+    }
+
+    // Standard staff cannot visit the station or manager tabs
+    if (!isAdminOrManager && !isTerminal && (activeTab === 'station' || activeTab === 'manager')) {
+      setActiveTab('activity');
     }
   }, [currentUser, activeTab]);
 

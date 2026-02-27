@@ -148,6 +148,24 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
                                 <Smartphone className="w-4 h-4" />
                                 Warehouse iPad Quick-Sign
                             </button>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onLogin('mock-token-staff', {
+                                        id: 'mock-staff-123',
+                                        name: 'Test Staff Check',
+                                        username: 'test_staff',
+                                        role: 'Staff',
+                                        avatarInitials: 'TS',
+                                        permissions: ['mobile_clock_in']
+                                    });
+                                }}
+                                disabled={isLoading}
+                                className="w-full flex justify-center py-2 px-4 border border-green-200 rounded-md shadow-sm text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-all"
+                            >
+                                Dev: Quick-Sign as Mock Staff
+                            </button>
                         </div>
                     </form>
 
