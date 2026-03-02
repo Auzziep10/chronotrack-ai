@@ -13,9 +13,10 @@ interface Props {
   onClockOut: (user: User) => void;
   onPauseSession?: (user: User) => void;
   onResumeSession?: (user: User) => void;
+  isAdmin?: boolean;
 }
 
-export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession }) => {
+export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession, isAdmin }) => {
   const [showPinPad, setShowPinPad] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [pinMessage, setPinMessage] = useState<string>('');
@@ -186,9 +187,29 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
               <UserIcon className="w-5 h-5 text-green-600" />
               Active Team Members ({sessionsList.length})
             </h3>
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              Live Tracking
+            <div className="flex items-center gap-4">
+              {isAdmin && (
+                <select
+                  className="text-xs border border-gray-300 rounded px-2 py-1 bg-white cursor-pointer font-bold text-blue-600"
+                  onChange={(e) => {
+                    const u = users.find(u => u.id === e.target.value);
+                    if (u) {
+                      onClockIn(u);
+                      e.target.value = '';
+                    }
+                  }}
+                  defaultValue=""
+                >
+                  <option value="" disabled>+ Admin Clock In</option>
+                  {users.filter(u => !activeSessions[u.id]).map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              )}
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                Live Tracking
+              </div>
             </div>
           </div>
 
@@ -244,8 +265,16 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                         </div>
                       )}
 
-                      <div className="text-xs text-gray-400 pt-2 border-t border-gray-100 mt-2">
-                        Last Log: {new Date(session.lastLogTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <div className="text-xs text-gray-400 pt-2 border-t border-gray-100 mt-2 flex justify-between items-center">
+                        <span>Last Log: {new Date(session.lastLogTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        {isAdmin && (
+                          <button
+                            onClick={() => onClockOut(session.user)}
+                            className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2 py-1 rounded text-xs font-bold transition-colors"
+                          >
+                            Clock Out
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

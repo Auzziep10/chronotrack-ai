@@ -984,6 +984,7 @@ const App: React.FC = () => {
               onClockOut={handleClockOut}
               onPauseSession={handlePauseSession}
               onResumeSession={handleResumeSession}
+              isAdmin={isAdminOrManager}
             />
           ) : activeTab === 'activity' ? (
             <ActivityTracker
