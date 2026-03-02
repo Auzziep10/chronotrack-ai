@@ -252,6 +252,19 @@ export const firebaseGetTimeCards = async (): Promise<DailyTimeCard[]> => {
     });
 };
 
+/** Save or update a time card in Firestore */
+export const firebaseSaveTimeCard = async (timeCard: DailyTimeCard): Promise<void> => {
+    const clean: any = {};
+    Object.entries(timeCard).forEach(([k, v]) => {
+        if (v !== undefined) clean[k] = v;
+    });
+
+    await setDoc(doc(db, TIMECARDS_COL, timeCard.id), {
+        ...clean,
+        updatedAt: serverTimestamp()
+    }, { merge: true });
+};
+
 /** Get all work logs from Firestore */
 export const firebaseGetLogs = async (): Promise<WorkLog[]> => {
     const snapshot = await getDocs(collection(db, WORKLOGS_COL));

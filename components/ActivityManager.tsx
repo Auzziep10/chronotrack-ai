@@ -124,10 +124,14 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     });
   };
 
-  // External Plan State
   const [externalPlanRaw, setExternalPlanRaw] = useState('');
   const [parsedPlan, setParsedPlan] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Timecard Editing State
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [editClockIn, setEditClockIn] = useState<string>('');
+  const [editClockOut, setEditClockOut] = useState<string>('');
 
   // State for real data
   const [timeCards, setTimeCards] = useState<DailyTimeCard[]>([]);
@@ -276,7 +280,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     if (filteredTimeCards.length === 0) return;
     const headers = ['Employee ID', 'Name', 'Role', 'Date', 'Clock In', 'Clock Out', 'Gross Hours', 'Idle Hours (Unpaid)', 'Net Hours', 'Status'];
     const rows = filteredTimeCards.map(card => {
-      const user = users.find(u => u.id === card.userId);
+      const user = users.find(u => u.id === card.userId) || (Object.values(activeSessions) as UserSession[]).find(s => s.userId === card.userId)?.user;
       const clockIn = new Date(card.clockIn).toLocaleTimeString();
       const clockOut = card.clockOut ? new Date(card.clockOut).toLocaleTimeString() : 'Active';
       const idle = card.totalIdleHours || 0;
@@ -284,7 +288,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
       const gross = net + idle;
       return [
         card.userId,
-        user?.name || 'Unknown',
+        user?.name || 'Deleted User',
         user?.role || 'Unknown',
         card.date,
         clockIn,
@@ -304,6 +308,45 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const startEditingCard = (card: DailyTimeCard) => {
+    setEditingCardId(card.id);
+    const offset = new Date().getTimezoneOffset() * 60000;
+    const toLocalFormat = (ts: number) => new Date(ts - offset).toISOString().slice(0, 16);
+    setEditClockIn(toLocalFormat(card.clockIn));
+    setEditClockOut(card.clockOut ? toLocalFormat(card.clockOut) : '');
+  };
+
+  const saveEditedCard = async (card: DailyTimeCard) => {
+    const inTime = new Date(editClockIn).getTime();
+    const outTime = editClockOut ? new Date(editClockOut).getTime() : null;
+    if (isNaN(inTime) || (editClockOut && isNaN(outTime!))) {
+      alert("Invalid date/time format.");
+      return;
+    }
+    const updatedCard: DailyTimeCard = {
+      ...card,
+      clockIn: inTime,
+      clockOut: outTime,
+      totalHours: outTime ? Math.max(0, ((outTime - inTime) / 3600000) - (card.totalIdleHours || 0)) : card.totalHours,
+      status: outTime ? 'Complete' : 'Active'
+    };
+
+    setTimeCards(prev => prev.map(c => c.id === card.id ? updatedCard : c));
+    setEditingCardId(null);
+
+    const { storageService } = await import('../services/storageService');
+    storageService.saveTimeCard(updatedCard);
+
+    const { firebaseSaveTimeCard, isFirebaseConfigured } = await import('../services/firebaseService');
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseSaveTimeCard(updatedCard);
+      } catch (err) {
+        console.error("Failed to save updated timecard to remote:", err);
+      }
+    }
   };
 
   return (
@@ -573,7 +616,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                         </tr>
                       ) : (
                         groupedTimeCards.map(group => {
-                          const user = users.find(u => u.id === group.userId);
+                          const user = users.find(u => u.id === group.userId) ||
+                            (Object.values(activeSessions) as UserSession[]).find(s => s.userId === group.userId)?.user ||
+                            { id: group.userId, name: 'Deleted User', role: 'Unknown', avatarInitials: '?' } as any;
                           const isExpanded = expandedUsers.has(group.userId);
 
                           return (
@@ -647,40 +692,78 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                 </td>
                               </tr>
 
-                              {isExpanded && group.cards.map(card => (
-                                <tr key={card.id} className="bg-gray-50/50 hover:bg-gray-100/50 transition-colors">
-                                  <td className="px-6 py-3 pl-16">
-                                    <div className="text-xs text-gray-400">Log Entry</div>
-                                  </td>
-                                  <td className="px-6 py-3 text-gray-600">
-                                    {new Date(card.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                  </td>
-                                  <td className="px-6 py-3">
-                                    <div className="text-xs font-medium text-gray-900">
-                                      {new Date(card.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </div>
-                                    <div className="text-[10px] text-gray-500">
-                                      {card.clockOut ? new Date(card.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-3">
-                                    <div className={`text-xs font-medium ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
-                                      -{card.totalIdleHours?.toFixed(2) || '0.00'} hr
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-3">
-                                    <div className="text-xs font-medium text-blue-600">
-                                      {card.totalHours.toFixed(2)} hr
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-3 text-right">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
-                                      ${card.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                      {card.status}
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
+                              {isExpanded && group.cards.map(card => {
+                                const isEditing = editingCardId === card.id;
+                                return (
+                                  <tr key={card.id} className="bg-gray-50/50 hover:bg-gray-100/50 transition-colors">
+                                    <td className="px-6 py-3 pl-16">
+                                      <div className="text-xs text-gray-400">Log Entry</div>
+                                    </td>
+                                    <td className="px-6 py-3 text-gray-600">
+                                      {new Date(card.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </td>
+                                    <td className="px-6 py-3">
+                                      {isEditing ? (
+                                        <div className="flex flex-col gap-1">
+                                          <input
+                                            type="datetime-local"
+                                            value={editClockIn}
+                                            onChange={e => setEditClockIn(e.target.value)}
+                                            className="text-xs border border-gray-300 rounded p-1"
+                                          />
+                                          <input
+                                            type="datetime-local"
+                                            value={editClockOut}
+                                            onChange={e => setEditClockOut(e.target.value)}
+                                            className="text-xs border border-gray-300 rounded p-1"
+                                            disabled={!card.clockOut && !editClockOut}
+                                          />
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <div className="text-xs font-medium text-gray-900">
+                                            {new Date(card.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                          </div>
+                                          <div className="text-[10px] text-gray-500">
+                                            {card.clockOut ? new Date(card.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
+                                          </div>
+                                        </>
+                                      )}
+                                    </td>
+                                    <td className="px-6 py-3">
+                                      <div className={`text-xs font-medium ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                                        -{card.totalIdleHours?.toFixed(2) || '0.00'} hr
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-3">
+                                      <div className="text-xs font-medium text-blue-600">
+                                        {card.totalHours.toFixed(2)} hr
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-3 text-right">
+                                      <div className="flex flex-col items-end gap-1.5">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
+                                          ${card.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                          {card.status}
+                                        </span>
+                                        {isEditing ? (
+                                          <div className="flex gap-1 mt-1">
+                                            <button onClick={() => setEditingCardId(null)} className="text-[10px] font-bold text-gray-500 hover:text-gray-700">Cancel</button>
+                                            <button onClick={() => saveEditedCard(card)} className="text-[10px] font-bold text-green-600 hover:text-green-700">Save</button>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            onClick={() => startEditingCard(card)}
+                                            className="text-[10px] font-bold text-gray-400 hover:text-blue-600 transition-colors underline"
+                                          >
+                                            Edit
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </React.Fragment>
                           );
                         })
