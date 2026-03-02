@@ -104,9 +104,11 @@ interface Props {
   users: User[];
   settings: AppSettings;
   activeSessions?: Record<string, UserSession>;
+  onClockIn?: (user: User) => void;
+  onClockOut?: (user: User) => void;
 }
 
-export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessions = {} }) => {
+export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessions = {}, onClockIn, onClockOut }) => {
   const [activeView, setActiveView] = useState<'departments' | 'users' | 'timecards' | 'planning'>('departments');
   const [selectedDept, setSelectedDept] = useState<Department | 'All'>('All');
   const [selectedUser, setSelectedUser] = useState<string | 'All'>('All');
@@ -225,28 +227,37 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
   const groupedTimeCards = useMemo(() => {
     const groups: Record<string, DailyTimeCard[]> = {};
+    users.forEach(user => {
+      groups[user.id] = [];
+    });
     filteredTimeCards.forEach(card => {
       if (!groups[card.userId]) groups[card.userId] = [];
       groups[card.userId].push(card);
     });
-    return Object.values(groups).map(cards => {
-      const userId = cards[0].userId;
+    return Object.entries(groups).map(([userId, cards]) => {
       const totalIdle = cards.reduce((sum, c) => sum + (c.totalIdleHours || 0), 0);
       const totalHours = cards.reduce((sum, c) => sum + c.totalHours, 0);
-      const isComplete = cards.every(c => c.status === 'Complete');
+      const isActive = (Object.values(activeSessions) as UserSession[]).some(s => s.userId === userId);
+      const isComplete = cards.length > 0 && cards.every(c => c.status === 'Complete') && !isActive;
+
+      let statusStr = 'No Data';
+      if (isActive) statusStr = 'Active';
+      else if (isComplete) statusStr = 'Complete';
+      else if (cards.length > 0) statusStr = 'Incomplete';
+
       return {
         userId,
         cards,
         totalIdle,
         totalHours,
-        status: isComplete ? 'Complete' : 'Active'
+        status: statusStr
       };
-    }).sort((a, b) => {
+    }).sort((a: any, b: any) => {
       const nameA = users.find(u => u.id === a.userId)?.name || '';
       const nameB = users.find(u => u.id === b.userId)?.name || '';
       return nameA.localeCompare(nameB);
     });
-  }, [filteredTimeCards, users]);
+  }, [filteredTimeCards, users, activeSessions]);
 
   const handleSyncPlan = async () => {
     if (!externalPlanRaw.trim()) return;
@@ -613,11 +624,26 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                   </div>
                                   <div className="text-[10px] text-gray-400 font-medium">Cycle Total</div>
                                 </td>
-                                <td className="px-6 py-4 text-right">
+                                <td className="px-6 py-4 flex flex-col items-end gap-1.5 justify-center mt-1">
                                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
-                                    ${group.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                    ${group.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' :
+                                      group.status === 'Active' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                        group.status === 'Incomplete' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                          'bg-gray-50 text-gray-500 border-gray-200'}`}>
                                     {group.status}
                                   </span>
+                                  {group.status !== 'Active' && onClockIn && user && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); onClockIn(user); }}
+                                      className="text-[10px] font-bold bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded shadow-sm transition-colors"
+                                    >Clock In</button>
+                                  )}
+                                  {group.status === 'Active' && onClockOut && user && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); onClockOut(user); }}
+                                      className="text-[10px] font-bold bg-white text-amber-600 border border-amber-200 hover:bg-amber-50 px-2 py-1 rounded shadow-sm transition-colors"
+                                    >Clock Out</button>
+                                  )}
                                 </td>
                               </tr>
 

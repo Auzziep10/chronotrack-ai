@@ -1005,7 +1005,7 @@ const App: React.FC = () => {
             // Lazy load nicely or just static
             <DailyPlanner users={users} currentUser={currentUser} />
           ) : (
-            <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} />
+            <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} onClockIn={handleClockIn} onClockOut={handleClockOut} />
           )}
         </div>
       </main>
