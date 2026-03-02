@@ -156,6 +156,14 @@ export const firebaseAddLog = async (userId: string, log: WorkLog): Promise<void
     }
 };
 
+/** Update the start time of an active session */
+export const firebaseUpdateSessionStartTime = async (userId: string, newStartTime: number): Promise<void> => {
+    await updateDoc(doc(db, SESSIONS_COL, userId), {
+        startTime: newStartTime,
+        updatedAt: serverTimestamp()
+    });
+};
+
 /** Atomic Resume: Calculates accumulated idle time and resumes tracking */
 export const firebaseResumeSession = async (userId: string, currentSession: any): Promise<void> => {
     const now = Date.now();

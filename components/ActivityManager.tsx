@@ -339,10 +339,14 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     const { storageService } = await import('../services/storageService');
     storageService.saveTimeCard(updatedCard);
 
-    const { firebaseSaveTimeCard, isFirebaseConfigured } = await import('../services/firebaseService');
+    const { firebaseSaveTimeCard, firebaseUpdateSessionStartTime, isFirebaseConfigured } = await import('../services/firebaseService');
     if (isFirebaseConfigured()) {
       try {
-        await firebaseSaveTimeCard(updatedCard);
+        if (card.id.startsWith('active-')) {
+          await firebaseUpdateSessionStartTime(card.userId, inTime);
+        } else {
+          await firebaseSaveTimeCard(updatedCard);
+        }
       } catch (err) {
         console.error("Failed to save updated timecard to remote:", err);
       }
