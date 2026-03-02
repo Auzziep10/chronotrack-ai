@@ -204,8 +204,18 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     return stats;
   }, [logs]);
 
+  const allLogs = useMemo(() => {
+    const sessionLogs = (Object.values(activeSessions) as UserSession[]).flatMap(s => s.logs || []);
+    const merged = [...logs];
+    const existingIds = new Set(logs.map(l => l.id));
+    sessionLogs.forEach(l => {
+      if (!existingIds.has(l.id)) merged.push(l);
+    });
+    return merged;
+  }, [logs, activeSessions]);
+
   const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
+    return allLogs.filter(log => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       if (new Date(log.timestamp) < thirtyDaysAgo) return false;
@@ -213,7 +223,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
       if (selectedUser !== 'All' && log.userId !== selectedUser) return false;
       return true;
     });
-  }, [selectedDept, selectedUser, logs]);
+  }, [selectedDept, selectedUser, allLogs]);
 
   const filteredTimeCards = useMemo(() => {
     if (!currentPeriod) return [];
@@ -709,10 +719,13 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                               {isExpanded && group.cards.map(card => {
                                 const isEditing = editingCardId === card.id;
                                 const isCardExpanded = expandedCards.has(card.id);
-                                const cardLogs = logs.filter(l =>
-                                  l.userId === card.userId &&
-                                  new Date(l.timestamp).toLocaleDateString() === new Date(card.date).toLocaleDateString()
-                                ).sort((a, b) => b.timestamp - a.timestamp);
+                                const cardLogs = allLogs.filter(l => {
+                                  if (l.userId !== card.userId) return false;
+                                  // Fix local timezone offset for accurate day matching since card.date is YYYY-MM-DD
+                                  const tzOffset = new Date(l.timestamp).getTimezoneOffset() * 60000;
+                                  const localIsoDate = new Date(l.timestamp - tzOffset).toISOString().split('T')[0];
+                                  return localIsoDate === card.date;
+                                }).sort((a, b) => b.timestamp - a.timestamp);
 
                                 return (
                                   <React.Fragment key={card.id}>
