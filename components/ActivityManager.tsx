@@ -701,7 +701,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                 return (
                                   <tr key={card.id} className="bg-gray-50/50 hover:bg-gray-100/50 transition-colors">
                                     <td className="px-6 py-3 pl-16">
-                                      <div className="text-xs text-gray-400">Log Entry</div>
+                                      <div className="text-xs text-gray-400">Total Time</div>
                                     </td>
                                     <td className="px-6 py-3 text-gray-600">
                                       {new Date(card.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
