@@ -114,12 +114,22 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [selectedUser, setSelectedUser] = useState<string | 'All'>('All');
   const [selectedPeriodIdx, setSelectedPeriodIdx] = useState(0);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
   const toggleUserExpanded = (userId: string) => {
     setExpandedUsers(prev => {
       const next = new Set(prev);
       if (next.has(userId)) next.delete(userId);
       else next.add(userId);
+      return next;
+    });
+  };
+
+  const toggleCardExpanded = (cardId: string) => {
+    setExpandedCards(prev => {
+      const next = new Set(prev);
+      if (next.has(cardId)) next.delete(cardId);
+      else next.add(cardId);
       return next;
     });
   };
@@ -698,74 +708,114 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
                               {isExpanded && group.cards.map(card => {
                                 const isEditing = editingCardId === card.id;
+                                const isCardExpanded = expandedCards.has(card.id);
+                                const cardLogs = logs.filter(l =>
+                                  l.userId === card.userId &&
+                                  new Date(l.timestamp).toLocaleDateString() === new Date(card.date).toLocaleDateString()
+                                ).sort((a, b) => b.timestamp - a.timestamp);
+
                                 return (
-                                  <tr key={card.id} className="bg-gray-50/50 hover:bg-gray-100/50 transition-colors">
-                                    <td className="px-6 py-3 pl-16">
-                                      <div className="text-xs text-gray-400">Total Time</div>
-                                    </td>
-                                    <td className="px-6 py-3 text-gray-600">
-                                      {new Date(card.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                    </td>
-                                    <td className="px-6 py-3">
-                                      {isEditing ? (
-                                        <div className="flex flex-col gap-1">
-                                          <input
-                                            type="datetime-local"
-                                            value={editClockIn}
-                                            onChange={e => setEditClockIn(e.target.value)}
-                                            className="text-xs border border-gray-300 rounded p-1"
-                                          />
-                                          <input
-                                            type="datetime-local"
-                                            value={editClockOut}
-                                            onChange={e => setEditClockOut(e.target.value)}
-                                            className="text-xs border border-gray-300 rounded p-1"
-                                            disabled={!card.clockOut && !editClockOut}
-                                          />
+                                  <React.Fragment key={card.id}>
+                                    <tr
+                                      className="bg-gray-50/50 hover:bg-gray-100/50 transition-colors cursor-pointer"
+                                      onClick={() => toggleCardExpanded(card.id)}
+                                    >
+                                      <td className="px-6 py-3 pl-16">
+                                        <div className="flex items-center gap-2">
+                                          {isCardExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                                          <div className="text-xs text-gray-600 font-bold">Total Time</div>
                                         </div>
-                                      ) : (
-                                        <>
-                                          <div className="text-xs font-medium text-gray-900">
-                                            {new Date(card.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                          </div>
-                                          <div className="text-[10px] text-gray-500">
-                                            {card.clockOut ? new Date(card.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
-                                          </div>
-                                        </>
-                                      )}
-                                    </td>
-                                    <td className="px-6 py-3">
-                                      <div className={`text-xs font-medium ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
-                                        -{card.totalIdleHours?.toFixed(2) || '0.00'} hr
-                                      </div>
-                                    </td>
-                                    <td className="px-6 py-3">
-                                      <div className="text-xs font-medium text-blue-600">
-                                        {card.totalHours.toFixed(2)} hr
-                                      </div>
-                                    </td>
-                                    <td className="px-6 py-3 text-right">
-                                      <div className="flex flex-col items-end gap-1.5">
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
-                                          ${card.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                          {card.status}
-                                        </span>
+                                      </td>
+                                      <td className="px-6 py-3 text-gray-600 font-medium">
+                                        {new Date(card.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                      </td>
+                                      <td className="px-6 py-3" onClick={e => e.stopPropagation()}>
                                         {isEditing ? (
-                                          <div className="flex gap-1 mt-1">
-                                            <button onClick={() => setEditingCardId(null)} className="text-[10px] font-bold text-gray-500 hover:text-gray-700">Cancel</button>
-                                            <button onClick={() => saveEditedCard(card)} className="text-[10px] font-bold text-green-600 hover:text-green-700">Save</button>
+                                          <div className="flex flex-col gap-1">
+                                            <input
+                                              type="datetime-local"
+                                              value={editClockIn}
+                                              onChange={e => setEditClockIn(e.target.value)}
+                                              className="text-xs border border-gray-300 rounded p-1"
+                                            />
+                                            <input
+                                              type="datetime-local"
+                                              value={editClockOut}
+                                              onChange={e => setEditClockOut(e.target.value)}
+                                              className="text-xs border border-gray-300 rounded p-1"
+                                              disabled={!card.clockOut && !editClockOut}
+                                            />
                                           </div>
                                         ) : (
-                                          <button
-                                            onClick={() => startEditingCard(card)}
-                                            className="text-[10px] font-bold text-gray-400 hover:text-blue-600 transition-colors underline"
-                                          >
-                                            Edit
-                                          </button>
+                                          <>
+                                            <div className="text-xs font-medium text-gray-900">
+                                              {new Date(card.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                            <div className="text-[10px] text-gray-500">
+                                              {card.clockOut ? new Date(card.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
+                                            </div>
+                                          </>
                                         )}
-                                      </div>
-                                    </td>
-                                  </tr>
+                                      </td>
+                                      <td className="px-6 py-3">
+                                        <div className={`text-xs font-medium ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                                          -{card.totalIdleHours?.toFixed(2) || '0.00'} hr
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-3">
+                                        <div className="text-xs font-medium text-blue-600">
+                                          {card.totalHours.toFixed(2)} hr
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-3 text-right" onClick={e => e.stopPropagation()}>
+                                        <div className="flex flex-col items-end gap-1.5">
+                                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
+                                            ${card.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                            {card.status}
+                                          </span>
+                                          {isEditing ? (
+                                            <div className="flex gap-1 mt-1">
+                                              <button onClick={() => setEditingCardId(null)} className="text-[10px] font-bold text-gray-500 hover:text-gray-700">Cancel</button>
+                                              <button onClick={() => saveEditedCard(card)} className="text-[10px] font-bold text-green-600 hover:text-green-700">Save</button>
+                                            </div>
+                                          ) : (
+                                            <button
+                                              onClick={() => startEditingCard(card)}
+                                              className="text-[10px] font-bold text-gray-400 hover:text-blue-600 transition-colors underline"
+                                            >
+                                              Edit
+                                            </button>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+
+                                    {isCardExpanded && (
+                                      cardLogs.length > 0 ? (
+                                        cardLogs.map(log => (
+                                          <tr key={log.id} className="bg-gray-100/30">
+                                            <td className="px-6 py-2 pl-[4.5rem]">
+                                              <div className="text-[10px] font-mono text-gray-400 whitespace-nowrap">
+                                                {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                              </div>
+                                            </td>
+                                            <td colSpan={5} className="px-6 py-2">
+                                              <div className="text-xs text-gray-600 flex items-center gap-2">
+                                                <span className="font-bold">{log.department}:</span>
+                                                <span>{log.task || log.notes || 'Routine check-in'}</span>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        ))
+                                      ) : (
+                                        <tr className="bg-gray-100/30">
+                                          <td className="px-6 py-2 pl-[4.5rem]" colSpan={6}>
+                                            <div className="text-xs text-gray-400 italic">No check-ins logged for this period.</div>
+                                          </td>
+                                        </tr>
+                                      )
+                                    )}
+                                  </React.Fragment>
                                 );
                               })}
                             </React.Fragment>
