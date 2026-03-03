@@ -418,6 +418,21 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Discord ID (for notifications)</label>
+                <div className="relative">
+                  <MessageSquare className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={formData.discordId || ''}
+                    onChange={e => setFormData({ ...formData, discordId: e.target.value })}
+                    placeholder="e.g. 123456789012345678"
+                    className="w-full pl-9 text-sm border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Requires Discord Developer Mode to copy user ID.</p>
+              </div>
             </div>
           </section>
 

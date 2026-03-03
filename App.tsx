@@ -68,6 +68,7 @@ const App: React.FC = () => {
   const [replitSyncError, setReplitSyncError] = useState<string | null>(null);
   const [replitSyncTrigger, setReplitSyncTrigger] = useState(0);
   const syncedLogIdsRef = useRef<Set<string>>(new Set());
+  const warnedSessionsRef = useRef<Set<string>>(new Set());
 
   // Track when we last made a local user update (to avoid sync overwriting unsaved data)
   const lastUserUpdateRef = useRef<number>(0);
@@ -289,17 +290,36 @@ const App: React.FC = () => {
     if (!isFirebaseConfigured() || !authToken) return;
 
     const IDLE_THRESHOLD_MS = 70 * 60 * 1000; // 70 minutes (60m lock + 10m grace)
+    const WARNING_THRESHOLD_MS = 60 * 60 * 1000; // 60 minutes
 
     const checkIdleSessions = async () => {
       const now = Date.now();
       for (const [userId, session] of Object.entries(activeSessions) as [string, UserSession][]) {
-        if (session.isPaused) continue;
+        if (session.isPaused) {
+          warnedSessionsRef.current.delete(userId);
+          continue;
+        }
 
         const timeSinceLastLog = now - session.lastLogTime;
+
         if (timeSinceLastLog >= IDLE_THRESHOLD_MS) {
           console.log(`[IdleEnforcement] Pausing session for ${session.user.name} (70m threshold reached)`);
           const { firebasePauseSession } = await import('./services/firebaseService');
           await firebasePauseSession(userId, 'idle');
+          warnedSessionsRef.current.delete(userId);
+        } else if (timeSinceLastLog >= WARNING_THRESHOLD_MS) {
+          if (!warnedSessionsRef.current.has(userId)) {
+            warnedSessionsRef.current.add(userId);
+            // Send Discord Warning!
+            const webhookUrl = import.meta.env.VITE_DISCORD_WEBHOOK_URL;
+            if (webhookUrl) {
+              const { sendDiscordWarning } = await import('./services/discordService');
+              await sendDiscordWarning(webhookUrl, session.user.name, session.user.discordId);
+            }
+          }
+        } else {
+          // If they checked in, remove from warned set
+          warnedSessionsRef.current.delete(userId);
         }
       }
     };

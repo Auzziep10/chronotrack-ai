@@ -58,6 +58,7 @@ export interface User {
   phoneNumber?: string;
   email?: string;
   address?: string;
+  discordId?: string;
   // Work Info
   availability: Record<DayOfWeek, DailyAvailability>;
   lateDays?: number;
