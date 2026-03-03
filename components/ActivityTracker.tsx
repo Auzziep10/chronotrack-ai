@@ -4,10 +4,10 @@ import { WorkLogForm } from './WorkLogForm';
 import { HistoryLog } from './HistoryLog';
 import { AiSummary } from './AiSummary';
 import { Timer } from './Timer';
-import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw, Play, Calendar, Users } from 'lucide-react';
+import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw, Play, Calendar, Users, MessageSquare } from 'lucide-react';
 import { LOG_INTERVAL_MS } from '../constants';
 
-import { UserProfileDialog } from './UserProfileDialog';
+import { DiscordSetupModal } from './DiscordSetupModal';
 import { TimeOffRequestModal } from './TimeOffRequestModal';
 
 interface Props {
@@ -43,7 +43,7 @@ export const ActivityTracker: React.FC<Props> = ({
 }) => {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isDiscordSetupOpen, setIsDiscordSetupOpen] = useState(false);
   const [isRequestingTimeOff, setIsRequestingTimeOff] = useState(false);
 
   const activeUsers = Object.values(activeSessions) as UserSession[];
@@ -170,11 +170,11 @@ export const ActivityTracker: React.FC<Props> = ({
               Request Time Off
             </button>
             <button
-              onClick={() => setIsEditingProfile(true)}
-              className="flex-1 sm:flex-none w-full sm:w-auto flex items-center justify-center gap-2 bg-white border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700 font-bold py-3.5 px-6 rounded-xl transition-all shadow-sm"
+              onClick={() => setIsDiscordSetupOpen(true)}
+              className="flex-1 sm:flex-none w-full sm:w-auto flex items-center justify-center gap-2 bg-white border-2 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 text-gray-700 font-bold py-3.5 px-6 rounded-xl transition-all shadow-sm"
             >
-              <UserIcon className="w-4 h-4" />
-              My Profile & Setup
+              <MessageSquare className="w-4 h-4" />
+              Discord Alerts
             </button>
           </div>
 
@@ -204,13 +204,12 @@ export const ActivityTracker: React.FC<Props> = ({
           )}
         </div>
 
-        {isEditingProfile && (
-          <UserProfileDialog
-            isOpen={isEditingProfile}
+        {isDiscordSetupOpen && (
+          <DiscordSetupModal
+            isOpen={isDiscordSetupOpen}
             user={currentUser}
-            onClose={() => setIsEditingProfile(false)}
+            onClose={() => setIsDiscordSetupOpen(false)}
             onSave={onUpdateUser || (() => { })}
-            isViewerAdmin={false}
           />
         )}
 
@@ -429,11 +428,11 @@ export const ActivityTracker: React.FC<Props> = ({
                   <Calendar className="w-4 h-4" /> <span className="sm:hidden">Time Off</span>
                 </button>
                 <button
-                  onClick={() => setIsEditingProfile(true)}
-                  className="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-gray-50 text-gray-700 hover:text-blue-600 px-3 py-1.5 hover:bg-blue-50 rounded-lg transition-colors border border-gray-200 hover:border-blue-200 text-sm font-bold"
-                  title="My Profile & Setup"
+                  onClick={() => setIsDiscordSetupOpen(true)}
+                  className="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-gray-50 text-gray-700 hover:text-indigo-600 px-3 py-1.5 hover:bg-indigo-50 rounded-lg transition-colors border border-gray-200 hover:border-indigo-200 text-sm font-bold"
+                  title="Discord Alerts"
                 >
-                  <UserIcon className="w-4 h-4" /> <span className="sm:hidden">Profile</span>
+                  <MessageSquare className="w-4 h-4" /> <span className="sm:hidden">Alerts</span>
                 </button>
               </>
             )}
