@@ -431,7 +431,16 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                     className="w-full pl-9 text-sm border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1">Requires Discord Developer Mode to copy user ID.</p>
+                <div className="mt-2 text-xs text-gray-500 bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <div className="font-bold text-gray-700 mb-1">How to find your Discord ID on Mobile:</div>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li>Open Discord & tap your profile icon (bottom right).</li>
+                    <li>Go to <strong>Settings</strong> (gear icon) <span className="text-gray-400">→</span> <strong>Advanced</strong>.</li>
+                    <li>Turn on <strong>Developer Mode</strong>.</li>
+                    <li>Go back to your Profile.</li>
+                    <li>Tap the three dots (top right) and select <strong>Copy User ID</strong>.</li>
+                  </ol>
+                </div>
               </div>
             </div>
           </section>
@@ -447,6 +456,6 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
           </div>
         </form>
       </div>
-    </div>
+    </div >
   );
 };
