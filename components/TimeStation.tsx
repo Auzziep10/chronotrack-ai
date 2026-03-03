@@ -256,7 +256,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                       {session.isPaused ? (
                         <div className="flex items-center gap-2 text-xs text-amber-700 font-bold bg-amber-200 px-2 py-1 rounded animate-pulse">
                           <Pause className="w-3 h-3" />
-                          <span>ON LUNCH (PAUSED)</span>
+                          <span>{session.pauseReason === 'lunch' ? 'ON LUNCH (PAUSED)' : 'SHIFT PAUSED (IDLE)'}</span>
                         </div>
                       ) : isOverdue && (
                         <div className="flex items-center gap-2 text-xs text-red-600 font-semibold bg-red-100 px-2 py-1 rounded">

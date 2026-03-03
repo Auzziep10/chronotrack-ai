@@ -72,6 +72,7 @@ export interface UserSession {
   lastLogTime: number;
   logs: WorkLog[];
   isPaused?: boolean;
+  pauseReason?: 'lunch' | 'idle';
   currentIdleStartTime?: number | null;
   totalIdleTimeMs?: number;
 }

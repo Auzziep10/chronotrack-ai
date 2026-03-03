@@ -299,7 +299,9 @@ export const ActivityTracker: React.FC<Props> = ({
                 </div>
                 <div>
                   <h2 className="text-lg font-bold">
-                    {selectedSession.isPaused ? 'Shift Paused' : 'Session Locked'} for {selectedSession.user.name}
+                    {selectedSession.isPaused
+                      ? (selectedSession.pauseReason === 'lunch' ? 'On Lunch' : 'Shift Paused')
+                      : 'Session Locked'} for {selectedSession.user.name}
                   </h2>
                   <p className="text-red-100 text-sm">
                     {selectedSession.isPaused

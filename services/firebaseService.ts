@@ -179,6 +179,7 @@ export const firebaseResumeSession = async (userId: string, currentSession: any)
 
     await updateDoc(doc(db, SESSIONS_COL, userId), {
         isPaused: false,
+        pauseReason: null,
         currentIdleStartTime: null,
         totalIdleTimeMs: newTotalIdle,
         updatedAt: serverTimestamp()
@@ -186,9 +187,10 @@ export const firebaseResumeSession = async (userId: string, currentSession: any)
 };
 
 /** Mark a session as paused/idle */
-export const firebasePauseSession = async (userId: string): Promise<void> => {
+export const firebasePauseSession = async (userId: string, reason?: 'lunch' | 'idle'): Promise<void> => {
     await updateDoc(doc(db, SESSIONS_COL, userId), {
         isPaused: true,
+        pauseReason: reason || null,
         currentIdleStartTime: Date.now(),
         updatedAt: serverTimestamp()
     });

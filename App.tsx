@@ -691,12 +691,13 @@ const App: React.FC = () => {
       [user.id]: {
         ...prev[user.id],
         isPaused: true,
+        pauseReason: 'lunch',
         currentIdleStartTime: Date.now()
       }
     }));
     if (isFirebaseConfigured()) {
       try {
-        await firebasePauseSession(user.id);
+        await firebasePauseSession(user.id, 'lunch');
       } catch (e) {
         console.error('Failed to pause session for lunch:', e);
       }
@@ -714,6 +715,7 @@ const App: React.FC = () => {
       [user.id]: {
         ...prev[user.id],
         isPaused: false,
+        pauseReason: undefined,
         totalIdleTimeMs: prev[user.id].totalIdleTimeMs + idleTimeToAdd,
         currentIdleStartTime: null,
         lastLogTime: Date.now()
@@ -816,6 +818,7 @@ const App: React.FC = () => {
               effectiveSession = {
                 ...session,
                 isPaused: true,
+                pauseReason: 'idle',
                 currentIdleStartTime: session.lastLogTime + IDLE_THRESHOLD_MS
               };
             }
@@ -845,6 +848,7 @@ const App: React.FC = () => {
           logs: [...session.logs, newLog],
           lastLogTime: now, // Reset timer for this specific user
           isPaused: false,
+          pauseReason: undefined,
           currentIdleStartTime: null
         }
       };
