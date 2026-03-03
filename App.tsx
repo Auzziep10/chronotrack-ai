@@ -247,6 +247,7 @@ const App: React.FC = () => {
             lastLogTime: data.lastLogTime,
             logs: data.logs || [],
             isPaused: data.isPaused || false,
+            pauseReason: data.pauseReason || undefined,
             currentIdleStartTime: data.currentIdleStartTime || null,
             totalIdleTimeMs: data.totalIdleTimeMs || 0
           };
@@ -298,7 +299,7 @@ const App: React.FC = () => {
         if (timeSinceLastLog >= IDLE_THRESHOLD_MS) {
           console.log(`[IdleEnforcement] Pausing session for ${session.user.name} (70m threshold reached)`);
           const { firebasePauseSession } = await import('./services/firebaseService');
-          await firebasePauseSession(userId);
+          await firebasePauseSession(userId, 'idle');
         }
       }
     };
