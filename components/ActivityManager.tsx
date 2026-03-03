@@ -740,7 +740,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                         </div>
                                       </td>
                                       <td className="px-6 py-3 text-gray-600 font-medium">
-                                        {new Date(card.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        {new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                       </td>
                                       <td className="px-6 py-3" onClick={e => e.stopPropagation()}>
                                         {isEditing ? (
