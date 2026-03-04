@@ -580,6 +580,24 @@ export const ActivityTracker: React.FC<Props> = ({
           <HistoryLog logs={selectedSession.logs} onDelete={(id) => onDeleteLog(selectedUserId, id)} />
         </div>
       </div>
+
+      {isDiscordSetupOpen && (
+        <DiscordSetupModal
+          isOpen={isDiscordSetupOpen}
+          user={currentUser}
+          onClose={() => setIsDiscordSetupOpen(false)}
+          onSave={onUpdateUser || (() => { })}
+        />
+      )}
+
+      {isRequestingTimeOff && (
+        <TimeOffRequestModal
+          isOpen={isRequestingTimeOff}
+          onClose={() => setIsRequestingTimeOff(false)}
+          user={currentUser}
+          onSave={onUpdateUser || (() => { })}
+        />
+      )}
     </div>
   );
 };
