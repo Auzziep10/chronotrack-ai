@@ -12,6 +12,9 @@ export const sendDiscordWarning = async (
     let content = `⚠️ ${mention}, your shift is in danger of being paused! You haven't checked in for ${minutes} minutes.`;
     if (minutes >= 60) content += ` Please submit an Activity Tracker log or your time will be auto-paused in ${70 - minutes} minutes.`;
 
+    const replitLink = `\n\n📝 **Log Activity:** https://dtf-supply-watch-catalyst.replit.app/daily-planner`;
+    content += replitLink;
+
     if (isTest) content = `🔔 ${mention}, this is a successful test ping from ChronoTrack! You're all set.`;
 
     const payload = {
