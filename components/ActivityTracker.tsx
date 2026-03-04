@@ -418,7 +418,7 @@ export const ActivityTracker: React.FC<Props> = ({
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-            {(!isAdminOrManager && !isDedicatedTerminal && currentUser?.id === selectedUserId) && (
+            {(!isDedicatedTerminal && currentUser?.id === selectedUserId) && (
               <>
                 <button
                   onClick={() => setIsRequestingTimeOff(true)}
