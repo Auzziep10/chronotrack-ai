@@ -147,6 +147,19 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [timeCards, setTimeCards] = useState<DailyTimeCard[]>([]);
   const [logs, setLogs] = useState<WorkLog[]>([]);
 
+  const periods = useMemo(() => getPayPeriods(settings), [settings]);
+  const currentPeriod = periods[selectedPeriodIdx];
+
+  const [exportStartDate, setExportStartDate] = useState<string>('');
+  const [exportEndDate, setExportEndDate] = useState<string>('');
+
+  React.useEffect(() => {
+    if (currentPeriod) {
+      setExportStartDate(currentPeriod.start.toISOString().split('T')[0]);
+      setExportEndDate(currentPeriod.end.toISOString().split('T')[0]);
+    }
+  }, [currentPeriod]);
+
   // Load data on mount from both LocalStorage (legacy/fallback) and Backend (sync)
   React.useEffect(() => {
     const fetchData = async () => {
@@ -180,9 +193,6 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
     fetchData();
   }, []);
-
-  const periods = useMemo(() => getPayPeriods(settings), [settings]);
-  const currentPeriod = periods[selectedPeriodIdx];
 
   const departmentStats = useMemo(() => {
     const stats: Record<string, { hours: number, count: number }> = {};
@@ -225,9 +235,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     });
   }, [selectedDept, selectedUser, allLogs]);
 
-  const filteredTimeCards = useMemo(() => {
-    if (!currentPeriod) return [];
-
+  const allCurrentCards = useMemo(() => {
     // Merge database cards with current active sessions
     const activeCards: DailyTimeCard[] = (Object.values(activeSessions) as UserSession[]).map(session => ({
       id: `active-${session.userId}`,
@@ -263,14 +271,18 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
       }
     });
 
-    const uniqueCards = Array.from(dedupedCardsMap.values());
+    return Array.from(dedupedCardsMap.values());
+  }, [timeCards, activeSessions]);
 
-    return uniqueCards.filter(card => {
+  const filteredTimeCards = useMemo(() => {
+    if (!currentPeriod) return [];
+
+    return allCurrentCards.filter(card => {
       const [y, m, d] = card.date.split('-').map(Number);
       const cardDate = new Date(y, m - 1, d, 12, 0, 0);
       return cardDate >= currentPeriod.start && cardDate <= currentPeriod.end;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [timeCards, activeSessions, currentPeriod]);
+  }, [allCurrentCards, currentPeriod]);
 
   const groupedTimeCards = useMemo(() => {
     const groups: Record<string, DailyTimeCard[]> = {};
@@ -320,37 +332,97 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   };
 
   const handleExportCSV = () => {
-    if (filteredTimeCards.length === 0) return;
-    const headers = ['Employee ID', 'Name', 'Role', 'Date', 'Clock In', 'Clock Out', 'Gross Hours', 'Idle Hours (Unpaid)', 'Net Hours', 'Status'];
-    const rows = filteredTimeCards.map(card => {
-      const user = users.find(u => u.id === card.userId) || (Object.values(activeSessions) as UserSession[]).find(s => s.userId === card.userId)?.user;
-      const clockIn = new Date(card.clockIn).toLocaleTimeString();
-      const clockOut = card.clockOut ? new Date(card.clockOut).toLocaleTimeString() : 'Active';
-      const idle = card.totalIdleHours || 0;
-      const net = card.totalHours;
-      const gross = net + idle;
-      return [
-        card.userId,
-        user?.name || 'Deleted User',
-        user?.role || 'Unknown',
-        card.date,
-        clockIn,
-        clockOut,
-        gross.toFixed(2),
-        idle.toFixed(2),
-        net.toFixed(2),
-        card.status
-      ].map(field => `"${field}"`).join(',');
+    if (!exportStartDate || !exportEndDate) return;
+
+    // Filter cards for the chosen range
+    const [sy, sm, sd] = exportStartDate.split('-').map(Number);
+    const startRange = new Date(sy, sm - 1, sd, 0, 0, 0);
+
+    const [ey, em, ed] = exportEndDate.split('-').map(Number);
+    const endRange = new Date(ey, em - 1, ed, 23, 59, 59);
+
+    const cardsToExport = allCurrentCards.filter(card => {
+      const [y, m, d] = card.date.split('-').map(Number);
+      const cardDate = new Date(y, m - 1, d, 12, 0, 0);
+      return cardDate >= startRange && cardDate <= endRange;
     });
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `time_report.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+    if (cardsToExport.length === 0) {
+      alert("No data found for the selected date range.");
+      return;
+    }
+
+    // Group by Date
+    const groupedByDate: Record<string, DailyTimeCard[]> = {};
+    cardsToExport.forEach(card => {
+      if (!groupedByDate[card.date]) groupedByDate[card.date] = [];
+      groupedByDate[card.date].push(card);
+    });
+
+    // Format matches Google Sheet requested
+    const headers = [
+      'Shift #',
+      'Full Legal Name',
+      'Hours Worked',
+      'Role',
+      'Cut QTY',
+      'Gross Presses',
+      'Shirts downed',
+      'Net Presses',
+      'Shift Total Hrly Pay',
+      'Shift Total Inctv Pay',
+      'Total shift pay:',
+      'Time Paused'
+    ];
+
+    Object.entries(groupedByDate).forEach(([dateStr, cards]) => {
+      const rows = cards.map(card => {
+        const user = users.find(u => u.id === card.userId) || (Object.values(activeSessions) as UserSession[]).find(s => s.userId === card.userId)?.user;
+
+        const shiftNo = '';
+        const name = user?.name || 'Deleted User';
+        const hoursWorked = card.totalHours.toFixed(2);
+        const role = user?.role || 'Unknown';
+        const cutQty = '';
+        const grossPresses = '';
+        const shirtsDowned = '';
+        const netPresses = '';
+        const shiftHrlyPay = '';
+        const shiftInctvPay = '';
+        const shiftTotalPay = '';
+        const timePaused = (card.totalIdleHours || 0).toFixed(2);
+
+        return [
+          shiftNo,
+          name,
+          hoursWorked,
+          role,
+          cutQty,
+          grossPresses,
+          shirtsDowned,
+          netPresses,
+          shiftHrlyPay,
+          shiftInctvPay,
+          shiftTotalPay,
+          timePaused
+        ].map(field => `"${field}"`).join(',');
+      });
+
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const dateObj = new Date(y, m - 1, d, 12, 0, 0);
+      const dateHeaderStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+      const csvContent = [`"${dateHeaderStr}"` + headers.slice(1).map(() => '').join(','), headers.join(','), ...rows].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `time_report_${dateStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
   };
 
   const startEditingCard = (card: DailyTimeCard) => {
@@ -633,7 +705,25 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 w-full lg:w-auto border-t lg:border-t-0 pt-4 lg:pt-0">
+                  <div className="flex flex-col lg:flex-row items-center gap-3 w-full lg:w-auto border-t lg:border-t-0 pt-4 lg:pt-0">
+                    <div className="flex flex-col gap-1 w-full lg:w-auto">
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1 lg:hidden">Export Range</label>
+                      <div className="flex items-center gap-2 text-sm bg-gray-50 border border-gray-200 rounded-lg p-1">
+                        <input
+                          type="date"
+                          value={exportStartDate}
+                          onChange={e => setExportStartDate(e.target.value)}
+                          className="bg-transparent border-none text-gray-700 text-xs font-bold focus:ring-0 cursor-pointer p-1"
+                        />
+                        <span className="text-gray-400 text-xs font-bold">to</span>
+                        <input
+                          type="date"
+                          value={exportEndDate}
+                          onChange={e => setExportEndDate(e.target.value)}
+                          className="bg-transparent border-none text-gray-700 text-xs font-bold focus:ring-0 cursor-pointer p-1"
+                        />
+                      </div>
+                    </div>
                     <button
                       onClick={handleExportCSV}
                       className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-100 hover:bg-slate-800 transition-all"
