@@ -242,7 +242,30 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
     const allCards = [...activeCards, ...timeCards];
 
-    return allCards.filter(card => {
+    // Deduplicate cards that somehow got created twice for the exact same shift (same clockIn time)
+    // We keep the one with the latest clockOut time, or the most recent ID if active.
+    const dedupedCardsMap = new Map<string, DailyTimeCard>();
+    allCards.forEach(card => {
+      const key = `${card.userId}-${card.clockIn}`;
+      const existing = dedupedCardsMap.get(key);
+      if (!existing) {
+        dedupedCardsMap.set(key, card);
+      } else {
+        // If there's a conflict, prefer the one with a clockOut time, and if both have it, prefer the later one
+        // or prefer the 'Complete' status one over a potentially stuck 'Active' one
+        if (existing.status === 'Active' && card.status === 'Complete') {
+          dedupedCardsMap.set(key, card);
+        } else if (existing.clockOut && card.clockOut) {
+          if (card.clockOut > existing.clockOut) {
+            dedupedCardsMap.set(key, card);
+          }
+        }
+      }
+    });
+
+    const uniqueCards = Array.from(dedupedCardsMap.values());
+
+    return uniqueCards.filter(card => {
       const [y, m, d] = card.date.split('-').map(Number);
       const cardDate = new Date(y, m - 1, d, 12, 0, 0);
       return cardDate >= currentPeriod.start && cardDate <= currentPeriod.end;
