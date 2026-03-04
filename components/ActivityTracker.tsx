@@ -419,22 +419,22 @@ export const ActivityTracker: React.FC<Props> = ({
 
           <div className="flex flex-wrap items-center justify-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
             {(!isDedicatedTerminal && currentUser?.id === selectedUserId) && (
-              <>
-                <button
-                  onClick={() => setIsRequestingTimeOff(true)}
-                  className="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-gray-50 text-gray-700 hover:text-teal-600 px-3 py-1.5 hover:bg-teal-50 rounded-lg transition-colors border border-gray-200 hover:border-teal-200 text-sm font-bold"
-                  title="Request Time Off"
-                >
-                  <Calendar className="w-4 h-4" /> <span className="sm:hidden">Time Off</span>
-                </button>
-                <button
-                  onClick={() => setIsDiscordSetupOpen(true)}
-                  className="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-gray-50 text-gray-700 hover:text-indigo-600 px-3 py-1.5 hover:bg-indigo-50 rounded-lg transition-colors border border-gray-200 hover:border-indigo-200 text-sm font-bold"
-                  title="Discord Alerts"
-                >
-                  <MessageSquare className="w-4 h-4" /> <span className="sm:hidden">Alerts</span>
-                </button>
-              </>
+              <button
+                onClick={() => setIsRequestingTimeOff(true)}
+                className="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-gray-50 text-gray-700 hover:text-teal-600 px-3 py-1.5 hover:bg-teal-50 rounded-lg transition-colors border border-gray-200 hover:border-teal-200 text-sm font-bold"
+                title="Request Time Off"
+              >
+                <Calendar className="w-4 h-4" /> <span className="sm:hidden">Time Off</span>
+              </button>
+            )}
+            {((!isDedicatedTerminal && currentUser?.id === selectedUserId) || isAdminOrManager) && (
+              <button
+                onClick={() => setIsDiscordSetupOpen(true)}
+                className="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-gray-50 text-gray-700 hover:text-indigo-600 px-3 py-1.5 hover:bg-indigo-50 rounded-lg transition-colors border border-gray-200 hover:border-indigo-200 text-sm font-bold"
+                title="Discord Alerts"
+              >
+                <MessageSquare className="w-4 h-4" /> <span className="sm:hidden">Alerts</span>
+              </button>
             )}
             {onClockOut && (currentUser?.id === selectedUserId && (
               Array.isArray(currentUser.permissions) ? currentUser.permissions.includes('mobile_clock_in') : (typeof currentUser.permissions === 'string' && currentUser.permissions.includes('mobile_clock_in'))
@@ -584,7 +584,7 @@ export const ActivityTracker: React.FC<Props> = ({
       {isDiscordSetupOpen && (
         <DiscordSetupModal
           isOpen={isDiscordSetupOpen}
-          user={currentUser}
+          user={selectedSession?.user || currentUser}
           onClose={() => setIsDiscordSetupOpen(false)}
           onSave={onUpdateUser || (() => { })}
         />
