@@ -68,7 +68,7 @@ const App: React.FC = () => {
   const [replitSyncError, setReplitSyncError] = useState<string | null>(null);
   const [replitSyncTrigger, setReplitSyncTrigger] = useState(0);
   const syncedLogIdsRef = useRef<Set<string>>(new Set());
-  const warnedSessionsRef = useRef<Set<string>>(new Set());
+  const warnedIntervalsRef = useRef<Record<string, number[]>>({});
 
   // Track when we last made a local user update (to avoid sync overwriting unsaved data)
   const lastUserUpdateRef = useRef<number>(0);
@@ -296,30 +296,48 @@ const App: React.FC = () => {
       const now = Date.now();
       for (const [userId, session] of Object.entries(activeSessions) as [string, UserSession][]) {
         if (session.isPaused) {
-          warnedSessionsRef.current.delete(userId);
+          delete warnedIntervalsRef.current[userId];
           continue;
         }
 
         const timeSinceLastLog = now - session.lastLogTime;
+        const minutesSinceLastLog = Math.floor(timeSinceLastLog / 60000);
 
         if (timeSinceLastLog >= IDLE_THRESHOLD_MS) {
           console.log(`[IdleEnforcement] Pausing session for ${session.user.name} (70m threshold reached)`);
           const { firebasePauseSession } = await import('./services/firebaseService');
           await firebasePauseSession(userId, 'idle');
-          warnedSessionsRef.current.delete(userId);
-        } else if (timeSinceLastLog >= WARNING_THRESHOLD_MS) {
-          if (!warnedSessionsRef.current.has(userId)) {
-            warnedSessionsRef.current.add(userId);
-            // Send Discord Warning!
-            const webhookUrl = import.meta.env.VITE_DISCORD_WEBHOOK_URL;
-            if (webhookUrl) {
-              const { sendDiscordWarning } = await import('./services/discordService');
-              await sendDiscordWarning(webhookUrl, session.user.name, session.user.discordId);
+          delete warnedIntervalsRef.current[userId];
+        } else {
+          // Determine which intervals this user wants to be notified for
+          const alertPrefs = session.user.discordAlertPrefs && session.user.discordAlertPrefs.length > 0
+            ? session.user.discordAlertPrefs
+            : [60];
+
+          // Sort descending so we process the biggest times first, or just check all of them
+          for (const thresholdMinutes of alertPrefs) {
+            if (minutesSinceLastLog >= thresholdMinutes) {
+              if (!warnedIntervalsRef.current[userId]) warnedIntervalsRef.current[userId] = [];
+
+              if (!warnedIntervalsRef.current[userId].includes(thresholdMinutes)) {
+                warnedIntervalsRef.current[userId].push(thresholdMinutes);
+
+                // Send Discord Warning!
+                const webhookUrl = import.meta.env.VITE_DISCORD_WEBHOOK_URL;
+                if (webhookUrl) {
+                  const { sendDiscordWarning } = await import('./services/discordService');
+                  await sendDiscordWarning(webhookUrl, session.user.name, session.user.discordId, thresholdMinutes, false);
+                }
+              }
             }
           }
-        } else {
-          // If they checked in, remove from warned set
-          warnedSessionsRef.current.delete(userId);
+
+          // Clean up old tracked intervals if they've checked in
+          // e.g., if they checked in and time dropped below lowest threshold
+          const lowestThreshold = Math.min(...alertPrefs);
+          if (minutesSinceLastLog < lowestThreshold) {
+            delete warnedIntervalsRef.current[userId];
+          }
         }
       }
     };

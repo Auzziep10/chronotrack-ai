@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, MessageSquare, Save } from 'lucide-react';
+import { X, MessageSquare, Save, BellRing, Clock, Loader2 } from 'lucide-react';
 import { User } from '../types';
 
 interface Props {
@@ -11,10 +11,23 @@ interface Props {
 
 export const DiscordSetupModal: React.FC<Props> = ({ user, isOpen, onClose, onSave }) => {
     const [formData, setFormData] = useState<User | null>(null);
+    const [isTesting, setIsTesting] = useState(false);
+    const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+
+    const AVAILABLE_INTERVALS = [
+        { value: 30, label: '30 minutes' },
+        { value: 45, label: '45 minutes' },
+        { value: 60, label: '60 minutes (Default)' }
+    ];
 
     useEffect(() => {
         if (user) {
-            setFormData({ ...user });
+            setFormData({
+                ...user,
+                discordAlertPrefs: user.discordAlertPrefs && user.discordAlertPrefs.length > 0
+                    ? user.discordAlertPrefs
+                    : [60]
+            });
         }
     }, [user]);
 
@@ -26,6 +39,40 @@ export const DiscordSetupModal: React.FC<Props> = ({ user, isOpen, onClose, onSa
             onSave(formData);
             onClose();
         }
+    };
+
+    const handleTestPing = async () => {
+        if (!formData?.discordId) return;
+        setIsTesting(true);
+        setTestResult(null);
+        try {
+            const webhookUrl = import.meta.env.VITE_DISCORD_WEBHOOK_URL;
+            if (!webhookUrl) throw new Error("No Webhook URL configured");
+            const { sendDiscordWarning } = await import('../services/discordService');
+            await sendDiscordWarning(webhookUrl, formData.name, formData.discordId, 0, true);
+            setTestResult('success');
+            setTimeout(() => setTestResult(null), 3000);
+        } catch (err) {
+            console.error(err);
+            setTestResult('error');
+            setTimeout(() => setTestResult(null), 3000);
+        } finally {
+            setIsTesting(false);
+        }
+    };
+
+    const toggleInterval = (minutes: number) => {
+        if (!formData) return;
+        const currentPrefs = formData.discordAlertPrefs || [];
+        const newPrefs = currentPrefs.includes(minutes)
+            ? currentPrefs.filter(m => m !== minutes)
+            : [...currentPrefs, minutes].sort((a, b) => a - b);
+
+        // Ensure at least one is selected, default to 60 if none
+        setFormData({
+            ...formData,
+            discordAlertPrefs: newPrefs.length > 0 ? newPrefs : [60]
+        });
     };
 
     return (
@@ -72,13 +119,49 @@ export const DiscordSetupModal: React.FC<Props> = ({ user, isOpen, onClose, onSa
                         </div>
                     </section>
 
-                    <div className="pt-2 sticky bottom-0 bg-white">
+                    <section>
+                        <div className="flex items-center justify-between mb-3">
+                            <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-indigo-500" />
+                                When to warn me
+                            </label>
+                        </div>
+                        <div className="space-y-2">
+                            {AVAILABLE_INTERVALS.map(interval => {
+                                const isChecked = (formData.discordAlertPrefs || []).includes(interval.value);
+                                return (
+                                    <label key={interval.value} className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-colors ${isChecked ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={() => toggleInterval(interval.value)}
+                                                className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 disabled:opacity-50"
+                                            />
+                                            <span className={`text-sm font-medium ${isChecked ? 'text-indigo-900' : 'text-gray-700'}`}>After {interval.label} of idle time</span>
+                                        </div>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    <div className="pt-2 sticky bottom-0 bg-white grid grid-cols-2 gap-3">
+                        <button
+                            type="button"
+                            onClick={handleTestPing}
+                            disabled={!formData.discordId || isTesting || formData.discordId.trim() === ''}
+                            className={`flex items-center justify-center gap-2 font-bold py-3 px-2 text-sm rounded-xl shadow-sm transition-all active:scale-95 border-2 ${testResult === 'success' ? 'bg-green-50 text-green-700 border-green-200' : testResult === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-indigo-600 border-indigo-100 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed'}`}
+                        >
+                            {isTesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <BellRing className="w-4 h-4" />}
+                            {testResult === 'success' ? 'Sent!' : testResult === 'error' ? 'Failed' : 'Send Test Ping'}
+                        </button>
                         <button
                             type="submit"
-                            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-all active:scale-95"
+                            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-3 px-2 rounded-xl shadow-md transition-all active:scale-95"
                         >
-                            <Save className="w-5 h-5" />
-                            Save Discord ID
+                            <Save className="w-4 h-4" />
+                            Save Settings
                         </button>
                     </div>
                 </form>
