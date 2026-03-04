@@ -47,13 +47,14 @@ export const DiscordSetupModal: React.FC<Props> = ({ user, isOpen, onClose, onSa
         setTestResult(null);
         try {
             const webhookUrl = import.meta.env.VITE_DISCORD_WEBHOOK_URL;
-            if (!webhookUrl) throw new Error("No Webhook URL configured");
+            if (!webhookUrl) throw new Error("No Webhook URL configured. Please restart your dev server if you just added it to .env.local!");
             const { sendDiscordWarning } = await import('../services/discordService');
             await sendDiscordWarning(webhookUrl, formData.name, formData.discordId, 0, true);
             setTestResult('success');
             setTimeout(() => setTestResult(null), 3000);
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
+            alert(`Discord Test Failed: ${err.message || 'Unknown Error'}`);
             setTestResult('error');
             setTimeout(() => setTestResult(null), 3000);
         } finally {

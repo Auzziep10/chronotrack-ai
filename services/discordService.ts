@@ -20,15 +20,15 @@ export const sendDiscordWarning = async (
         avatar_url: 'https://i.imgur.com/rE5C77L.png' // Optional generic bot avatar
     };
 
-    try {
-        await fetch(webhookUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-    } catch (error) {
-        console.error('Failed to send Discord notification:', error);
+    const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Discord API Error: ${response.status} ${response.statusText}`);
     }
 };
