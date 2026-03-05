@@ -26,6 +26,30 @@ export const PinPad: React.FC<Props> = ({ mode, users, onSuccess, onCancel }) =>
   };
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9') {
+        setPin(prev => {
+          if (prev.length < 4) {
+            setError('');
+            return prev + e.key;
+          }
+          return prev;
+        });
+      } else if (e.key === 'Backspace') {
+        setPin(prev => {
+          setError('');
+          return prev.slice(0, -1);
+        });
+      } else if (e.key === 'Escape') {
+        onCancel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onCancel]);
+
+  useEffect(() => {
     if (pin.length === 4) {
       // Validate PIN against passed users list
       const user = users.find(u => u.pin === pin);
@@ -77,12 +101,12 @@ export const PinPad: React.FC<Props> = ({ mode, users, onSuccess, onCancel }) =>
         )}
 
         {/* Numpad */}
-        <div className="grid grid-cols-3 gap-6 w-full max-w-[320px]">
+        <div className="grid grid-cols-3 gap-8 w-full max-w-[360px] mt-2">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
             <button
               key={num}
               onClick={() => handleNumClick(num.toString())}
-              className="aspect-square flex items-center justify-center rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-3xl font-bold text-gray-700 transition-all shadow-sm border border-gray-100 active:scale-90"
+              className="aspect-square flex items-center justify-center rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-4xl font-bold text-gray-700 transition-all shadow-sm border border-gray-100 active:scale-90"
             >
               {num}
             </button>
@@ -92,7 +116,7 @@ export const PinPad: React.FC<Props> = ({ mode, users, onSuccess, onCancel }) =>
           </div>
           <button
             onClick={() => handleNumClick('0')}
-            className="aspect-square flex items-center justify-center rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-3xl font-bold text-gray-700 transition-all shadow-sm border border-gray-100 active:scale-90"
+            className="aspect-square flex items-center justify-center rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-4xl font-bold text-gray-700 transition-all shadow-sm border border-gray-100 active:scale-90"
           >
             0
           </button>
@@ -100,7 +124,7 @@ export const PinPad: React.FC<Props> = ({ mode, users, onSuccess, onCancel }) =>
             onClick={handleDelete}
             className="aspect-square flex items-center justify-center rounded-full hover:bg-red-50 active:bg-red-100 text-gray-400 hover:text-red-500 transition-all active:scale-90"
           >
-            <Delete className="w-8 h-8" />
+            <Delete className="w-10 h-10" />
           </button>
         </div>
       </div>
