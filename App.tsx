@@ -540,6 +540,11 @@ const App: React.FC = () => {
 
     // Immediately force local role/permissions over the Replit payload if an active local profile exists (stops UI flashing and false permissions on fresh logins)
     const localUserMatch = users.find(u => String(u.id) === userData.id);
+
+    // Normalize missing fields from Replit's /api/auth/me response
+    userData.name = localUserMatch?.name || userData.name || (userData.firstName ? `${userData.firstName} ${userData.lastName || ''}`.trim() : userData.username || 'Team Member');
+    userData.avatarInitials = localUserMatch?.avatarInitials || userData.avatarInitials || (userData.name ? userData.name.substring(0, 2).toUpperCase() : '??');
+
     if (localUserMatch) {
       userData.role = localUserMatch.role || userData.role;
       userData.permissions = localUserMatch.permissions || userData.permissions;

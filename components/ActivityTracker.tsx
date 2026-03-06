@@ -136,9 +136,11 @@ export const ActivityTracker: React.FC<Props> = ({
 
         <div className="relative z-10 flex flex-col items-center">
           <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-3xl font-bold shadow-xl mb-6 border-4 border-white">
-            {currentUser.avatarInitials}
+            {currentUser.avatarInitials || (currentUser.firstName ? currentUser.firstName[0].toUpperCase() : (currentUser.name ? currentUser.name[0].toUpperCase() : '?'))}
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Welcome, {currentUser.name.split(' ')[0]}!</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            Welcome, {currentUser.firstName || (currentUser.name ? currentUser.name.split(' ')[0] : (currentUser.username || 'Team Member'))}!
+          </h2>
           <p className="text-gray-500 mb-8 max-w-sm">
             Access your personal dashboard, update your availability, or manage your active shift.
           </p>
