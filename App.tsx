@@ -289,6 +289,10 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isFirebaseConfigured() || !authToken) return;
 
+    // Only run this on an admin terminal to avoid multiple devices triggering alerts
+    const isAdminTerminal = currentUser?.role === 'admin' && currentUser?.username?.toLowerCase() !== 'warehouse';
+    if (!isAdminTerminal) return;
+
     const IDLE_THRESHOLD_MS = 70 * 60 * 1000; // 70 minutes (60m lock + 10m grace)
     const WARNING_THRESHOLD_MS = 60 * 60 * 1000; // 60 minutes
 
@@ -344,7 +348,8 @@ const App: React.FC = () => {
 
     const interval = setInterval(checkIdleSessions, 15000); // Check every 15 seconds
     return () => clearInterval(interval);
-  }, [activeSessions, authToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessions, authToken, currentUser]);
 
   // ─── REPLIT -> FIREBASE LOG BRIDGE ──────────────────────────────────────────
   // Sync hourly check-ins from Replit Supply Watch into ChronoTrack Firebase
