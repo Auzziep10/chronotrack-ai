@@ -135,6 +135,8 @@ export const supplyWatchService = {
         const dateLocale = date.toLocaleDateString('en-CA'); // YYYY-MM-DD
 
         const tryEndpoints = [
+            `/api/daily-schedules/date/${dateISO}/external`,
+            `/api/daily-schedules/date/${dateLocale}/external`,
             `/api/daily-planner?date=${dateLocale}`,
             `/api/daily-planner?date=${dateISO}`,
             `/api/daily-schedules/date/${dateLocale}`,
@@ -144,7 +146,10 @@ export const supplyWatchService = {
         for (const endpoint of tryEndpoints) {
             try {
                 const response = await fetch(`${baseUrl}${endpoint}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'X-API-Key': 'ct_c9a9828186758e3ab7e5e903ab3b214f42a1d884543f55b67d1ac48431e9e753'
+                    }
                 });
                 if (response.ok) {
                     let data = await response.json();
