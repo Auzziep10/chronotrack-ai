@@ -565,13 +565,31 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     // Group blocks by user and filter based on active view
     const userBlocks = users.reduce((acc, user) => {
+        const isMatch = (assignedTo?: string) => {
+            if (!assignedTo) return false;
+            // Exact ID Match
+            if (String(assignedTo) === String(user.id)) return true;
+            
+            // Fuzzy Name Match Fallback
+            if (String(assignedTo).startsWith('NAME_MATCH:')) {
+                const searchName = String(assignedTo).replace('NAME_MATCH:', '').toLowerCase().trim();
+                const localName = user.name.toLowerCase().trim();
+                const localUsername = (user.username || '').toLowerCase().trim();
+                
+                if (localName === searchName || localUsername === searchName) return true;
+                // Try first name matching as a last resort
+                if (localName.split(' ')[0] === searchName.split(' ')[0]) return true;
+            }
+            return false;
+        };
+
         if (activeView === 'shifts') {
             acc[user.id] = shiftBlocks.filter(b => {
                 const bDate = new Date(b.startTime);
-                return String(b.assignedTo) === String(user.id) && bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
+                return isMatch(b.assignedTo) && bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
             });
         } else {
-            const userBlocksRaw = schedule?.blocks.filter(b => String(b.assignedTo) === String(user.id)) || [];
+            const userBlocksRaw = schedule?.blocks.filter(b => isMatch(b.assignedTo)) || [];
             acc[user.id] = userBlocksRaw.filter(b => !b.title.startsWith('[SHIFT]'));
         }
         return acc;

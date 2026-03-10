@@ -195,10 +195,23 @@ export const supplyWatchService = {
                                 };
                             }) : [];
 
+                            const assignedToName = b.assignedToName || b.assigned_to_name || b.userName || b.user_name || b.username || b.ownerName || b.employeeName || '';
+                            let assignedToStr = b.assignedTo !== undefined ? String(b.assignedTo) : 
+                                                (b.assigned_to !== undefined ? String(b.assigned_to) : 
+                                                (b.userId !== undefined ? String(b.userId) : 
+                                                (b.user_id !== undefined ? String(b.user_id) : 
+                                                (b.ownerId !== undefined ? String(b.ownerId) : 
+                                                (b.employeeId !== undefined ? String(b.employeeId) : undefined)))));
+
+                            // If we still don't have an ID but we have a name, we'll try to let DailyPlanner do a fuzz name match
+                            if (!assignedToStr && assignedToName) {
+                                assignedToStr = `NAME_MATCH:${assignedToName}`;
+                            }
+
                             return {
                                 ...b,
-                                assignedTo: b.assignedTo !== undefined ? String(b.assignedTo) : (b.assigned_to !== undefined ? String(b.assigned_to) : undefined),
-                                assignedToName: b.assignedToName || b.assigned_to_name || b.userName || b.username || b.ownerName,
+                                assignedTo: assignedToStr,
+                                assignedToName: assignedToName,
                                 checkIns: normalizedCheckIns
                             };
                         });
