@@ -147,7 +147,21 @@ export const supplyWatchService = {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (response.ok) {
-                    const data = await response.json();
+                    let data = await response.json();
+                    
+                    // If the API returned a flat array, wrap it in our expected object format
+                    if (Array.isArray(data)) {
+                        data = { id: dateISO, date: dateISO, blocks: data };
+                    }
+                    
+                    // Handle various potential backend wrappers
+                    if (data && !data.blocks) {
+                        if (data.tasks && Array.isArray(data.tasks)) data.blocks = data.tasks;
+                        else if (data.schedule && data.schedule.blocks) data.blocks = data.schedule.blocks;
+                        else if (data.schedule && Array.isArray(data.schedule)) data.blocks = data.schedule;
+                        else if (data.data && Array.isArray(data.data)) data.blocks = data.data;
+                    }
+                    
                     if (data && data.blocks && Array.isArray(data.blocks)) {
                         data.blocks = data.blocks.map((b: any) => {
                             // Extract check-ins from any possible field name
@@ -208,8 +222,17 @@ export const supplyWatchService = {
                                 assignedToStr = `NAME_MATCH:${assignedToName}`;
                             }
 
+                            const rawStartTime = b.startTime || b.start_time || b.start || b.startDate || b.start_date || new Date().toISOString();
+                            const rawEndTime = b.endTime || b.end_time || b.end || b.endDate || b.end_date || new Date(Date.now() + 3600000).toISOString();
+                            const startTimeISO = new Date(supplyWatchService.parseReplitTime(rawStartTime)).toISOString();
+                            const endTimeISO = new Date(supplyWatchService.parseReplitTime(rawEndTime)).toISOString();
+
                             return {
                                 ...b,
+                                title: b.title || b.name || b.task || b.taskName || b.description || 'Untitled Task',
+                                description: b.description || b.notes || b.details || '',
+                                startTime: startTimeISO,
+                                endTime: endTimeISO,
                                 assignedTo: assignedToStr,
                                 assignedToName: assignedToName,
                                 checkIns: normalizedCheckIns
