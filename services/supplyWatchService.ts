@@ -197,6 +197,7 @@ export const supplyWatchService = {
 
                             return {
                                 ...b,
+                                assignedTo: b.assignedTo !== undefined ? String(b.assignedTo) : (b.assigned_to !== undefined ? String(b.assigned_to) : undefined),
                                 assignedToName: b.assignedToName || b.assigned_to_name || b.userName || b.username || b.ownerName,
                                 checkIns: normalizedCheckIns
                             };

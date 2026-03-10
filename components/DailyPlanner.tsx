@@ -568,10 +568,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         if (activeView === 'shifts') {
             acc[user.id] = shiftBlocks.filter(b => {
                 const bDate = new Date(b.startTime);
-                return b.assignedTo === user.id && bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
+                return String(b.assignedTo) === String(user.id) && bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
             });
         } else {
-            const userBlocksRaw = schedule?.blocks.filter(b => b.assignedTo === user.id) || [];
+            const userBlocksRaw = schedule?.blocks.filter(b => String(b.assignedTo) === String(user.id)) || [];
             acc[user.id] = userBlocksRaw.filter(b => !b.title.startsWith('[SHIFT]'));
         }
         return acc;

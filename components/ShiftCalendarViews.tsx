@@ -160,7 +160,7 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                                         }
                                         if (top + height > 100) height = 100 - top;
 
-                                        const user = teamMembers.find(u => u.id === b.assignedTo);
+                                        const user = teamMembers.find(u => String(u.id) === String(b.assignedTo));
                                         const userName = user ? user.name.split(' ')[0] : 'Unknown';
 
                                         return (
@@ -229,7 +229,7 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                                         <div className="flex-1 overflow-y-auto space-y-1 mt-1 pr-1 custom-scrollbar">
                                             {dayBlocks.map(b => {
                                                 const bStart = new Date(b.startTime);
-                                                const user = teamMembers.find(u => u.id === b.assignedTo);
+                                                const user = teamMembers.find(u => String(u.id) === String(b.assignedTo));
                                                 const userName = user ? user.name.split(' ')[0] : 'Unknown';
 
                                                 return (
