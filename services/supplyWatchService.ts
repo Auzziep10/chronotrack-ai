@@ -210,12 +210,17 @@ export const supplyWatchService = {
                             }) : [];
 
                             const assignedToName = b.assignedToName || b.assigned_to_name || b.userName || b.user_name || b.username || b.ownerName || b.employeeName || '';
-                            let assignedToStr = b.assignedTo !== undefined ? String(b.assignedTo) : 
-                                                (b.assigned_to !== undefined ? String(b.assigned_to) : 
-                                                (b.userId !== undefined ? String(b.userId) : 
-                                                (b.user_id !== undefined ? String(b.user_id) : 
-                                                (b.ownerId !== undefined ? String(b.ownerId) : 
-                                                (b.employeeId !== undefined ? String(b.employeeId) : undefined)))));
+                            let assignedToStr = b.assignedTo != null ? String(b.assignedTo) : 
+                                                (b.assigned_to != null ? String(b.assigned_to) : 
+                                                (b.userId != null ? String(b.userId) : 
+                                                (b.user_id != null ? String(b.user_id) : 
+                                                (b.ownerId != null ? String(b.ownerId) : 
+                                                (b.employeeId != null ? String(b.employeeId) : '')))));
+
+                            // Clean up "null" or "undefined" strings that might have snuck in, or empty strings
+                            if (assignedToStr === 'null' || assignedToStr === 'undefined' || assignedToStr.trim() === '') {
+                                assignedToStr = '';
+                            }
 
                             // If we still don't have an ID but we have a name, we'll try to let DailyPlanner do a fuzz name match
                             if (!assignedToStr && assignedToName) {
