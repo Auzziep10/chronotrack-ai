@@ -24,6 +24,7 @@ interface Props {
   onClockIn?: (user: any) => void;
   onClockOut?: (user: any) => void;
   onUpdateUser?: (updatedUser: any) => void;
+  onUpdateTaskStatus?: (taskId: string, status: string, taskTitle: string, user: any) => void;
 }
 
 export const ActivityTracker: React.FC<Props> = ({
@@ -39,7 +40,8 @@ export const ActivityTracker: React.FC<Props> = ({
   currentUser,
   onClockIn,
   onClockOut,
-  onUpdateUser
+  onUpdateUser,
+  onUpdateTaskStatus
 }) => {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
@@ -514,7 +516,7 @@ export const ActivityTracker: React.FC<Props> = ({
                           {task.checkIns && task.checkIns.length > 0 && (
                             <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
                               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Check-ins:</div>
-                              {task.checkIns.map((ci, idx) => {
+                              {task.checkIns.map((ci: any, idx: number) => {
                                 const ts = ci.timestamp ? (typeof ci.timestamp === 'number' ? ci.timestamp : new Date(ci.timestamp).getTime()) : null;
                                 const timeStr = ts && !isNaN(ts) ? new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '??:??';
                                 const progress = ci.progressPercent !== undefined ? ci.progressPercent : ci.progress;
@@ -527,6 +529,29 @@ export const ActivityTracker: React.FC<Props> = ({
                                   </div>
                                 );
                               })}
+                            </div>
+                          )}
+
+                          {onUpdateTaskStatus && (!isDedicatedTerminal && currentUser?.id === selectedUserId) && (
+                            <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                              <button
+                                onClick={() => onUpdateTaskStatus(task.id, 'in_progress', task.title, selectedSession.user)}
+                                className="text-[10px] px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold rounded transition-colors uppercase tracking-wider"
+                              >
+                                In Progress
+                              </button>
+                              <button
+                                onClick={() => onUpdateTaskStatus(task.id, 'completed', task.title, selectedSession.user)}
+                                className="text-[10px] px-2.5 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 font-bold rounded transition-colors uppercase tracking-wider"
+                              >
+                                Complete
+                              </button>
+                              <button
+                                onClick={() => onUpdateTaskStatus(task.id, 'delayed', task.title, selectedSession.user)}
+                                className="text-[10px] px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 font-bold rounded transition-colors uppercase tracking-wider"
+                              >
+                                Delayed
+                              </button>
                             </div>
                           )}
                         </div>

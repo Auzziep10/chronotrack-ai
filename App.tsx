@@ -904,6 +904,29 @@ const App: React.FC = () => {
     });
   };
 
+  const handleUpdateTaskStatus = async (taskId: string, status: string, taskTitle: string, user: User) => {
+    const replitUrl = localStorage.getItem('replitAppUrl');
+    if (!replitUrl || !authToken) return;
+
+    try {
+      const { supplyWatchService } = await import('./services/supplyWatchService');
+      await supplyWatchService.updateScheduleBlock(replitUrl, authToken, taskId, { status });
+      
+      // Also automatically submit a log so it's tracked in timestamps
+      handleLogSubmit(user.id, {
+        task: taskTitle,
+        notes: `Status updated to: ${status === 'in_progress' ? 'Active' : status.charAt(0).toUpperCase() + status.slice(1)}`,
+        department: user.primaryDepartment
+      });
+      
+      // Refresh schedule manually to show new check-ins immediately
+      setReplitSyncTrigger(prev => prev + 1);
+    } catch (err) {
+      console.error("Failed to update task status:", err);
+      alert("Failed to update task status. Please ensure you are connected to Supply Watch.");
+    }
+  };
+
   const deleteLog = (userId: string, logId: string) => {
     if (confirm('Are you sure you want to delete this entry?')) {
       // Primary: Delete from Firebase
@@ -1054,6 +1077,7 @@ const App: React.FC = () => {
               onClockIn={handleClockIn}
               onClockOut={handleClockOut}
               onUpdateUser={handleUpdateUser}
+              onUpdateTaskStatus={handleUpdateTaskStatus}
             />
           ) : activeTab === 'planner' ? (
             // Lazy load nicely or just static
