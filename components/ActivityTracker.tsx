@@ -332,6 +332,45 @@ export const ActivityTracker: React.FC<Props> = ({
                   currentIdleStartTime={selectedSession.currentIdleStartTime}
                 />
               </div>
+
+              {/* Scheduled Tasks View in Modal */}
+              {userTasks.length > 0 && (
+                <div className="px-6 py-4 border-b border-gray-100 bg-white">
+                  <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-blue-500" />
+                    Today's Scheduled Tasks
+                  </h3>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                    {userTasks.map(task => (
+                      <div
+                        key={task.id}
+                        className={`p-2.5 rounded-lg border-l-4 ${getTaskStatusColor(task.status)} bg-gray-50/50 text-sm`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="mt-0.5 shrink-0">
+                            {getTaskIcon(task.status)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-gray-900 leading-tight">{task.title}</h4>
+                            <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 mt-1 uppercase tracking-wider font-semibold">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {new Date(task.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} -
+                                {new Date(task.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                              </span>
+                              {task.priority && task.priority !== 'medium' && task.priority !== 'low' && (
+                                <span className={`px-1.5 py-0.5 rounded ${task.priority === 'urgent' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
+                                  {task.priority}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <WorkLogForm
                 onSubmit={(data) => {
                   onLogSubmit(selectedUserId, data);
