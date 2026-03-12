@@ -101,29 +101,38 @@ export const supplyWatchService = {
      * Fetches all users from Replit backend
      */
     getUsers: async (replitUrl: string, token: string) => {
-        try {
-            // Clean URL (remove trailing slash)
-            const baseUrl = replitUrl.replace(/\/$/, '');
+        const baseUrl = replitUrl.replace(/\/$/, '');
+        const endpoints = [
+            '/api/users',
+            '/api/team',
+            '/api/staff',
+            '/api/employees'
+        ];
 
-            const response = await fetch(`${baseUrl}/api/users`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
+        let lastError: any = null;
+        for (const endpoint of endpoints) {
+            try {
+                const response = await fetch(`${baseUrl}${endpoint}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'X-API-Key': 'ct_c9a9828186758e3ab7e5e903ab3b214f42a1d884543f55b67d1ac48431e9e753'
+                    }
+                });
 
-            if (!response.ok) {
-                // Determine if it is a 404 (route doesn't exist) or 401/403
-                if (response.status === 404) {
-                    console.warn("API /api/users not found. Checking if /api/team or similar exists or defaulting.");
+                if (response.ok) {
+                    return await response.json();
+                } else if (response.status === 404) {
+                    lastError = new Error(`Endpoint ${endpoint} not found (404)`);
+                } else {
+                    throw new Error(`Failed to fetch users at ${endpoint}: ${response.statusText}`);
                 }
-                throw new Error(`Failed to fetch users: ${response.statusText}`);
+            } catch (error) {
+                lastError = error;
             }
-
-            return await response.json();
-        } catch (error) {
-            console.error("Failed to fetch users from Replit:", error);
-            throw error;
         }
+        
+        console.error("Failed to fetch users from Replit:", lastError);
+        throw lastError || new Error("Failed to fetch users");
     },
 
     /**
