@@ -294,7 +294,8 @@ export const supplyWatchService = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${token}`,
+                    'X-API-Key': 'ct_c9a9828186758e3ab7e5e903ab3b214f42a1d884543f55b67d1ac48431e9e753'
                 },
                 body: JSON.stringify(blockData)
             });
@@ -314,50 +315,83 @@ export const supplyWatchService = {
      * Updates an existing schedule block
      */
     updateScheduleBlock: async (replitUrl: string, token: string, blockId: string, blockData: any) => {
-        try {
-            const baseUrl = replitUrl.replace(/\/$/, '');
-            const response = await fetch(`${baseUrl}/api/schedule-blocks/${blockId}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(blockData)
-            });
+        const baseUrl = replitUrl.replace(/\/$/, '');
+        const endpoints = [
+            `/api/schedule-blocks/${blockId}`,
+            `/api/daily-planner/tasks/${blockId}`,
+            `/api/tasks/${blockId}`,
+            `/api/schedules/blocks/${blockId}`
+        ];
 
-            if (!response.ok) {
-                throw new Error(`Failed to update block: ${response.statusText}`);
+        let lastError: any = null;
+        for (const endpoint of endpoints) {
+            try {
+                const response = await fetch(`${baseUrl}${endpoint}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        'X-API-Key': 'ct_c9a9828186758e3ab7e5e903ab3b214f42a1d884543f55b67d1ac48431e9e753'
+                    },
+                    body: JSON.stringify(blockData)
+                });
+
+                if (response.ok) {
+                    return await response.json();
+                } else if (response.status === 404) {
+                    lastError = new Error(`Endpoint ${endpoint} not found (404)`);
+                    continue; // Try next endpoint
+                } else {
+                    throw new Error(`Failed to update block at ${endpoint}: ${response.statusText}`);
+                }
+            } catch (error) {
+                lastError = error;
+                // If network error (fetch failed), continue trying other endpoints just in case
+                // Though unlikely to help if the baseUrl is completely unreachable
             }
-
-            return await response.json();
-        } catch (error) {
-            console.error("Failed to update schedule block:", error);
-            throw error;
         }
+        
+        console.error("Failed to update schedule block across all endpoints:", lastError);
+        throw lastError || new Error("Failed to update schedule block");
     },
 
     /**
      * Deletes a schedule block
      */
     deleteScheduleBlock: async (replitUrl: string, token: string, blockId: string) => {
-        try {
-            const baseUrl = replitUrl.replace(/\/$/, '');
-            const response = await fetch(`${baseUrl}/api/schedule-blocks/${blockId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
+        const baseUrl = replitUrl.replace(/\/$/, '');
+        const endpoints = [
+            `/api/schedule-blocks/${blockId}`,
+            `/api/daily-planner/tasks/${blockId}`,
+            `/api/tasks/${blockId}`,
+            `/api/schedules/blocks/${blockId}`
+        ];
+
+        let lastError: any = null;
+        for (const endpoint of endpoints) {
+            try {
+                const response = await fetch(`${baseUrl}${endpoint}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'X-API-Key': 'ct_c9a9828186758e3ab7e5e903ab3b214f42a1d884543f55b67d1ac48431e9e753'
+                    }
+                });
+
+                if (response.ok) {
+                    return true;
+                } else if (response.status === 404) {
+                    lastError = new Error(`Endpoint ${endpoint} not found (404)`);
+                } else {
+                    throw new Error(`Failed to delete block at ${endpoint}: ${response.statusText}`);
                 }
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to delete block: ${response.statusText}`);
+            } catch (error) {
+                lastError = error;
             }
-
-            return true;
-        } catch (error) {
-            console.error("Failed to delete schedule block:", error);
-            throw error;
         }
+        
+        console.error("Failed to delete schedule block:", lastError);
+        throw lastError || new Error("Failed to delete schedule block");
     },
 
     /**
