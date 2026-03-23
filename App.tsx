@@ -22,7 +22,8 @@ import {
   isFirebaseConfigured,
   subscribeToShiftBlocks,
   firebasePauseSession,
-  firebaseResumeSession
+  firebaseResumeSession,
+  firebaseSilentAuth
 } from './services/firebaseService';
 
 type Tab = 'station' | 'activity' | 'manager' | 'planner';
@@ -203,6 +204,9 @@ const App: React.FC = () => {
   useEffect(() => {
     const initAuthenticatedData = async () => {
       if (!authToken) return;
+
+      // Silently authenticate the device with Firebase to pass security rules
+      await firebaseSilentAuth();
 
       // Sync users immediately
       await syncUsersFromReplit(authToken);
