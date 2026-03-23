@@ -684,8 +684,9 @@ const App: React.FC = () => {
     if (isFirebaseConfigured()) {
       try {
         await firebaseClockIn(user);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Firebase clock-in failed:', err);
+        alert(`Firebase Save Error: ${err.message || 'Unknown database error. Check your Firebase Security Rules!'}`);
       }
     }
 

@@ -56,6 +56,9 @@ export const subscribeToActiveSessions = (
             }
         });
         onUpdate(raw);
+    }, (error) => {
+        console.error("Firebase ActiveSessions Sync Error:", error);
+        alert(`Database Sync Error: ${error.message}. Please check your Firebase Security Rules or Project configuration.`);
     });
 };
 
