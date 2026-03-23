@@ -53,8 +53,20 @@ const App: React.FC = () => {
   });
 
   // Global State: Map of userId -> UserSession
-  // Initialize as empty to ensure we fetch fresh state from server on every device
-  const [activeSessions, setActiveSessions] = useState<Record<string, UserSession>>({});
+  // Initialize from localStorage first, then Firebase will overwrite with fresh state if connected.
+  // This prevents the optimistic local state from being wiped out upon reload if Firebase config is missing.
+  const [activeSessions, setActiveSessions] = useState<Record<string, UserSession>>(() => {
+    try {
+      const saved = localStorage.getItem('chronoSessions');
+      if (saved && saved !== '{}') {
+        const parsed = JSON.parse(saved);
+        if (Object.keys(parsed).length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse local chronoSessions:', e);
+    }
+    return {};
+  });
 
   const [activeTab, setActiveTab] = useState<Tab>('station');
   const [showSettings, setShowSettings] = useState(false);
@@ -225,7 +237,7 @@ const App: React.FC = () => {
         const newSessions: Record<string, UserSession> = {};
         Object.entries(rawSessions).forEach(([userId, data]: [string, any]) => {
           // Try full user from our local list first
-          const sessionUser = usersRef.current.find(u => u.id === userId);
+          const sessionUser = usersRef.current.find(u => String(u.id) === String(userId));
 
           // Fall back to data Firestore stored at clock-in time — fixes race condition
           // where user list isn't loaded yet but session data is already available
@@ -963,7 +975,14 @@ const App: React.FC = () => {
             <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-2 rounded-lg shadow-md">
               <div className="w-4 h-4 border-2 border-white rounded-full"></div>
             </div>
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight">ChronoTrack AI</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-gray-900 tracking-tight">ChronoTrack AI</h1>
+              {!isFirebaseConfigured() && isAdmin && (
+                <span className="hidden sm:inline-block px-2 py-0.5 bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold rounded shadow-sm">
+                  Firebase Keys Missing!
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex flex-col items-end text-right mr-2">
