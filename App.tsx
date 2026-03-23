@@ -86,6 +86,19 @@ const App: React.FC = () => {
   // Track when we last made a local user update (to avoid sync overwriting unsaved data)
   const lastUserUpdateRef = useRef<number>(0);
 
+  // Authenticate silently before allowing any Firebase subscriptions
+  const [isFirebaseAuthed, setIsFirebaseAuthed] = useState(false);
+
+  useEffect(() => {
+    if (isFirebaseConfigured()) {
+      import('./services/firebaseService').then(mod => {
+        mod.firebaseSilentAuth().then(() => setIsFirebaseAuthed(true)).catch(() => setIsFirebaseAuthed(true));
+      });
+    } else {
+      setIsFirebaseAuthed(true);
+    }
+  }, []);
+
   const usersRef = useRef<User[]>(users);
   useEffect(() => { usersRef.current = users; }, [users]);
 
@@ -205,9 +218,6 @@ const App: React.FC = () => {
     const initAuthenticatedData = async () => {
       if (!authToken) return;
 
-      // Silently authenticate the device with Firebase to pass security rules
-      await firebaseSilentAuth();
-
       // Sync users immediately
       await syncUsersFromReplit(authToken);
 
@@ -233,7 +243,7 @@ const App: React.FC = () => {
 
   // ─── FIREBASE REAL-TIME LISTENERS ────────────────────────────────────────────
   useEffect(() => {
-    if (!authToken || !isFirebaseConfigured()) return;
+    if (!authToken || !isFirebaseConfigured() || !isFirebaseAuthed) return;
 
     // 1. Real-time active sessions listener
     const unsubSessions = subscribeToActiveSessions((rawSessions) => {
@@ -299,7 +309,7 @@ const App: React.FC = () => {
       unsubSessions();
       unsubUsers();
     };
-  }, [authToken]); // Add users to dependency to ensure mapping works when users list changes
+  }, [authToken, isFirebaseAuthed]); // Add dependency to ensure mapping works when users list changes
 
   // ─── IDLE ENFORCEMENT MONITOR ──────────────────────────────────────────────
   useEffect(() => {
@@ -799,7 +809,7 @@ const App: React.FC = () => {
 
   // ─── SHIFT BLOCKS LISTENER ───────────────────────────────────────────────
   useEffect(() => {
-    if (!isFirebaseConfigured()) return;
+    if (!isFirebaseConfigured() || !isFirebaseAuthed) return;
 
     // Subscribe to shifts purely inside Firebase to bypass Replit
     const unsubscribe = subscribeToShiftBlocks((blocks: any[]) => {
