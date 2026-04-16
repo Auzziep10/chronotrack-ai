@@ -7,6 +7,7 @@ import {
   Target, TrendingUp, AlertCircle
 } from 'lucide-react';
 import { processExternalPlan } from '../services/geminiService';
+import { UserProfileDialog } from './UserProfileDialog';
 
 // Generate more data (60 days) to allow testing different pay periods
 const generateMockData = (users: User[]) => {
@@ -106,12 +107,14 @@ interface Props {
   activeSessions?: Record<string, UserSession>;
   onClockIn?: (user: User) => void;
   onClockOut?: (user: User) => void;
+  onUpdateUser?: (updatedUser: User) => void;
 }
 
-export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessions = {}, onClockIn, onClockOut }) => {
+export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessions = {}, onClockIn, onClockOut, onUpdateUser }) => {
   const [activeView, setActiveView] = useState<'departments' | 'users' | 'timecards' | 'planning'>('departments');
   const [selectedDept, setSelectedDept] = useState<Department | 'All'>('All');
   const [selectedUser, setSelectedUser] = useState<string | 'All'>('All');
+  const [selectedUserForProfile, setSelectedUserForProfile] = useState<User | null>(null);
   const [selectedPeriodIdx, setSelectedPeriodIdx] = useState(0);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
@@ -647,41 +650,36 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
           <div className="space-y-6">
             {/* Keeping current filter logic from previous implementation for backward compatibility */}
             {activeView === 'users' ? (
-              <div className="space-y-6">
-                <div className="flex flex-col md:flex-row gap-4 justify-between bg-white p-4 rounded-xl border border-zinc-200">
-                  <div className="relative">
-                    <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Filter by User</label>
-                    <select
-                      value={selectedUser}
-                      onChange={(e) => setSelectedUser(e.target.value)}
-                      className="w-full md:w-64 bg-zinc-50 border border-zinc-300 text-sm rounded-lg p-2.5"
-                    >
-                      <option value="All">All Users</option>
-                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
+              <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                <div className="flex flex-col md:flex-row gap-4 justify-between bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+                  <div>
+                    <h3 className="text-xl font-bold text-zinc-800">Team Members</h3>
+                    <p className="text-zinc-500 text-sm">Select a staff member to view their performance metrics and full profile.</p>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="px-4 py-2 bg-zinc-100 rounded-lg text-sm font-bold text-zinc-700">
+                      {users.length} Active Staff
+                    </div>
                   </div>
                 </div>
-                <div className="bg-white shadow-sm rounded-xl overflow-hidden border border-zinc-200">
-                  <ul className="divide-y divide-zinc-100">
-                    {filteredLogs.map(log => (
-                      <li key={log.id} className="p-5 hover:bg-zinc-50 transition-colors">
-                        <div className="flex justify-between items-start">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center font-bold text-zinc-500 text-xs">
-                              {log.userName.split(' ').map(n => n[0]).join('')}
-                            </div>
-                            <div>
-                              <div className="font-bold text-zinc-900 text-sm">{log.userName}</div>
-                              <div className="text-xs text-zinc-500">{log.department} • {log.task}</div>
-                            </div>
-                          </div>
-                          <div className="text-xs text-zinc-400">
-                            {new Date(log.timestamp).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {users.map(user => (
+                    <button
+                      key={user.id}
+                      onClick={() => setSelectedUserForProfile(user)}
+                      className="flex items-center gap-4 bg-white p-5 rounded-2xl border border-zinc-200 hover:border-zinc-400 hover:shadow-lg transition-all text-left group"
+                    >
+                      <div className="w-14 h-14 rounded-full bg-zinc-100 text-zinc-700 flex items-center justify-center text-xl font-bold group-hover:bg-zinc-800 group-hover:text-white transition-colors">
+                        {user.avatarInitials}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-zinc-900 truncate">{user.name}</div>
+                        <div className="text-xs text-zinc-500 truncate">{user.role}</div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
+                    </button>
+                  ))}
                 </div>
               </div>
             ) : (
@@ -957,6 +955,19 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         )}
 
       </div>
+
+      {selectedUserForProfile && (
+        <UserProfileDialog
+          isOpen={true}
+          user={selectedUserForProfile}
+          onClose={() => setSelectedUserForProfile(null)}
+          onSave={(u) => { 
+            if (onUpdateUser) onUpdateUser(u); 
+            setSelectedUserForProfile(null); 
+          }}
+          isViewerAdmin={true}
+        />
+      )}
     </div>
   );
 };
