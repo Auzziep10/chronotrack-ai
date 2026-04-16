@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { WorkLog, UserSession, ScheduleBlock } from '../types';
+import { WorkLog, UserSession, ScheduleBlock, AppSettings } from '../types';
 import { WorkLogForm } from './WorkLogForm';
 import { HistoryLog } from './HistoryLog';
 import { AiSummary } from './AiSummary';
 import { Timer } from './Timer';
 import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw, Play, Calendar, Users, MessageSquare } from 'lucide-react';
-import { LOG_INTERVAL_MS } from '../constants';
+
 
 import { DiscordSetupModal } from './DiscordSetupModal';
 import { TimeOffRequestModal } from './TimeOffRequestModal';
@@ -25,6 +25,7 @@ interface Props {
   onClockOut?: (user: any) => void;
   onUpdateUser?: (updatedUser: any) => void;
   onUpdateTaskStatus?: (taskId: string, status: string, taskTitle: string, user: any) => void;
+  appSettings?: AppSettings;
 }
 
 export const ActivityTracker: React.FC<Props> = ({
@@ -41,7 +42,8 @@ export const ActivityTracker: React.FC<Props> = ({
   onClockIn,
   onClockOut,
   onUpdateUser,
-  onUpdateTaskStatus
+  onUpdateTaskStatus,
+  appSettings
 }) => {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
@@ -106,22 +108,23 @@ export const ActivityTracker: React.FC<Props> = ({
     }
   }, [activeSessions, selectedUserId]);
 
-  // Check 60-minute interval for selected user
+  // Check interval for selected user
   useEffect(() => {
     if (!selectedSession) return;
+    const intervalMs = (appSettings?.checkInIntervalHours || 1) * 60 * 60 * 1000;
 
     const checkInterval = setInterval(() => {
       const now = Date.now();
       const elapsed = now - selectedSession.lastLogTime;
-      setIsLocked(elapsed >= LOG_INTERVAL_MS);
+      setIsLocked(elapsed >= intervalMs);
     }, 1000);
 
     // Initial check
     const now = Date.now();
-    setIsLocked(now - selectedSession.lastLogTime >= LOG_INTERVAL_MS);
+    setIsLocked(now - selectedSession.lastLogTime >= intervalMs);
 
     return () => clearInterval(checkInterval);
-  }, [selectedSession]);
+  }, [selectedSession, appSettings]);
 
 
   // Standard Staff Not Clocked In View

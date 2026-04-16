@@ -96,7 +96,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
                 <Calendar className="w-4 h-4 text-zinc-900" /> Pay Period Configuration
               </h4>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-xs font-semibold text-zinc-500 mb-2">Frequency</label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -132,6 +132,20 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
                     ))}
                   </select>
                   <p className="text-xs text-zinc-400 mt-1">First day of the reporting cycle</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-500 mb-2">Check-in Interval</label>
+                  <select
+                    value={settings.checkInIntervalHours || 1}
+                    onChange={(e) => onUpdateSettings({ ...settings, checkInIntervalHours: Number(e.target.value) })}
+                    className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 p-2 bg-zinc-50"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(hour => (
+                      <option key={hour} value={hour}>{hour} Hour{hour > 1 ? 's' : ''}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-zinc-400 mt-1">Prompt staff to log activity every X hours</p>
                 </div>
               </div>
             </div>

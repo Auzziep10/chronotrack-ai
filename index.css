@@ -11,15 +11,6 @@ body {
   @apply bg-zinc-50 text-zinc-900 font-sans antialiased;
 }
 
-.bg-checkerboard {
-  background-image: repeating-linear-gradient(45deg, #f4f4f5 25%, transparent 25%, transparent 75%, #f4f4f5 75%, #f4f4f5), repeating-linear-gradient(45deg, #f4f4f5 25%, #e4e4e7 25%, #e4e4e7 75%, #f4f4f5 75%, #f4f4f5);
-  background-position: 0 0, 8px 8px;
-  background-size: 16px 16px;
-}
-
-:where(.dark) .bg-checkerboard {
-  background-image: repeating-linear-gradient(45deg, #27272a 25%, transparent 25%, transparent 75%, #27272a 75%, #27272a), repeating-linear-gradient(45deg, #27272a 25%, #3f3f46 25%, #3f3f46 75%, #27272a 75%, #27272a);
-}
 
 /* Custom Scrollbars to ensure scrolling visibility on Mac */
 ::-webkit-scrollbar {

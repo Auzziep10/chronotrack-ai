@@ -882,7 +882,7 @@ const App: React.FC = () => {
       // Primary: Write to Firebase
       if (isFirebaseConfigured()) {
         import('./services/firebaseService').then(async (mod) => {
-          const IDLE_THRESHOLD_MS = 70 * 60 * 1000;
+          const IDLE_THRESHOLD_MS = ((appSettings?.checkInIntervalHours || 1) * 60 * 60 * 1000) + (10 * 60 * 1000);
           const isOverdueForPause = (now - session.lastLogTime) >= IDLE_THRESHOLD_MS;
 
           if (session.isPaused || isOverdueForPause) {
@@ -982,7 +982,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-checkerboard flex flex-col font-sans">
+    <div className="min-h-screen bg-zinc-50 flex flex-col font-sans">
       {/* Header */}
       <header className="bg-white border-b border-zinc-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -1095,6 +1095,7 @@ const App: React.FC = () => {
               onPauseSession={handlePauseSession}
               onResumeSession={handleResumeSession}
               isAdmin={isAdminOrManager}
+              appSettings={appSettings}
             />
           ) : activeTab === 'activity' ? (
             <ActivityTracker
@@ -1112,6 +1113,7 @@ const App: React.FC = () => {
               onClockOut={handleClockOut}
               onUpdateUser={handleUpdateUser}
               onUpdateTaskStatus={handleUpdateTaskStatus}
+              appSettings={appSettings}
             />
           ) : activeTab === 'planner' ? (
             // Lazy load nicely or just static

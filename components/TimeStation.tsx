@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { UserSession, User } from '../types';
+import { UserSession, User, AppSettings } from '../types';
 import { Timer } from './Timer';
 import { PinPad } from './PinPad';
 import { Play, Pause, ShieldCheck, User as UserIcon, LogOut, CheckCircle2, QrCode as QrCodeIcon, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { LOG_INTERVAL_MS } from '../constants';
+
 
 interface Props {
   activeSessions: Record<string, UserSession>;
@@ -14,9 +14,10 @@ interface Props {
   onPauseSession?: (user: User) => void;
   onResumeSession?: (user: User) => void;
   isAdmin?: boolean;
+  appSettings?: AppSettings;
 }
 
-export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession, isAdmin }) => {
+export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession, isAdmin, appSettings }) => {
   const [showPinPad, setShowPinPad] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [pinMessage, setPinMessage] = useState<string>('');
@@ -225,7 +226,8 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
               {sessionsList.map(session => {
                 const now = Date.now();
                 const elapsedSinceLog = now - session.lastLogTime;
-                const isOverdue = elapsedSinceLog > LOG_INTERVAL_MS;
+                const intervalMs = (appSettings?.checkInIntervalHours || 1) * 60 * 60 * 1000;
+                const isOverdue = elapsedSinceLog > intervalMs;
 
                 return (
                   <div key={session.userId} className={`p-4 rounded-xl border-2 transition-all hover:shadow-md

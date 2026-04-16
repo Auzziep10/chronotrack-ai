@@ -96,6 +96,7 @@ export type PayFrequency = 'Weekly' | 'Bi-Weekly' | 'Monthly';
 export interface AppSettings {
   payFrequency: PayFrequency;
   payPeriodStartDay: DayOfWeek;
+  checkInIntervalHours?: number;
 }
 
 export interface ScheduleBlock {
