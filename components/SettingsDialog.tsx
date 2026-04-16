@@ -107,7 +107,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
                         className={`relative p-2 rounded-lg border text-xs font-medium transition-all text-center
                           ${settings.payFrequency === freq
                             ? 'bg-zinc-50 border-zinc-300 text-zinc-800 shadow-sm'
-                            : 'bg-white border-zinc-200 text-zinc-600 hover:border-blue-300'}`}
+                            : 'bg-white border-zinc-200 text-zinc-600 hover:border-zinc-300'}`}
                       >
                         {freq}
                         {settings.payFrequency === freq && (
@@ -222,7 +222,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
                         <span className="font-mono bg-zinc-100 px-2 py-0.5 rounded text-xs text-zinc-500">PIN: {u.pin}</span>
                         <button
                           onClick={() => setEditingUser(u)}
-                          className="flex items-center gap-1 text-xs bg-white border border-zinc-200 hover:border-blue-300 text-zinc-600 hover:text-zinc-600 px-2 py-1 rounded transition-all shadow-sm"
+                          className="flex items-center gap-1 text-xs bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-600 hover:text-zinc-600 px-2 py-1 rounded transition-all shadow-sm"
                         >
                           <UserCog className="w-3 h-3" />
                           Profile
@@ -269,7 +269,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
 
             <div className="space-y-4">
               <h4 className="text-sm font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
-                <Info className="w-4 h-4 text-purple-600" /> System Info
+                <Info className="w-4 h-4 text-zinc-600" /> System Info
               </h4>
               <div className="grid grid-cols-2 gap-4 text-sm text-zinc-600">
                 <div className="bg-zinc-50 p-3 rounded-lg">

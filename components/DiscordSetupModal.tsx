@@ -79,14 +79,14 @@ export const DiscordSetupModal: React.FC<Props> = ({ user, isOpen, onClose, onSa
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[95vh]">
-                <div className="bg-gradient-to-r from-indigo-600 to-purple-700 p-6 text-white flex justify-between items-start">
+                <div className="bg-gradient-to-r from-zinc-600 to-zinc-700 p-6 text-white flex justify-between items-start">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-xl font-bold border-2 border-white/30">
                             <MessageSquare className="w-6 h-6" />
                         </div>
                         <div>
                             <h3 className="text-xl font-bold">Discord Alerts</h3>
-                            <p className="text-indigo-100 text-xs">Receive shift warnings on your phone</p>
+                            <p className="text-zinc-100 text-xs">Receive shift warnings on your phone</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="text-white/70 hover:text-white transition-colors">
@@ -104,7 +104,7 @@ export const DiscordSetupModal: React.FC<Props> = ({ user, isOpen, onClose, onSa
                                 value={formData.discordId || ''}
                                 onChange={e => setFormData({ ...formData, discordId: e.target.value })}
                                 placeholder="e.g. 123456789012345678"
-                                className="w-full pl-10 text-base border-zinc-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 py-2.5"
+                                className="w-full pl-10 text-base border-zinc-300 rounded-lg focus:ring-zinc-500 focus:border-zinc-500 py-2.5"
                             />
                         </div>
 
@@ -131,15 +131,15 @@ export const DiscordSetupModal: React.FC<Props> = ({ user, isOpen, onClose, onSa
                             {AVAILABLE_INTERVALS.map(interval => {
                                 const isChecked = (formData.discordAlertPrefs || []).includes(interval.value);
                                 return (
-                                    <label key={interval.value} className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-colors ${isChecked ? 'border-indigo-500 bg-zinc-50' : 'border-zinc-200 bg-white hover:bg-zinc-50'}`}>
+                                    <label key={interval.value} className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-colors ${isChecked ? 'border-zinc-500 bg-zinc-50' : 'border-zinc-200 bg-white hover:bg-zinc-50'}`}>
                                         <div className="flex items-center gap-3">
                                             <input
                                                 type="checkbox"
                                                 checked={isChecked}
                                                 onChange={() => toggleInterval(interval.value)}
-                                                className="w-4 h-4 text-zinc-900 rounded border-zinc-300 focus:ring-indigo-500 disabled:opacity-50"
+                                                className="w-4 h-4 text-zinc-900 rounded border-zinc-300 focus:ring-zinc-500 disabled:opacity-50"
                                             />
-                                            <span className={`text-sm font-medium ${isChecked ? 'text-indigo-900' : 'text-zinc-700'}`}>After {interval.label} of idle time</span>
+                                            <span className={`text-sm font-medium ${isChecked ? 'text-zinc-900' : 'text-zinc-700'}`}>After {interval.label} of idle time</span>
                                         </div>
                                     </label>
                                 );

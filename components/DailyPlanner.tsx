@@ -639,7 +639,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                         </button>
                         <button
                             onClick={() => setActiveView('shifts')}
-                            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${activeView === 'shifts' ? 'bg-white shadow text-indigo-700' : 'text-zinc-500 hover:text-zinc-700'}`}
+                            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${activeView === 'shifts' ? 'bg-white shadow text-zinc-700' : 'text-zinc-500 hover:text-zinc-700'}`}
                         >
                             <Clock className="w-4 h-4 inline-block mr-1" />
                             Shift Schedules
@@ -653,7 +653,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             onClick={() => setIsPlanningMode(!isPlanningMode)}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border ${isPlanningMode
                                 ? 'bg-orange-600 border-orange-700 text-white animate-pulse'
-                                : 'bg-zinc-900 border-blue-700 text-white hover:bg-zinc-800'
+                                : 'bg-zinc-900 border-zinc-700 text-white hover:bg-zinc-800'
                                 }`}
                         >
                             <Wand2 className="w-4 h-4" />
@@ -680,7 +680,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                     <button
                                         key={view}
                                         onClick={() => setShiftTimeframe(view as any)}
-                                        className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-md transition-shadow ${shiftTimeframe === view ? 'bg-white shadow-sm text-indigo-700' : 'text-zinc-500 hover:text-zinc-700'}`}
+                                        className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-md transition-shadow ${shiftTimeframe === view ? 'bg-white shadow-sm text-zinc-700' : 'text-zinc-500 hover:text-zinc-700'}`}
                                     >
                                         {view}
                                     </button>
@@ -698,7 +698,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             <div className="relative">
                                 <button
                                     onClick={() => setIsDuplicating(!isDuplicating)}
-                                    className={`text-xs px-2 py-2 rounded-lg border font-medium transition-colors flex items-center gap-1 ${isDuplicating ? 'bg-zinc-50 border-zinc-200 text-indigo-700' : 'bg-white border-zinc-300 text-zinc-600 hover:bg-zinc-50'}`}
+                                    className={`text-xs px-2 py-2 rounded-lg border font-medium transition-colors flex items-center gap-1 ${isDuplicating ? 'bg-zinc-50 border-zinc-200 text-zinc-700' : 'bg-white border-zinc-300 text-zinc-600 hover:bg-zinc-50'}`}
                                     title="Duplicate Schedule"
                                 >
                                     <Copy className="w-4 h-4" />
@@ -712,14 +712,14 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             type="date"
                                             value={duplicateTargetDate}
                                             onChange={(e) => setDuplicateTargetDate(e.target.value)}
-                                            className="w-full text-sm p-2 border border-zinc-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            className="w-full text-sm p-2 border border-zinc-300 rounded focus:ring-2 focus:ring-zinc-500 outline-none"
                                         />
                                         <label className="flex items-center gap-2 text-xs text-zinc-700 cursor-pointer">
                                             <input
                                                 type="checkbox"
                                                 checked={duplicateWholeWeek}
                                                 onChange={(e) => setDuplicateWholeWeek(e.target.checked)}
-                                                className="rounded border-zinc-300 text-zinc-900 focus:ring-indigo-500"
+                                                className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
                                             />
                                             Apply to entire work week (Mon-Fri)
                                         </label>
@@ -833,7 +833,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             {activeView === 'shifts' && isAdminOrManager && (
                 <div className="bg-zinc-50 border-b border-zinc-100 p-4 shrink-0 relative z-10">
                     <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-4">
-                        <div className="flex items-center gap-2 text-indigo-900 font-bold shrink-0">
+                        <div className="flex items-center gap-2 text-zinc-900 font-bold shrink-0">
                             <Clock className="w-5 h-5 text-zinc-900" />
                             Add Expected Shift
                         </div>
@@ -842,7 +842,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             <select
                                 value={shiftUser}
                                 onChange={(e) => setShiftUser(e.target.value)}
-                                className="px-3 py-2 text-sm rounded bg-white border border-zinc-200 focus:ring-2 focus:ring-indigo-500 outline-none min-w-[200px] flex-1 md:flex-none"
+                                className="px-3 py-2 text-sm rounded bg-white border border-zinc-200 focus:ring-2 focus:ring-zinc-500 outline-none min-w-[200px] flex-1 md:flex-none"
                             >
                                 <option value="" disabled>Select Staff Member...</option>
                                 {teamMembers.map(u => (
@@ -857,7 +857,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                     onChange={(e) => setShiftStart(e.target.value)}
                                     className="text-sm outline-none px-1"
                                 />
-                                <span className="text-indigo-300 font-bold">to</span>
+                                <span className="text-zinc-300 font-bold">to</span>
                                 <input
                                     type="time"
                                     value={shiftEnd}
@@ -875,7 +875,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             </button>
                         </div>
                     </div>
-                    <p className="text-xs text-indigo-700 mt-2 text-center md:text-left max-w-4xl mx-auto">
+                    <p className="text-xs text-zinc-700 mt-2 text-center md:text-left max-w-4xl mx-auto">
                         Setting shift hours ensures users are automatically clocked out if they forget, enforcing a correct duration (includes a 10 min grace period after the shift ends).
                     </p>
                 </div>
@@ -926,7 +926,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             className="absolute top-0 bottom-0 border-l border-zinc-100 flex flex-col justify-end pb-2"
                                             style={{ left: `${left}%` }}
                                         >
-                                            <span className="text-[10px] text-zinc-400 pl-1 transform -translate-x-1/2">
+                                            <span className="text-[10px] text-zinc-400 pl-1 transform -tranzinc-x-1/2">
                                                 {displayHour}{ampm}
                                             </span>
                                         </div>
@@ -962,7 +962,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                 // Actually the sidebar and grid content are in the rows below.
                                 // Let's restructure to have a single grid container background.
                                 >
-                                    <div className="bg-red-500 text-white text-[10px] font-bold px-1 rounded absolute -top-2 left-1/2 transform -translate-x-1/2">
+                                    <div className="bg-red-500 text-white text-[10px] font-bold px-1 rounded absolute -top-2 left-1/2 transform -tranzinc-x-1/2">
                                         {new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                                     </div>
                                 </div>
@@ -1067,7 +1067,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         type="time"
                                         value={editStart}
                                         onChange={(e) => setEditStart(e.target.value)}
-                                        className="w-full text-sm p-2 border border-zinc-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        className="w-full text-sm p-2 border border-zinc-300 rounded focus:ring-2 focus:ring-zinc-500 outline-none"
                                     />
                                 </div>
                                 <div>
@@ -1076,7 +1076,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         type="time"
                                         value={editEnd}
                                         onChange={(e) => setEditEnd(e.target.value)}
-                                        className="w-full text-sm p-2 border border-zinc-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        className="w-full text-sm p-2 border border-zinc-300 rounded focus:ring-2 focus:ring-zinc-500 outline-none"
                                     />
                                 </div>
                             </div>
@@ -1087,7 +1087,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                     value={editNotes}
                                     onChange={(e) => setEditNotes(e.target.value)}
                                     placeholder="Add any notes relevant to this schedule schedule..."
-                                    className="w-full h-24 p-2 border border-zinc-300 rounded resize-none text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    className="w-full h-24 p-2 border border-zinc-300 rounded resize-none text-sm focus:ring-2 focus:ring-zinc-500 outline-none"
                                 ></textarea>
                             </div>
                         </div>

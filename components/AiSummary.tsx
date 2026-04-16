@@ -26,7 +26,7 @@ export const AiSummary: React.FC<Props> = ({ logs }) => {
       <button
         onClick={handleGenerate}
         disabled={logs.length === 0}
-        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-md hover:from-purple-700 hover:to-indigo-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-zinc-600 to-zinc-600 text-white rounded-md hover:from-zinc-700 hover:to-zinc-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Sparkles className="w-4 h-4" />
         Generate AI Report
@@ -37,9 +37,9 @@ export const AiSummary: React.FC<Props> = ({ logs }) => {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]">
-        <div className="p-4 border-b border-zinc-100 flex justify-between items-center bg-gradient-to-r from-purple-50 to-indigo-50">
+        <div className="p-4 border-b border-zinc-100 flex justify-between items-center bg-gradient-to-r from-zinc-50 to-zinc-50">
           <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-purple-600" />
+            <Sparkles className="w-5 h-5 text-zinc-600" />
             Daily AI Summary
           </h3>
           <button onClick={() => setIsOpen(false)} className="text-zinc-400 hover:text-zinc-600">
@@ -50,7 +50,7 @@ export const AiSummary: React.FC<Props> = ({ logs }) => {
         <div className="p-6 overflow-y-auto">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
-              <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+              <div className="w-8 h-8 border-4 border-zinc-200 border-t-zinc-600 rounded-full animate-spin"></div>
               <p className="text-sm text-zinc-500 animate-pulse">Analyzing work patterns...</p>
             </div>
           ) : (

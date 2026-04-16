@@ -84,9 +84,9 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
               {actionMenuUser.avatarInitials}
             </div>
             <h2 className="text-3xl font-bold mb-2">Hello, {actionMenuUser.name}</h2>
-            <p className="text-slate-300">What would you like to do?</p>
+            <p className="text-zinc-300">What would you like to do?</p>
           </div>
-          <div className="p-8 space-y-4 bg-slate-50">
+          <div className="p-8 space-y-4 bg-zinc-50">
             {isPaused ? (
               <button
                 onClick={() => {
@@ -130,7 +130,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
 
             <button
               onClick={() => setActionMenuUser(null)}
-              className="w-full mt-4 bg-transparent border-2 border-slate-300 text-slate-500 hover:bg-slate-200 p-4 rounded-2xl font-bold transition-colors"
+              className="w-full mt-4 bg-transparent border-2 border-zinc-300 text-zinc-500 hover:bg-zinc-200 p-4 rounded-2xl font-bold transition-colors"
             >
               Cancel
             </button>
@@ -149,7 +149,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-zinc-100 h-full flex flex-col">
           <div className="bg-black p-8 text-white text-center">
             <h2 className="text-3xl font-bold mb-2">Master Time Station</h2>
-            <p className="text-slate-300">Identify yourself to start or end your shift.</p>
+            <p className="text-zinc-300">Identify yourself to start or end your shift.</p>
           </div>
 
           <div className="p-10 flex-1 flex flex-col items-center justify-center space-y-8">
@@ -159,7 +159,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
 
             <button
               onClick={handlePinAction}
-              className="w-full max-w-xs flex flex-col items-center justify-center gap-3 px-8 py-6 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl shadow-lg shadow-blue-200 font-bold text-xl transition-all hover:scale-105 active:scale-95"
+              className="w-full max-w-xs flex flex-col items-center justify-center gap-3 px-8 py-6 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl shadow-lg shadow-zinc-200 font-bold text-xl transition-all hover:scale-105 active:scale-95"
             >
               <span>Enter PIN</span>
               <span className="text-sm font-normal opacity-80">Clock In / Clock Out</span>
@@ -167,7 +167,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
 
             <button
               onClick={() => setShowQR(true)}
-              className="w-full max-w-xs flex items-center justify-center gap-3 px-8 py-4 bg-white border-2 border-zinc-200 hover:border-slate-800 hover:text-slate-800 hover:bg-slate-50 text-zinc-600 rounded-2xl shadow-sm font-bold text-md transition-all active:scale-95"
+              className="w-full max-w-xs flex items-center justify-center gap-3 px-8 py-4 bg-white border-2 border-zinc-200 hover:border-zinc-800 hover:text-zinc-800 hover:bg-zinc-50 text-zinc-600 rounded-2xl shadow-sm font-bold text-md transition-all active:scale-95"
             >
               <QrCodeIcon className="w-5 h-5" />
               Scan to Login
@@ -293,7 +293,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="p-6 flex justify-between items-center border-b border-zinc-100 bg-zinc-50">
                 <div className="flex items-center gap-3">
-                  <div className="bg-slate-800 p-2 rounded-lg text-white">
+                  <div className="bg-zinc-800 p-2 rounded-lg text-white">
                     <QrCodeIcon className="w-5 h-5" />
                   </div>
                   <div>
@@ -316,8 +316,8 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                     fgColor="#0f172a"
                   />
                 </div>
-                <div className="flex items-center gap-2 bg-slate-50 text-slate-700 px-4 py-3 rounded-xl border border-slate-200 max-w-sm">
-                  <QrCodeIcon className="w-6 h-6 shrink-0 text-slate-500" />
+                <div className="flex items-center gap-2 bg-zinc-50 text-zinc-700 px-4 py-3 rounded-xl border border-zinc-200 max-w-sm">
+                  <QrCodeIcon className="w-6 h-6 shrink-0 text-zinc-500" />
                   <p className="text-sm font-medium leading-snug">
                     Point your smartphone camera at this code to quickly log into your secure dashboard.
                   </p>

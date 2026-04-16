@@ -113,7 +113,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[95vh]">
-        <div className="bg-gradient-to-r from-zinc-900 to-indigo-700 p-6 text-white flex justify-between items-start">
+        <div className="bg-gradient-to-r from-zinc-900 to-zinc-700 p-6 text-white flex justify-between items-start">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-2xl font-bold border-2 border-white/30">
               {formData.avatarInitials}
@@ -297,14 +297,14 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
               {/* Correction Review Section */}
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-2 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-purple-500" /> Correction Reviews
+                  <MessageSquare className="w-4 h-4 text-zinc-500" /> Correction Reviews
                 </label>
                 <textarea
                   value={formData.correctionNotes || ''}
                   onChange={e => setFormData({ ...formData, correctionNotes: e.target.value })}
                   placeholder="Log any disciplinary actions, performance corrections, or time card adjustments here..."
                   rows={4}
-                  className="w-full text-sm border-zinc-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 p-3 bg-yellow-50/50"
+                  className="w-full text-sm border-zinc-300 rounded-md shadow-sm focus:ring-zinc-500 focus:border-zinc-500 p-3 bg-yellow-50/50"
                 />
               </div>
             </section>
@@ -428,7 +428,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                     value={formData.discordId || ''}
                     onChange={e => setFormData({ ...formData, discordId: e.target.value })}
                     placeholder="e.g. 123456789012345678"
-                    className="w-full pl-9 text-sm border-zinc-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full pl-9 text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-500"
                   />
                 </div>
                 <div className="mt-2 text-xs text-zinc-500 bg-zinc-50 rounded-lg p-3 border border-zinc-100">

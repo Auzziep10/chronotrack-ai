@@ -471,7 +471,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   return (
     <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden min-h-[700px] flex flex-col animate-fade-in">
       {/* Enhanced Manager Header */}
-      <div className="bg-slate-900 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="bg-zinc-900 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-2">
           <div className="bg-zinc-900 p-1.5 rounded-lg">
             <Briefcase className="w-5 h-5 text-white" />
@@ -479,7 +479,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
           <h2 className="text-xl font-bold tracking-tight">Manager Console</h2>
         </div>
 
-        <div className="flex bg-slate-800 rounded-xl p-1 overflow-x-auto max-w-full">
+        <div className="flex bg-zinc-800 rounded-xl p-1 overflow-x-auto max-w-full">
           {[
             { id: 'departments', icon: BarChart3, label: 'Depts' },
             { id: 'users', icon: Users, label: 'Users' },
@@ -489,7 +489,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             <button
               key={tab.id}
               onClick={() => setActiveView(tab.id as any)}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${activeView === tab.id ? 'bg-zinc-900 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${activeView === tab.id ? 'bg-zinc-900 text-white shadow-lg' : 'text-zinc-400 hover:text-white'}`}
             >
               <tab.icon className="w-4 h-4" />
               {tab.label}
@@ -522,8 +522,8 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 <div key={dept} className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md transition-all group">
                   <div className="flex justify-between items-start mb-4">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase
-                      ${dept === Department.Production ? 'bg-purple-100 text-purple-700' :
-                        dept === Department.Design ? 'bg-indigo-100 text-indigo-700' :
+                      ${dept === Department.Production ? 'bg-zinc-100 text-zinc-700' :
+                        dept === Department.Design ? 'bg-zinc-100 text-zinc-700' :
                           'bg-zinc-100 text-zinc-800'}`}>
                       {dept}
                     </span>
@@ -535,7 +535,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                   </div>
                   <div className="mt-4 h-2.5 w-full bg-zinc-100 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-1000 ${dept === Department.Production ? 'bg-purple-500' : 'bg-zinc-500'}`}
+                      className={`h-full rounded-full transition-all duration-1000 ${dept === Department.Production ? 'bg-zinc-500' : 'bg-zinc-500'}`}
                       style={{ width: `${Math.min(100, (data.hours / 20) * 100)}%` }}
                     ></div>
                   </div>
@@ -555,7 +555,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-xl font-bold text-zinc-800 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  <Sparkles className="w-5 h-5 text-zinc-600" />
                   Daily Planning & AI Sync
                 </h3>
                 <p className="text-zinc-500 text-sm">Bridge the gap between your external plans and real-time logs.</p>
@@ -577,12 +577,12 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                     value={externalPlanRaw}
                     onChange={(e) => setExternalPlanRaw(e.target.value)}
                     placeholder="Paste planner data here... e.g. 'Monday: Alex production focus 500 units, Sarah design 2 tech packs...'"
-                    className="w-full h-40 text-sm border-zinc-200 rounded-xl focus:ring-purple-500 focus:border-purple-500 p-4 bg-slate-50 font-mono"
+                    className="w-full h-40 text-sm border-zinc-200 rounded-xl focus:ring-zinc-500 focus:border-zinc-500 p-4 bg-zinc-50 font-mono"
                   />
                   <button
                     onClick={handleSyncPlan}
                     disabled={isSyncing || !externalPlanRaw.trim()}
-                    className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-100 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-zinc-600 to-zinc-600 text-white font-bold rounded-xl shadow-lg shadow-zinc-100 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
                   >
                     <Sparkles className="w-4 h-4" />
                     {isSyncing ? 'Processing with AI...' : 'Parse Plan with Gemini'}
@@ -590,12 +590,12 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 </div>
 
                 <div className="bg-zinc-50 border border-zinc-100 p-6 rounded-2xl flex items-start gap-4">
-                  <div className="p-2 bg-indigo-200 rounded-lg">
-                    <AlertCircle className="w-5 h-5 text-indigo-700" />
+                  <div className="p-2 bg-zinc-200 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-zinc-700" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-indigo-900">Pro Tip</h4>
-                    <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
+                    <h4 className="text-sm font-bold text-zinc-900">Pro Tip</h4>
+                    <p className="text-xs text-zinc-700 mt-1 leading-relaxed">
                       You can also paste JSON output from your Replit app!
                       Gemini handles messy text, spreadsheets, or structured objects equally well.
                     </p>
@@ -667,7 +667,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                       <li key={log.id} className="p-5 hover:bg-zinc-50 transition-colors">
                         <div className="flex justify-between items-start">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">
+                            <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center font-bold text-zinc-500 text-xs">
                               {log.userName.split(' ').map(n => n[0]).join('')}
                             </div>
                             <div>
@@ -726,7 +726,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                     </div>
                     <button
                       onClick={handleExportCSV}
-                      className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-100 hover:bg-slate-800 transition-all"
+                      className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold shadow-lg shadow-zinc-100 hover:bg-zinc-800 transition-all"
                     >
                       <Download className="w-4 h-4" /> Export Cycle
                     </button>

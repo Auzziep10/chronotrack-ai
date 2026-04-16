@@ -29,8 +29,8 @@ export const HistoryLog: React.FC<Props> = ({ logs, onDelete }) => {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                    ${log.department === Department.Production ? 'bg-purple-100 text-purple-800' : 
-                      log.department === Department.Design ? 'bg-indigo-100 text-indigo-800' : 
+                    ${log.department === Department.Production ? 'bg-zinc-100 text-zinc-800' : 
+                      log.department === Department.Design ? 'bg-zinc-100 text-zinc-800' : 
                       'bg-zinc-100 text-zinc-800'}`}>
                     {log.department}
                   </span>

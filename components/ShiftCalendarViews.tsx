@@ -88,7 +88,7 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
             <div className="flex-1 flex flex-col bg-white min-h-0 overflow-hidden relative">
                 {loading && (
                     <div className="absolute inset-0 bg-white/50 z-50 flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-600"></div>
                     </div>
                 )}
                 {/* Header Row */}
@@ -199,7 +199,7 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
             <div className="flex-1 flex flex-col bg-white min-h-0 relative">
                 {loading && (
                     <div className="absolute inset-0 bg-white/50 z-50 flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-600"></div>
                     </div>
                 )}
                 <div className="flex grid-cols-7 border-b border-zinc-200 bg-zinc-50 shrink-0">
@@ -222,8 +222,8 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                                 dayBlocks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
                                 return (
-                                    <div key={dIndex} className={`flex-1 border-r border-zinc-200 last:border-r-0 p-1 flex flex-col ${!isCurrentMonth ? 'bg-zinc-50' : 'bg-white'} ${isToday(d) ? 'ring-2 ring-indigo-500 ring-inset relative z-10' : ''}`}>
-                                        <div className={`text-xs p-1 ${isToday(d) ? 'text-indigo-700 font-bold' : (!isCurrentMonth ? 'text-zinc-400' : 'text-zinc-700 font-medium')}`}>
+                                    <div key={dIndex} className={`flex-1 border-r border-zinc-200 last:border-r-0 p-1 flex flex-col ${!isCurrentMonth ? 'bg-zinc-50' : 'bg-white'} ${isToday(d) ? 'ring-2 ring-zinc-500 ring-inset relative z-10' : ''}`}>
+                                        <div className={`text-xs p-1 ${isToday(d) ? 'text-zinc-700 font-bold' : (!isCurrentMonth ? 'text-zinc-400' : 'text-zinc-700 font-medium')}`}>
                                             {d.getDate() === 1 ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : d.getDate()}
                                         </div>
                                         <div className="flex-1 overflow-y-auto space-y-1 mt-1 pr-1 custom-scrollbar">

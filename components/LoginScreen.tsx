@@ -46,7 +46,7 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
     return (
         <div className="min-h-screen bg-zinc-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
             <div className="sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="mx-auto h-16 w-16 bg-gradient-to-br from-zinc-900 to-indigo-700 rounded-xl shadow-lg flex items-center justify-center">
+                <div className="mx-auto h-16 w-16 bg-gradient-to-br from-zinc-900 to-zinc-700 rounded-xl shadow-lg flex items-center justify-center">
                     <div className="w-8 h-8 border-2 border-white rounded-full"></div>
                 </div>
                 <h2 className="mt-6 text-center text-3xl font-extrabold text-zinc-900">
