@@ -64,9 +64,9 @@ export const WorkLogForm: React.FC<Props> = ({ onSubmit, isRequired, title }) =>
   const currentTasks = department ? DEPARTMENT_TASKS[department] : [];
 
   return (
-    <form onSubmit={handleSubmit} className={`bg-white p-6 rounded-lg shadow-md ${isRequired ? 'border-t-4 border-red-500' : 'border-t-4 border-blue-500'}`}>
-      <h3 className={`text-xl font-bold mb-6 flex items-center gap-2 ${isRequired ? 'text-red-700' : 'text-gray-800'}`}>
-        {isRequired ? <AlertCircle className="w-6 h-6" /> : <ClipboardCheck className="w-6 h-6 text-blue-600" />}
+    <form onSubmit={handleSubmit} className={`bg-white p-6 rounded-lg shadow-md ${isRequired ? 'border-t-4 border-red-500' : 'border-t-4 border-zinc-300'}`}>
+      <h3 className={`text-xl font-bold mb-6 flex items-center gap-2 ${isRequired ? 'text-red-700' : 'text-zinc-800'}`}>
+        {isRequired ? <AlertCircle className="w-6 h-6" /> : <ClipboardCheck className="w-6 h-6 text-zinc-900" />}
         {title || (isRequired ? 'Hourly Activity Summary Required' : 'Log Activity')}
       </h3>
 
@@ -76,25 +76,25 @@ export const WorkLogForm: React.FC<Props> = ({ onSubmit, isRequired, title }) =>
         <div className="animate-fade-in space-y-4">
           {department === Department.Production && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">Project Name</label>
               <input
                 type="text"
                 value={productionData.projectName}
                 onChange={(e) => setProductionData({ ...productionData, projectName: e.target.value })}
-                className="w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-zinc-300 rounded-md shadow-sm p-2 focus:ring-zinc-500 focus:border-zinc-300"
                 placeholder="Enter Project Name"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
               {department === Department.Production ? 'Activity Performed' : 'Description of Work'}
             </label>
             <select
               value={task}
               onChange={(e) => setTask(e.target.value)}
-              className="w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-zinc-300 rounded-md shadow-sm p-2 focus:ring-zinc-500 focus:border-zinc-300"
             >
               <option value="" disabled>Select Activity</option>
               {currentTasks.map(t => (
@@ -105,24 +105,24 @@ export const WorkLogForm: React.FC<Props> = ({ onSubmit, isRequired, title }) =>
 
           {department === Department.Production && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity Completed</label>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">Quantity Completed</label>
               <input
                 type="number"
                 min="1"
                 value={productionData.quantity || ''}
                 onChange={(e) => setProductionData({ ...productionData, quantity: parseInt(e.target.value) || 0 })}
-                className="w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-zinc-300 rounded-md shadow-sm p-2 focus:ring-zinc-500 focus:border-zinc-300"
                 placeholder="Qty"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes (Optional)</label>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">Additional Notes (Optional)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-zinc-300 rounded-md shadow-sm p-2 focus:ring-zinc-500 focus:border-zinc-300"
               rows={2}
             />
           </div>
@@ -140,7 +140,7 @@ export const WorkLogForm: React.FC<Props> = ({ onSubmit, isRequired, title }) =>
       <button
         type="submit"
         className={`w-full mt-6 flex items-center justify-center gap-2 py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white transition-all
-        ${isRequired ? 'bg-red-600 hover:bg-red-700 ring-2 ring-red-500 ring-offset-2' : 'bg-blue-600 hover:bg-blue-700'} focus:outline-none`}
+        ${isRequired ? 'bg-red-600 hover:bg-red-700 ring-2 ring-red-500 ring-offset-2' : 'bg-zinc-900 hover:bg-zinc-800'} focus:outline-none`}
       >
         <Save className="w-4 h-4" />
         {isRequired ? 'Submit Required Summary' : 'Submit Log'}

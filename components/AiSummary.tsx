@@ -37,12 +37,12 @@ export const AiSummary: React.FC<Props> = ({ logs }) => {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-purple-50 to-indigo-50">
-          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+        <div className="p-4 border-b border-zinc-100 flex justify-between items-center bg-gradient-to-r from-purple-50 to-indigo-50">
+          <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-purple-600" />
             Daily AI Summary
           </h3>
-          <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600">
+          <button onClick={() => setIsOpen(false)} className="text-zinc-400 hover:text-zinc-600">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -51,21 +51,21 @@ export const AiSummary: React.FC<Props> = ({ logs }) => {
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-              <p className="text-sm text-gray-500 animate-pulse">Analyzing work patterns...</p>
+              <p className="text-sm text-zinc-500 animate-pulse">Analyzing work patterns...</p>
             </div>
           ) : (
             <div className="prose prose-purple max-w-none">
-              <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+              <div className="whitespace-pre-wrap text-zinc-700 leading-relaxed">
                 {summary}
               </div>
             </div>
           )}
         </div>
         
-        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+        <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex justify-end">
           <button 
             onClick={() => setIsOpen(false)}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="px-4 py-2 bg-white border border-zinc-300 rounded-md text-sm font-medium text-zinc-700 hover:bg-zinc-50"
           >
             Close
           </button>

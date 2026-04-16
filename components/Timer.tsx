@@ -41,8 +41,8 @@ export const Timer: React.FC<Props> = ({ startTime, isActive, totalIdleTimeMs = 
   };
 
   return (
-    <div className="inline-flex items-center gap-2 font-mono font-bold text-gray-800">
-      <Clock className={`w-4 h-4 ${isActive ? 'text-blue-600 animate-pulse' : 'text-gray-400'}`} />
+    <div className="inline-flex items-center gap-2 font-mono font-bold text-zinc-800">
+      <Clock className={`w-4 h-4 ${isActive ? 'text-zinc-900 animate-pulse' : 'text-zinc-400'}`} />
       <span>{formatTime(elapsed)}</span>
     </div>
   );

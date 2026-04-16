@@ -982,16 +982,16 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+    <div className="min-h-screen bg-checkerboard flex flex-col font-sans">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+      <header className="bg-white border-b border-zinc-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-2 rounded-lg shadow-md">
+            <div className="bg-gradient-to-br from-zinc-900 to-indigo-700 p-2 rounded-lg shadow-md">
               <div className="w-4 h-4 border-2 border-white rounded-full"></div>
             </div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-gray-900 tracking-tight">ChronoTrack AI</h1>
+              <h1 className="text-xl font-bold text-zinc-900 tracking-tight">ChronoTrack AI</h1>
               {!isFirebaseConfigured() && isAdmin && (
                 <span className="hidden sm:inline-block px-2 py-0.5 bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold rounded shadow-sm">
                   Firebase Keys Missing!
@@ -1001,16 +1001,16 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center gap-4">
             <div className="flex flex-col items-end text-right mr-2">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Active Staff</span>
-              <span className="text-sm font-semibold text-gray-800">
+              <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Active Staff</span>
+              <span className="text-sm font-semibold text-zinc-800">
                 {Object.keys(activeSessions).length} Checked In
               </span>
             </div>
-            <div className="h-8 w-px bg-gray-200 mx-2"></div>
+            <div className="h-8 w-px bg-zinc-200 mx-2"></div>
             {isAdmin && !isTerminal && (
               <button
                 onClick={() => setShowSettings(true)}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors"
                 title="Settings"
               >
                 <Settings className="w-5 h-5" />
@@ -1018,7 +1018,7 @@ const App: React.FC = () => {
             )}
             <button
               onClick={handleLogout}
-              className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+              className="p-2 text-zinc-500 hover:text-zinc-900 hover:bg-red-50 rounded-lg transition-colors"
               title="Sign Out"
             >
               <LogOut className="w-5 h-5" />
@@ -1028,15 +1028,15 @@ const App: React.FC = () => {
       </header>
 
       {/* Tab Navigation */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-white border-b border-zinc-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
             {(isAdminOrManager || isTerminal) && (
               <button
                 onClick={() => setActiveTab('station')}
                 className={`${activeTab === 'station'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-zinc-300 text-zinc-900'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300'
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
               >
                 <Radio className={`w-4 h-4 ${activeTab === 'station' ? 'animate-pulse' : ''}`} />
@@ -1048,8 +1048,8 @@ const App: React.FC = () => {
               <button
                 onClick={() => setActiveTab('activity')}
                 className={`${activeTab === 'activity'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-zinc-300 text-zinc-900'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300'
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
               >
                 <ClipboardList className="w-4 h-4" />
@@ -1060,8 +1060,8 @@ const App: React.FC = () => {
             <button
               onClick={() => setActiveTab('planner')}
               className={`${activeTab === 'planner'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-zinc-300 text-zinc-900'
+                : 'border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300'
                 } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
             >
               <Calendar className="w-4 h-4" />
@@ -1072,8 +1072,8 @@ const App: React.FC = () => {
               <button
                 onClick={() => setActiveTab('manager')}
                 className={`${activeTab === 'manager'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-zinc-300 text-zinc-900'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300'
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
               >
                 <BarChart4 className="w-4 h-4" />

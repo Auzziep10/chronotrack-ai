@@ -113,14 +113,14 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[95vh]">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white flex justify-between items-start">
+        <div className="bg-gradient-to-r from-zinc-900 to-indigo-700 p-6 text-white flex justify-between items-start">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-2xl font-bold border-2 border-white/30">
               {formData.avatarInitials}
             </div>
             <div>
               <h3 className="text-xl font-bold">{formData.name}</h3>
-              <p className="text-blue-100 text-sm">{formData.role}</p>
+              <p className="text-zinc-100 text-sm">{formData.role}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-white/70 hover:text-white transition-colors">
@@ -133,18 +133,18 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
           {/* Work Information - Only visible to admins */}
           {isViewerAdmin && (
             <section className="space-y-4">
-              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
-                <Briefcase className="w-4 h-4 text-blue-500" /> Work Information
+              <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
+                <Briefcase className="w-4 h-4 text-zinc-500" /> Work Information
               </h4>
 
               <div className="grid grid-cols-2 gap-4">
                 {/* Row 1: Primary Dept & Primary Role */}
                 <div className="col-span-1">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Primary Department</label>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Primary Department</label>
                   <select
                     value={formData.primaryDepartment || ''}
                     onChange={e => setFormData({ ...formData, primaryDepartment: e.target.value as Department })}
-                    className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                    className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-zinc-50"
                   >
                     <option value="" disabled>Select Department</option>
                     {Object.values(Department).map(dept => (
@@ -153,7 +153,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                   </select>
                 </div>
                 <div className="col-span-1">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Focus Area (System Role)</label>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Focus Area (System Role)</label>
                   <input
                     type="text"
                     value={formData.role}
@@ -187,18 +187,18 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
                       setFormData({ ...formData, role: val, permissions: perms });
                     }}
-                    className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                    className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-zinc-50"
                     placeholder="e.g. Production Lead, manager, admin"
                   />
                 </div>
 
                 {/* Row 2: Secondary Dept & Supporting Role */}
                 <div className="col-span-1">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Secondary Department</label>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Secondary Department</label>
                   <select
                     value={formData.secondaryDepartment || ''}
                     onChange={e => setFormData({ ...formData, secondaryDepartment: e.target.value as Department })}
-                    className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-white"
                   >
                     <option value="">None</option>
                     {Object.values(Department).map(dept => (
@@ -207,29 +207,29 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                   </select>
                 </div>
                 <div className="col-span-1">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Focus Area</label>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Focus Area</label>
                   <input
                     type="text"
                     value={formData.supportingRole || ''}
                     onChange={e => setFormData({ ...formData, supportingRole: e.target.value })}
-                    className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-white"
                     placeholder="e.g. Backup Driver"
                   />
                 </div>
 
                 {/* Row 3: PIN & Late Days */}
                 <div className="col-span-1">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Access PIN</label>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Access PIN</label>
                   <input
                     type="text"
                     maxLength={4}
                     value={formData.pin}
                     onChange={e => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '') })}
-                    className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono tracking-widest bg-gray-50"
+                    className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 font-mono tracking-widest bg-zinc-50"
                   />
                 </div>
                 <div className="col-span-1">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Late Days to Date</label>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Late Days to Date</label>
                   <div className="relative">
                     <AlertTriangle className="absolute left-3 top-2.5 w-4 h-4 text-orange-400" />
                     <input
@@ -237,7 +237,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                       min="0"
                       value={formData.lateDays || 0}
                       onChange={e => setFormData({ ...formData, lateDays: parseInt(e.target.value) || 0 })}
-                      className="w-full pl-9 text-sm border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
+                      className="w-full pl-9 text-sm border-zinc-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
                     />
                   </div>
                 </div>
@@ -245,22 +245,22 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
               {/* Availability Grid */}
               <div className="mt-4">
-                <label className="block text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-blue-500" /> Weekly Availability
+                <label className="block text-xs font-medium text-zinc-500 mb-2 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-zinc-500" /> Weekly Availability
                 </label>
-                <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                <div className="bg-zinc-50 rounded-lg border border-zinc-200 overflow-hidden">
                   {ORDERED_DAYS.map((day) => {
                     const dayData = formData.availability[day] || { active: false, start: '09:00', end: '17:00' };
                     return (
-                      <div key={day} className="flex items-center gap-3 p-3 border-b border-gray-200 last:border-0 hover:bg-white transition-colors">
+                      <div key={day} className="flex items-center gap-3 p-3 border-b border-zinc-200 last:border-0 hover:bg-white transition-colors">
                         <div className="w-28 flex items-center gap-2">
                           <input
                             type="checkbox"
                             checked={dayData.active}
                             onChange={(e) => handleAvailabilityChange(day, 'active', e.target.checked)}
-                            className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            className="h-4 w-4 text-zinc-900 rounded border-zinc-300 focus:ring-zinc-500"
                           />
-                          <span className={`text-sm font-medium ${dayData.active ? 'text-gray-900' : 'text-gray-400'}`}>
+                          <span className={`text-sm font-medium ${dayData.active ? 'text-zinc-900' : 'text-zinc-400'}`}>
                             {day}
                           </span>
                         </div>
@@ -270,18 +270,18 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                             disabled={!dayData.active}
                             value={dayData.start}
                             onChange={(e) => handleAvailabilityChange(day, 'start', e.target.value)}
-                            className="block w-full text-xs border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                            className="block w-full text-xs border-zinc-300 rounded-md shadow-sm focus:ring-zinc-500 focus:border-zinc-300 disabled:bg-zinc-100 disabled:text-zinc-400"
                           >
                             {TIME_OPTIONS.map(t => (
                               <option key={`start-${day}-${t.value}`} value={t.value}>{t.label}</option>
                             ))}
                           </select>
-                          <span className="text-gray-400">-</span>
+                          <span className="text-zinc-400">-</span>
                           <select
                             disabled={!dayData.active}
                             value={dayData.end}
                             onChange={(e) => handleAvailabilityChange(day, 'end', e.target.value)}
-                            className="block w-full text-xs border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                            className="block w-full text-xs border-zinc-300 rounded-md shadow-sm focus:ring-zinc-500 focus:border-zinc-300 disabled:bg-zinc-100 disabled:text-zinc-400"
                           >
                             {TIME_OPTIONS.map(t => (
                               <option key={`end-${day}-${t.value}`} value={t.value}>{t.label}</option>
@@ -296,7 +296,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
               {/* Correction Review Section */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
+                <label className="block text-xs font-medium text-zinc-500 mb-2 flex items-center gap-2">
                   <MessageSquare className="w-4 h-4 text-purple-500" /> Correction Reviews
                 </label>
                 <textarea
@@ -304,7 +304,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                   onChange={e => setFormData({ ...formData, correctionNotes: e.target.value })}
                   placeholder="Log any disciplinary actions, performance corrections, or time card adjustments here..."
                   rows={4}
-                  className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 p-3 bg-yellow-50/50"
+                  className="w-full text-sm border-zinc-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 p-3 bg-yellow-50/50"
                 />
               </div>
             </section>
@@ -313,7 +313,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
           {/* Permissions Section - Only visible to admins */}
           {isViewerAdmin && (
             <section className="space-y-4">
-              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
+              <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
                 <Lock className="w-4 h-4 text-red-500" /> Bio-Lock Permissions
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -333,7 +333,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                                       cursor-pointer p-3 rounded-lg border text-left transition-all
                                       ${isSelected
                           ? 'bg-red-50 border-red-200 shadow-sm'
-                          : 'bg-gray-50 border-transparent hover:bg-gray-100'}
+                          : 'bg-zinc-50 border-transparent hover:bg-zinc-100'}
                                   `}
                     >
                       <div className="flex items-center gap-3">
@@ -341,15 +341,15 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                                           w-5 h-5 rounded flex items-center justify-center border transition-colors
                                           ${isSelected
                             ? 'bg-red-500 border-red-500 text-white'
-                            : 'bg-white border-gray-300'}
+                            : 'bg-white border-zinc-300'}
                                       `}>
                           {isSelected && <Check className="w-3 h-3" />}
                         </div>
                         <div>
-                          <h5 className={`text-sm font-semibold ${isSelected ? 'text-red-700' : 'text-gray-700'}`}>
+                          <h5 className={`text-sm font-semibold ${isSelected ? 'text-red-700' : 'text-zinc-700'}`}>
                             {perm.label}
                           </h5>
-                          <p className="text-xs text-gray-500 leading-tight mt-0.5">
+                          <p className="text-xs text-zinc-500 leading-tight mt-0.5">
                             {perm.description}
                           </p>
                         </div>
@@ -363,79 +363,79 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
           {/* Personal Information */}
           <section className="space-y-4">
-            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
-              <UserIcon className="w-4 h-4 text-green-500" /> Personal Information
+            <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
+              <UserIcon className="w-4 h-4 text-zinc-500" /> Personal Information
             </h4>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Full Name</label>
+                <label className="block text-xs font-medium text-zinc-500 mb-1">Full Name</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full text-sm border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
+                  className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Phone Number</label>
+                <label className="block text-xs font-medium text-zinc-500 mb-1">Phone Number</label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                  <Phone className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
                   <input
                     type="tel"
                     value={formData.phoneNumber || ''}
                     onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })}
                     placeholder="(555) 000-0000"
-                    className="w-full pl-9 text-sm border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
+                    className="w-full pl-9 text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
+                <label className="block text-xs font-medium text-zinc-500 mb-1">Email Address</label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
                   <input
                     type="email"
                     value={formData.email || ''}
                     onChange={e => setFormData({ ...formData, email: e.target.value })}
                     placeholder="email@company.com"
-                    className="w-full pl-9 text-sm border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
+                    className="w-full pl-9 text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Mailing Address</label>
+                <label className="block text-xs font-medium text-zinc-500 mb-1">Mailing Address</label>
                 <div className="relative">
-                  <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                  <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
                   <input
                     type="text"
                     value={formData.address || ''}
                     onChange={e => setFormData({ ...formData, address: e.target.value })}
                     placeholder="123 Street Name, City, State"
-                    className="w-full pl-9 text-sm border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
+                    className="w-full pl-9 text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Discord ID (for notifications)</label>
+                <label className="block text-xs font-medium text-zinc-500 mb-1">Discord ID (for notifications)</label>
                 <div className="relative">
-                  <MessageSquare className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                  <MessageSquare className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
                   <input
                     type="text"
                     value={formData.discordId || ''}
                     onChange={e => setFormData({ ...formData, discordId: e.target.value })}
                     placeholder="e.g. 123456789012345678"
-                    className="w-full pl-9 text-sm border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full pl-9 text-sm border-zinc-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
-                <div className="mt-2 text-xs text-gray-500 bg-gray-50 rounded-lg p-3 border border-gray-100">
-                  <div className="font-bold text-gray-700 mb-1">How to find your Discord ID on Mobile:</div>
+                <div className="mt-2 text-xs text-zinc-500 bg-zinc-50 rounded-lg p-3 border border-zinc-100">
+                  <div className="font-bold text-zinc-700 mb-1">How to find your Discord ID on Mobile:</div>
                   <ol className="list-decimal pl-4 space-y-1">
                     <li>Open Discord & tap your profile icon (bottom right).</li>
-                    <li>Go to <strong>Settings</strong> (gear icon) <span className="text-gray-400">→</span> <strong>Advanced</strong>.</li>
+                    <li>Go to <strong>Settings</strong> (gear icon) <span className="text-zinc-400">→</span> <strong>Advanced</strong>.</li>
                     <li>Turn on <strong>Developer Mode</strong>.</li>
                     <li>Go back to your Profile.</li>
                     <li>Tap the three dots (top right) and select <strong>Copy User ID</strong>.</li>
@@ -448,7 +448,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
           <div className="pt-4 sticky bottom-0 bg-white">
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-all active:scale-95"
+              className="w-full flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-all active:scale-95"
             >
               <Save className="w-4 h-4" />
               Save Profile Changes

@@ -64,8 +64,8 @@ export const PinPad: React.FC<Props> = ({ mode, users, onSuccess, onCancel }) =>
   }, [pin, onSuccess, users]);
 
   return (
-    <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 max-w-md w-full mx-auto">
-      <div className={`p-8 text-white text-center ${mode === 'IN' ? 'bg-blue-600' : 'bg-red-600'}`}>
+    <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-zinc-100 max-w-md w-full mx-auto">
+      <div className={`p-8 text-white text-center ${mode === 'IN' ? 'bg-zinc-900' : 'bg-red-600'}`}>
         <div className="relative">
           <button
             onClick={onCancel}
@@ -88,8 +88,8 @@ export const PinPad: React.FC<Props> = ({ mode, users, onSuccess, onCancel }) =>
               key={i}
               className={`w-5 h-5 rounded-full border-2 transition-all duration-200 
                 ${i < pin.length
-                  ? 'bg-gray-800 border-gray-800 scale-125'
-                  : 'bg-transparent border-gray-300'}`}
+                  ? 'bg-zinc-800 border-zinc-800 scale-125'
+                  : 'bg-transparent border-zinc-300'}`}
             />
           ))}
         </div>
@@ -106,7 +106,7 @@ export const PinPad: React.FC<Props> = ({ mode, users, onSuccess, onCancel }) =>
             <button
               key={num}
               onClick={() => handleNumClick(num.toString())}
-              className="aspect-square flex items-center justify-center rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-4xl font-bold text-gray-700 transition-all shadow-sm border border-gray-100 active:scale-90"
+              className="aspect-square flex items-center justify-center rounded-full bg-zinc-50 hover:bg-zinc-100 active:bg-zinc-200 text-4xl font-bold text-zinc-700 transition-all shadow-sm border border-zinc-100 active:scale-90"
             >
               {num}
             </button>
@@ -116,13 +116,13 @@ export const PinPad: React.FC<Props> = ({ mode, users, onSuccess, onCancel }) =>
           </div>
           <button
             onClick={() => handleNumClick('0')}
-            className="aspect-square flex items-center justify-center rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-4xl font-bold text-gray-700 transition-all shadow-sm border border-gray-100 active:scale-90"
+            className="aspect-square flex items-center justify-center rounded-full bg-zinc-50 hover:bg-zinc-100 active:bg-zinc-200 text-4xl font-bold text-zinc-700 transition-all shadow-sm border border-zinc-100 active:scale-90"
           >
             0
           </button>
           <button
             onClick={handleDelete}
-            className="aspect-square flex items-center justify-center rounded-full hover:bg-red-50 active:bg-red-100 text-gray-400 hover:text-red-500 transition-all active:scale-90"
+            className="aspect-square flex items-center justify-center rounded-full hover:bg-red-50 active:bg-red-100 text-zinc-400 hover:text-red-500 transition-all active:scale-90"
           >
             <Delete className="w-10 h-10" />
           </button>

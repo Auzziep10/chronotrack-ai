@@ -50,7 +50,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
     return (
       <div className="max-w-4xl mx-auto flex flex-col items-center justify-center py-10 space-y-6">
         {pinMessage ? (
-          <div className="bg-green-100 border border-green-200 text-green-800 px-6 py-4 rounded-xl flex items-center gap-3 text-lg font-bold animate-fade-in">
+          <div className="bg-zinc-100 border border-zinc-200 text-zinc-800 px-6 py-4 rounded-xl flex items-center gap-3 text-lg font-bold animate-fade-in">
             <CheckCircle2 className="w-8 h-8" />
             {pinMessage}
           </div>
@@ -77,7 +77,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
 
     return (
       <div className="max-w-2xl mx-auto py-12 animate-fade-in">
-        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-zinc-100">
           <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-8 text-center text-white">
             <div className="w-16 h-16 bg-white/10 rounded-full mx-auto flex items-center justify-center text-2xl font-bold mb-4 border border-white/20">
               {actionMenuUser.avatarInitials}
@@ -95,7 +95,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                   setShowPinPad(true);
                   setTimeout(() => { setShowPinPad(false); setPinMessage(''); }, 2000);
                 }}
-                className="w-full bg-green-600 hover:bg-green-700 text-white p-6 rounded-2xl shadow-sm text-xl font-bold transition-transform active:scale-95 flex items-center justify-center gap-3"
+                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white p-6 rounded-2xl shadow-sm text-xl font-bold transition-transform active:scale-95 flex items-center justify-center gap-3"
               >
                 <Play className="w-6 h-6" /> Resume Shift (Return from Lunch)
               </button>
@@ -145,20 +145,20 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
       {/* Left Column: Clock In/Out Action */}
       <div className="lg:col-span-5 space-y-6">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 h-full flex flex-col">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-zinc-100 h-full flex flex-col">
           <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-8 text-white text-center">
             <h2 className="text-3xl font-bold mb-2">Master Time Station</h2>
             <p className="text-slate-300">Identify yourself to start or end your shift.</p>
           </div>
 
           <div className="p-10 flex-1 flex flex-col items-center justify-center space-y-8">
-            <div className="p-6 bg-blue-50 rounded-full cursor-pointer hover:bg-blue-100 transition-colors" onClick={handlePinAction}>
-              <ShieldCheck className="w-20 h-20 text-blue-600" />
+            <div className="p-6 bg-zinc-50 rounded-full cursor-pointer hover:bg-zinc-100 transition-colors" onClick={handlePinAction}>
+              <ShieldCheck className="w-20 h-20 text-zinc-900" />
             </div>
 
             <button
               onClick={handlePinAction}
-              className="w-full max-w-xs flex flex-col items-center justify-center gap-3 px-8 py-6 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-lg shadow-blue-200 font-bold text-xl transition-all hover:scale-105 active:scale-95"
+              className="w-full max-w-xs flex flex-col items-center justify-center gap-3 px-8 py-6 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl shadow-lg shadow-blue-200 font-bold text-xl transition-all hover:scale-105 active:scale-95"
             >
               <span>Enter PIN</span>
               <span className="text-sm font-normal opacity-80">Clock In / Clock Out</span>
@@ -166,13 +166,13 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
 
             <button
               onClick={() => setShowQR(true)}
-              className="w-full max-w-xs flex items-center justify-center gap-3 px-8 py-4 bg-white border-2 border-gray-200 hover:border-slate-800 hover:text-slate-800 hover:bg-slate-50 text-gray-600 rounded-2xl shadow-sm font-bold text-md transition-all active:scale-95"
+              className="w-full max-w-xs flex items-center justify-center gap-3 px-8 py-4 bg-white border-2 border-zinc-200 hover:border-slate-800 hover:text-slate-800 hover:bg-slate-50 text-zinc-600 rounded-2xl shadow-sm font-bold text-md transition-all active:scale-95"
             >
               <QrCodeIcon className="w-5 h-5" />
               Scan to Login
             </button>
 
-            <p className="text-center text-gray-400 text-sm max-w-xs">
+            <p className="text-center text-zinc-400 text-sm max-w-xs">
               Enter your 4-digit PIN. The system will automatically clock you in or out based on your current status.
             </p>
           </div>
@@ -181,16 +181,16 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
 
       {/* Right Column: Active Users Dashboard */}
       <div className="lg:col-span-7">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-              <UserIcon className="w-5 h-5 text-green-600" />
+        <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-zinc-50">
+            <h3 className="text-lg font-bold text-zinc-800 flex items-center gap-2">
+              <UserIcon className="w-5 h-5 text-zinc-900" />
               Active Team Members ({sessionsList.length})
             </h3>
             <div className="flex items-center gap-4">
               {isAdmin && (
                 <select
-                  className="text-xs border border-gray-300 rounded px-2 py-1 bg-white cursor-pointer font-bold text-blue-600"
+                  className="text-xs border border-zinc-300 rounded px-2 py-1 bg-white cursor-pointer font-bold text-zinc-900"
                   onChange={(e) => {
                     const u = users.find(u => u.id === e.target.value);
                     if (u) {
@@ -206,17 +206,17 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                   ))}
                 </select>
               )}
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              <div className="flex items-center gap-2 text-xs text-zinc-500">
+                <span className="w-2 h-2 bg-zinc-500 rounded-full animate-pulse"></span>
                 Live Tracking
               </div>
             </div>
           </div>
 
           {sessionsList.length === 0 ? (
-            <div className="p-12 text-center text-gray-400 flex flex-col items-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <LogOut className="w-8 h-8 text-gray-300" />
+            <div className="p-12 text-center text-zinc-400 flex flex-col items-center">
+              <div className="w-16 h-16 bg-zinc-100 rounded-full flex items-center justify-center mb-4">
+                <LogOut className="w-8 h-8 text-zinc-300" />
               </div>
               <p>No one is currently clocked in.</p>
             </div>
@@ -230,21 +230,21 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                 return (
                   <div key={session.userId} className={`p-4 rounded-xl border-2 transition-all hover:shadow-md
                     ${session.isPaused ? 'border-amber-200 bg-amber-50 shadow-inner' :
-                      isOverdue ? 'border-red-100 bg-red-50' : 'border-green-100 bg-white'}`}>
+                      isOverdue ? 'border-red-100 bg-red-50' : 'border-zinc-100 bg-white'}`}>
                     <div className="flex items-center gap-3 mb-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm
-                        ${session.isPaused ? 'bg-amber-500' : isOverdue ? 'bg-red-400' : 'bg-green-500'}`}>
+                        ${session.isPaused ? 'bg-amber-500' : isOverdue ? 'bg-red-400' : 'bg-zinc-500'}`}>
                         {session.user.avatarInitials}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-gray-900 truncate">{session.user.name}</h4>
-                        <p className="text-xs text-gray-500 truncate">{session.user.role}</p>
+                        <h4 className="font-bold text-zinc-900 truncate">{session.user.name}</h4>
+                        <p className="text-xs text-zinc-500 truncate">{session.user.role}</p>
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-500">Shift Time:</span>
+                        <span className="text-zinc-500">Shift Time:</span>
                         <Timer
                           startTime={session.startTime}
                           isActive={!session.isPaused}
@@ -265,7 +265,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                         </div>
                       )}
 
-                      <div className="text-xs text-gray-400 pt-2 border-t border-gray-100 mt-2 flex justify-between items-center">
+                      <div className="text-xs text-zinc-400 pt-2 border-t border-zinc-100 mt-2 flex justify-between items-center">
                         <span>Last Log: {new Date(session.lastLogTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         {isAdmin && (
                           <button
@@ -289,22 +289,22 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
         showQR && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-              <div className="p-6 flex justify-between items-center border-b border-gray-100 bg-gray-50">
+              <div className="p-6 flex justify-between items-center border-b border-zinc-100 bg-zinc-50">
                 <div className="flex items-center gap-3">
                   <div className="bg-slate-800 p-2 rounded-lg text-white">
                     <QrCodeIcon className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-xl text-gray-900 leading-tight">Staff Portal Login</h3>
-                    <p className="text-xs text-gray-500 font-medium">Scan to open on your device</p>
+                    <h3 className="font-bold text-xl text-zinc-900 leading-tight">Staff Portal Login</h3>
+                    <p className="text-xs text-zinc-500 font-medium">Scan to open on your device</p>
                   </div>
                 </div>
-                <button onClick={() => setShowQR(false)} className="text-gray-400 hover:text-gray-800 transition-colors p-2 hover:bg-gray-200 rounded-full">
+                <button onClick={() => setShowQR(false)} className="text-zinc-400 hover:text-zinc-800 transition-colors p-2 hover:bg-zinc-200 rounded-full">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               <div className="p-10 flex flex-col items-center bg-white justify-center">
-                <div className="p-4 bg-white border-4 border-gray-100 rounded-2xl shadow-inner inline-block mb-6">
+                <div className="p-4 bg-white border-4 border-zinc-100 rounded-2xl shadow-inner inline-block mb-6">
                   <QRCodeSVG
                     value={window.location.href}
                     size={256}

@@ -16,11 +16,11 @@ const TOTAL_HOURS = END_HOUR - START_HOUR;
 
 // Colors matching the screenshot (approximate)
 const STATUS_COLORS = {
-    active: 'bg-blue-500 text-white border-blue-600',
+    active: 'bg-zinc-500 text-white border-zinc-900',
     pending: 'bg-orange-400 text-white border-orange-500', // "Not Started" / "Print 1..."
-    completed: 'bg-green-500 text-white border-green-600',
+    completed: 'bg-zinc-500 text-white border-zinc-900',
     delayed: 'bg-red-500 text-white border-red-600',
-    default: 'bg-gray-400 text-white border-gray-500'
+    default: 'bg-zinc-400 text-white border-zinc-500'
 };
 
 const STATUS_LABELS = {
@@ -615,31 +615,31 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     });
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-zinc-200 flex flex-col h-full overflow-hidden">
             {/* Header */}
-            <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50 z-50 relative">
+            <div className="p-4 border-b border-zinc-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-zinc-50 z-50 relative">
                 <div className="flex gap-4 items-center">
                     <div>
-                        <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                            <Calendar className="w-5 h-5 text-gray-500" />
+                        <h2 className="text-lg font-bold text-zinc-800 flex items-center gap-2">
+                            <Calendar className="w-5 h-5 text-zinc-500" />
                             Daily Planner
                         </h2>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-zinc-500">
                             {activeView === 'tasks' ? 'Task assignment based on workload' : 'Auto-clock out parameters'}
                         </p>
                     </div>
 
-                    <div className="flex bg-gray-200 p-1 rounded-lg sm:ml-4 shadow-inner mt-2 sm:mt-0 w-full sm:w-auto">
+                    <div className="flex bg-zinc-200 p-1 rounded-lg sm:ml-4 shadow-inner mt-2 sm:mt-0 w-full sm:w-auto">
                         <button
                             onClick={() => setActiveView('tasks')}
-                            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${activeView === 'tasks' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${activeView === 'tasks' ? 'bg-white shadow text-zinc-800' : 'text-zinc-500 hover:text-zinc-700'}`}
                         >
                             <LayoutGrid className="w-4 h-4 inline-block mr-1" />
                             Tasks
                         </button>
                         <button
                             onClick={() => setActiveView('shifts')}
-                            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${activeView === 'shifts' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${activeView === 'shifts' ? 'bg-white shadow text-indigo-700' : 'text-zinc-500 hover:text-zinc-700'}`}
                         >
                             <Clock className="w-4 h-4 inline-block mr-1" />
                             Shift Schedules
@@ -653,7 +653,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             onClick={() => setIsPlanningMode(!isPlanningMode)}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border ${isPlanningMode
                                 ? 'bg-orange-600 border-orange-700 text-white animate-pulse'
-                                : 'bg-blue-600 border-blue-700 text-white hover:bg-blue-700'
+                                : 'bg-zinc-900 border-blue-700 text-white hover:bg-zinc-800'
                                 }`}
                         >
                             <Wand2 className="w-4 h-4" />
@@ -661,26 +661,26 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                         </button>
                     )}
 
-                    <div className="flex bg-white rounded-lg border border-gray-300 shadow-sm p-1 items-center ml-2">
-                        <button onClick={handlePrevDay} className="p-1 hover:bg-gray-100 rounded text-gray-600">
+                    <div className="flex bg-white rounded-lg border border-zinc-300 shadow-sm p-1 items-center ml-2">
+                        <button onClick={handlePrevDay} className="p-1 hover:bg-zinc-100 rounded text-zinc-600">
                             <ChevronLeft className="w-5 h-5" />
                         </button>
-                        <span className="px-3 text-sm font-medium text-gray-800 min-w-[120px] text-center">
+                        <span className="px-3 text-sm font-medium text-zinc-800 min-w-[120px] text-center">
                             {currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                         </span>
-                        <button onClick={handleNextDay} className="p-1 hover:bg-gray-100 rounded text-gray-600">
+                        <button onClick={handleNextDay} className="p-1 hover:bg-zinc-100 rounded text-zinc-600">
                             <ChevronRight className="w-5 h-5" />
                         </button>
                     </div>
 
                     <div className="flex items-center gap-2">
                         {activeView === 'shifts' && (
-                            <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                            <div className="flex bg-zinc-100 p-0.5 rounded-lg border border-zinc-200">
                                 {['day', 'week', 'month'].map(view => (
                                     <button
                                         key={view}
                                         onClick={() => setShiftTimeframe(view as any)}
-                                        className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-md transition-shadow ${shiftTimeframe === view ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                        className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-md transition-shadow ${shiftTimeframe === view ? 'bg-white shadow-sm text-indigo-700' : 'text-zinc-500 hover:text-zinc-700'}`}
                                     >
                                         {view}
                                     </button>
@@ -689,7 +689,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                         )}
                         <button
                             onClick={() => { setCurrentDate(new Date()) }}
-                            className={`text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${isToday(currentDate) ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                            className={`text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${isToday(currentDate) ? 'bg-zinc-50 border-zinc-200 text-zinc-800' : 'bg-white border-zinc-300 text-zinc-600 hover:bg-zinc-50'}`}
                         >
                             Today
                         </button>
@@ -698,35 +698,35 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             <div className="relative">
                                 <button
                                     onClick={() => setIsDuplicating(!isDuplicating)}
-                                    className={`text-xs px-2 py-2 rounded-lg border font-medium transition-colors flex items-center gap-1 ${isDuplicating ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                                    className={`text-xs px-2 py-2 rounded-lg border font-medium transition-colors flex items-center gap-1 ${isDuplicating ? 'bg-zinc-50 border-zinc-200 text-indigo-700' : 'bg-white border-zinc-300 text-zinc-600 hover:bg-zinc-50'}`}
                                     title="Duplicate Schedule"
                                 >
                                     <Copy className="w-4 h-4" />
                                 </button>
 
                                 {isDuplicating && (
-                                    <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 p-3 rounded-xl shadow-xl z-50 min-w-[250px] animate-fade-in flex flex-col gap-3">
-                                        <div className="text-sm font-bold text-gray-800">Duplicate {activeView === 'shifts' ? 'Shifts' : 'Tasks'}</div>
-                                        <div className="text-xs text-gray-500 mb-2">Select a date to copy all {activeView === 'shifts' ? 'shift schedules' : 'tasks'} from this day.</div>
+                                    <div className="absolute right-0 top-full mt-2 bg-white border border-zinc-200 p-3 rounded-xl shadow-xl z-50 min-w-[250px] animate-fade-in flex flex-col gap-3">
+                                        <div className="text-sm font-bold text-zinc-800">Duplicate {activeView === 'shifts' ? 'Shifts' : 'Tasks'}</div>
+                                        <div className="text-xs text-zinc-500 mb-2">Select a date to copy all {activeView === 'shifts' ? 'shift schedules' : 'tasks'} from this day.</div>
                                         <input
                                             type="date"
                                             value={duplicateTargetDate}
                                             onChange={(e) => setDuplicateTargetDate(e.target.value)}
-                                            className="w-full text-sm p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            className="w-full text-sm p-2 border border-zinc-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                                         />
-                                        <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                                        <label className="flex items-center gap-2 text-xs text-zinc-700 cursor-pointer">
                                             <input
                                                 type="checkbox"
                                                 checked={duplicateWholeWeek}
                                                 onChange={(e) => setDuplicateWholeWeek(e.target.checked)}
-                                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                className="rounded border-zinc-300 text-zinc-900 focus:ring-indigo-500"
                                             />
                                             Apply to entire work week (Mon-Fri)
                                         </label>
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={() => setIsDuplicating(false)}
-                                                className="flex-1 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-300"
+                                                className="flex-1 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors border border-zinc-300"
                                             >
                                                 Cancel
                                             </button>
@@ -736,7 +736,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                     const d = new Date(b.startTime);
                                                     return d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth() && d.getFullYear() === currentDate.getFullYear();
                                                 }))}
-                                                className="flex-1 px-3 py-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg font-bold transition-colors shadow-sm"
+                                                className="flex-1 px-3 py-1.5 text-xs text-white bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 rounded-lg font-bold transition-colors shadow-sm"
                                             >
                                                 Confirm
                                             </button>
@@ -764,7 +764,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             <button
                                 onClick={handlePublish}
                                 disabled={!schedule?.blocks.length || loading}
-                                className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-lg shadow-green-100 transition-all disabled:opacity-50"
+                                className="flex items-center gap-2 px-6 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-bold shadow-lg shadow-zinc-100 transition-all disabled:opacity-50"
                             >
                                 <CheckCircle className="w-4 h-4" />
                                 Publish Schedule
@@ -805,8 +805,8 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                     {unassignedBlocks.map((block) => (
                                         <div key={block.tempId} className="bg-white p-3 rounded-lg border border-orange-200 shadow-sm flex flex-col gap-2">
                                             <div>
-                                                <div className="font-bold text-gray-800 text-sm">{block.title}</div>
-                                                <div className="text-[10px] text-gray-500">
+                                                <div className="font-bold text-zinc-800 text-sm">{block.title}</div>
+                                                <div className="text-[10px] text-zinc-500">
                                                     {block.suggestedName ? `(Suggested for: ${block.suggestedName})` : '(No assignee found)'}
                                                 </div>
                                             </div>
@@ -831,10 +831,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
             {/* Shift Addition Form */}
             {activeView === 'shifts' && isAdminOrManager && (
-                <div className="bg-indigo-50 border-b border-indigo-100 p-4 shrink-0 relative z-10">
+                <div className="bg-zinc-50 border-b border-zinc-100 p-4 shrink-0 relative z-10">
                     <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-4">
                         <div className="flex items-center gap-2 text-indigo-900 font-bold shrink-0">
-                            <Clock className="w-5 h-5 text-indigo-600" />
+                            <Clock className="w-5 h-5 text-zinc-900" />
                             Add Expected Shift
                         </div>
 
@@ -842,7 +842,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             <select
                                 value={shiftUser}
                                 onChange={(e) => setShiftUser(e.target.value)}
-                                className="px-3 py-2 text-sm rounded bg-white border border-indigo-200 focus:ring-2 focus:ring-indigo-500 outline-none min-w-[200px] flex-1 md:flex-none"
+                                className="px-3 py-2 text-sm rounded bg-white border border-zinc-200 focus:ring-2 focus:ring-indigo-500 outline-none min-w-[200px] flex-1 md:flex-none"
                             >
                                 <option value="" disabled>Select Staff Member...</option>
                                 {teamMembers.map(u => (
@@ -850,7 +850,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                 ))}
                             </select>
 
-                            <div className="flex items-center gap-2 bg-white rounded border border-indigo-200 px-2 py-1 shadow-inner">
+                            <div className="flex items-center gap-2 bg-white rounded border border-zinc-200 px-2 py-1 shadow-inner">
                                 <input
                                     type="time"
                                     value={shiftStart}
@@ -869,7 +869,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             <button
                                 onClick={handleAddShift}
                                 disabled={!shiftUser || !shiftStart || !shiftEnd}
-                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow disabled:opacity-50 flex items-center gap-2 transition-colors ml-auto md:ml-0"
+                                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold rounded-lg shadow disabled:opacity-50 flex items-center gap-2 transition-colors ml-auto md:ml-0"
                             >
                                 <Plus className="w-4 h-4" /> Add
                             </button>
@@ -883,7 +883,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
             {loading && (
                 <div className="flex-1 flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900"></div>
                 </div>
             )}
 
@@ -909,8 +909,8 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                     <div className="min-w-[800px] flex-1 flex flex-col">
 
                         {/* Time Header */}
-                        <div className="flex border-b border-gray-200 bg-white sticky top-0 z-20">
-                            <div className="w-48 p-3 border-r border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider sticky left-0 z-30">
+                        <div className="flex border-b border-zinc-200 bg-white sticky top-0 z-20">
+                            <div className="w-48 p-3 border-r border-zinc-200 bg-zinc-50 text-xs font-semibold text-zinc-500 uppercase tracking-wider sticky left-0 z-30">
                                 Team Members
                             </div>
                             <div className="flex-1 relative h-10">
@@ -923,10 +923,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                     return (
                                         <div
                                             key={hour}
-                                            className="absolute top-0 bottom-0 border-l border-gray-100 flex flex-col justify-end pb-2"
+                                            className="absolute top-0 bottom-0 border-l border-zinc-100 flex flex-col justify-end pb-2"
                                             style={{ left: `${left}%` }}
                                         >
-                                            <span className="text-[10px] text-gray-400 pl-1 transform -translate-x-1/2">
+                                            <span className="text-[10px] text-zinc-400 pl-1 transform -translate-x-1/2">
                                                 {displayHour}{ampm}
                                             </span>
                                         </div>
@@ -943,7 +943,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                     {Array.from({ length: TOTAL_HOURS + 1 }).map((_, i) => (
                                         <div
                                             key={i}
-                                            className="absolute top-0 bottom-0 border-l border-gray-100"
+                                            className="absolute top-0 bottom-0 border-l border-zinc-100"
                                             style={{ left: `${(i / TOTAL_HOURS) * 100}%` }}
                                         />
                                     ))}
@@ -970,13 +970,13 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
                             {/* Rows */}
                             {sortedUsers.map(user => (
-                                <div key={user.id} className="flex border-b border-gray-100 hover:bg-gray-50/50 transition-colors h-16 relative">
+                                <div key={user.id} className="flex border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors h-16 relative">
                                     {/* User Info (Sticky Left) */}
-                                    <div className="w-48 border-r border-gray-200 p-3 bg-white sticky left-0 z-10 flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold text-xs ring-2 ring-white shadow-sm">
+                                    <div className="w-48 border-r border-zinc-200 p-3 bg-white sticky left-0 z-10 flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-600 flex items-center justify-center font-bold text-xs ring-2 ring-white shadow-sm">
                                             {user.avatarInitials}
                                         </div>
-                                        <span className="text-sm font-medium text-gray-700 truncate">{user.name}</span>
+                                        <span className="text-sm font-medium text-zinc-700 truncate">{user.name}</span>
                                     </div>
 
                                     {/* Timeline Area for this User */}
@@ -994,7 +994,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                 >
                                                     {block.title}
                                                     {/* Tooltip-ish Details */}
-                                                    <div className="hidden group-hover:block absolute top-full left-0 bg-gray-800 text-white text-xs p-2 rounded shadow-lg z-50 w-48 mt-1 whitespace-normal">
+                                                    <div className="hidden group-hover:block absolute top-full left-0 bg-zinc-800 text-white text-xs p-2 rounded shadow-lg z-50 w-48 mt-1 whitespace-normal">
                                                         <div className="flex justify-between items-start mb-1">
                                                             <div className="font-bold">{activeView === 'shifts' ? 'Shift Schedule' : block.title}</div>
                                                             {(isAdminOrManager) && (
@@ -1021,7 +1021,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
                             {/* Empty State if no users */}
                             {sortedUsers.length === 0 && (
-                                <div className="p-8 text-center text-gray-400">
+                                <div className="p-8 text-center text-zinc-400">
                                     No team members found.
                                 </div>
                             )}
@@ -1032,11 +1032,11 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
             {/* Footer / Legend */}
             {shiftTimeframe === 'day' && (
-                <div className="p-4 border-t border-gray-200 bg-white flex flex-wrap gap-4 text-xs">
+                <div className="p-4 border-t border-zinc-200 bg-white flex flex-wrap gap-4 text-xs">
                     {Object.entries(STATUS_LABELS).map(([key, label]) => (
                         <div key={key} className="flex items-center gap-2">
                             <div className={`w-3 h-3 rounded-full ${STATUS_COLORS[key as keyof typeof STATUS_COLORS].split(' ')[0]}`}></div>
-                            <span className="text-gray-600 font-medium">{label}</span>
+                            <span className="text-zinc-600 font-medium">{label}</span>
                         </div>
                     ))}
                 </div>
@@ -1045,63 +1045,63 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             {/* Edit Block Dialog */}
             {editingBlock && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-fade-in">
-                        <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                            <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                <Clock className="w-5 h-5 text-indigo-600" />
+                    <div className="bg-white rounded-xl shadow-xl border border-zinc-200 w-full max-w-md overflow-hidden animate-fade-in">
+                        <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex justify-between items-center">
+                            <h3 className="font-bold text-zinc-800 flex items-center gap-2">
+                                <Clock className="w-5 h-5 text-zinc-900" />
                                 {editingBlock.title.startsWith('[SHIFT]') ? 'Edit Expected Shift' : 'Edit Task Block'}
                             </h3>
-                            <button onClick={() => setEditingBlock(null)} className="p-1 hover:bg-gray-200 rounded text-gray-500 transition-colors">
+                            <button onClick={() => setEditingBlock(null)} className="p-1 hover:bg-zinc-200 rounded text-zinc-500 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
                         <div className="p-6 flex flex-col gap-4">
-                            <div className="text-sm font-medium text-gray-700 bg-gray-50 p-2 rounded border border-gray-100">
+                            <div className="text-sm font-medium text-zinc-700 bg-zinc-50 p-2 rounded border border-zinc-100">
                                 {editingBlock.title}
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1">Start Time</label>
+                                    <label className="block text-xs font-bold text-zinc-600 mb-1">Start Time</label>
                                     <input
                                         type="time"
                                         value={editStart}
                                         onChange={(e) => setEditStart(e.target.value)}
-                                        className="w-full text-sm p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        className="w-full text-sm p-2 border border-zinc-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1">End Time</label>
+                                    <label className="block text-xs font-bold text-zinc-600 mb-1">End Time</label>
                                     <input
                                         type="time"
                                         value={editEnd}
                                         onChange={(e) => setEditEnd(e.target.value)}
-                                        className="w-full text-sm p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        className="w-full text-sm p-2 border border-zinc-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                                     />
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1">Notes / Description</label>
+                                <label className="block text-xs font-bold text-zinc-600 mb-1">Notes / Description</label>
                                 <textarea
                                     value={editNotes}
                                     onChange={(e) => setEditNotes(e.target.value)}
                                     placeholder="Add any notes relevant to this schedule schedule..."
-                                    className="w-full h-24 p-2 border border-gray-300 rounded resize-none text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    className="w-full h-24 p-2 border border-zinc-300 rounded resize-none text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                                 ></textarea>
                             </div>
                         </div>
-                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+                        <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex justify-end gap-2">
                             <button
                                 onClick={() => setEditingBlock(null)}
-                                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+                                className="px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-200 rounded-lg transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleSaveEdit}
                                 disabled={isUpdating}
-                                className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow transition-colors flex items-center gap-2 disabled:opacity-50"
+                                className="px-4 py-2 text-sm font-bold text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg shadow transition-colors flex items-center gap-2 disabled:opacity-50"
                             >
                                 {isUpdating ? 'Saving...' : 'Save Changes'}
                             </button>

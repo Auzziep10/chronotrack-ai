@@ -469,11 +469,11 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[700px] flex flex-col animate-fade-in">
+    <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden min-h-[700px] flex flex-col animate-fade-in">
       {/* Enhanced Manager Header */}
       <div className="bg-slate-900 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-2">
-          <div className="bg-blue-600 p-1.5 rounded-lg">
+          <div className="bg-zinc-900 p-1.5 rounded-lg">
             <Briefcase className="w-5 h-5 text-white" />
           </div>
           <h2 className="text-xl font-bold tracking-tight">Manager Console</h2>
@@ -489,7 +489,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             <button
               key={tab.id}
               onClick={() => setActiveView(tab.id as any)}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${activeView === tab.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${activeView === tab.id ? 'bg-zinc-900 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
             >
               <tab.icon className="w-4 h-4" />
               {tab.label}
@@ -498,18 +498,18 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         </div>
       </div>
 
-      <div className="p-6 bg-gray-50 flex-1 overflow-y-auto">
+      <div className="p-6 bg-zinc-50 flex-1 overflow-y-auto">
 
         {/* VIEW: DEPARTMENT REPORTS */}
         {activeView === 'departments' && (
           <div className="space-y-6">
             <div className="flex justify-between items-end">
               <div>
-                <h3 className="text-xl font-bold text-gray-800">Department Overview</h3>
-                <p className="text-gray-500 text-sm">Labor distribution across the company (Last 7 Days)</p>
+                <h3 className="text-xl font-bold text-zinc-800">Department Overview</h3>
+                <p className="text-zinc-500 text-sm">Labor distribution across the company (Last 7 Days)</p>
               </div>
               <div className="flex gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-full border border-green-100">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-900 bg-zinc-50 px-3 py-1.5 rounded-full border border-zinc-100">
                   <TrendingUp className="w-3.5 h-3.5" />
                   +12% Efficiency
                 </div>
@@ -519,27 +519,27 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Added explicit type casting to fix 'unknown' property access errors */}
               {(Object.entries(departmentStats) as [string, { hours: number; count: number }][]).map(([dept, data]) => (
-                <div key={dept} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all group">
+                <div key={dept} className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md transition-all group">
                   <div className="flex justify-between items-start mb-4">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase
                       ${dept === Department.Production ? 'bg-purple-100 text-purple-700' :
                         dept === Department.Design ? 'bg-indigo-100 text-indigo-700' :
-                          'bg-blue-100 text-blue-700'}`}>
+                          'bg-zinc-100 text-zinc-800'}`}>
                       {dept}
                     </span>
-                    <Zap className="w-5 h-5 text-gray-300 group-hover:text-yellow-400 transition-colors" />
+                    <Zap className="w-5 h-5 text-zinc-300 group-hover:text-yellow-400 transition-colors" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-black text-gray-900">{data.hours}</span>
-                    <span className="text-gray-500 text-sm font-medium">hours logged</span>
+                    <span className="text-4xl font-black text-zinc-900">{data.hours}</span>
+                    <span className="text-zinc-500 text-sm font-medium">hours logged</span>
                   </div>
-                  <div className="mt-4 h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                  <div className="mt-4 h-2.5 w-full bg-zinc-100 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-1000 ${dept === Department.Production ? 'bg-purple-500' : 'bg-blue-500'}`}
+                      className={`h-full rounded-full transition-all duration-1000 ${dept === Department.Production ? 'bg-purple-500' : 'bg-zinc-500'}`}
                       style={{ width: `${Math.min(100, (data.hours / 20) * 100)}%` }}
                     ></div>
                   </div>
-                  <div className="mt-3 flex justify-between text-xs text-gray-400 font-medium">
+                  <div className="mt-3 flex justify-between text-xs text-zinc-400 font-medium">
                     <span>{data.count} tasks</span>
                     <span>Goal: 40h</span>
                   </div>
@@ -554,22 +554,22 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
           <div className="space-y-6 animate-in slide-in-from-bottom-4">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <h3 className="text-xl font-bold text-zinc-800 flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-purple-600" />
                   Daily Planning & AI Sync
                 </h3>
-                <p className="text-gray-500 text-sm">Bridge the gap between your external plans and real-time logs.</p>
+                <p className="text-zinc-500 text-sm">Bridge the gap between your external plans and real-time logs.</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               <div className="lg:col-span-5 space-y-6">
-                <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-bold text-zinc-700">
                     <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
                     Sync Daily Planner Data
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-zinc-500">
                     Paste content from your Replit Daily Planner or external spreadsheet.
                     AI will extract departments and tasks.
                   </p>
@@ -577,7 +577,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                     value={externalPlanRaw}
                     onChange={(e) => setExternalPlanRaw(e.target.value)}
                     placeholder="Paste planner data here... e.g. 'Monday: Alex production focus 500 units, Sarah design 2 tech packs...'"
-                    className="w-full h-40 text-sm border-gray-200 rounded-xl focus:ring-purple-500 focus:border-purple-500 p-4 bg-slate-50 font-mono"
+                    className="w-full h-40 text-sm border-zinc-200 rounded-xl focus:ring-purple-500 focus:border-purple-500 p-4 bg-slate-50 font-mono"
                   />
                   <button
                     onClick={handleSyncPlan}
@@ -589,7 +589,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                   </button>
                 </div>
 
-                <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-2xl flex items-start gap-4">
+                <div className="bg-zinc-50 border border-zinc-100 p-6 rounded-2xl flex items-start gap-4">
                   <div className="p-2 bg-indigo-200 rounded-lg">
                     <AlertCircle className="w-5 h-5 text-indigo-700" />
                   </div>
@@ -604,14 +604,14 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
               </div>
 
               <div className="lg:col-span-7">
-                <div className="bg-white min-h-[500px] rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                    <span className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                      <ListTodo className="w-4 h-4 text-blue-600" />
+                <div className="bg-white min-h-[500px] rounded-2xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
+                  <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
+                    <span className="text-sm font-bold text-zinc-800 flex items-center gap-2">
+                      <ListTodo className="w-4 h-4 text-zinc-900" />
                       Extracted Shift Goals
                     </span>
                     {parsedPlan && (
-                      <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded-full border border-green-200">
+                      <span className="text-xs font-medium text-zinc-900 bg-zinc-100 px-2 py-1 rounded-full border border-zinc-200">
                         AI Processed
                       </span>
                     )}
@@ -620,18 +620,18 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                   <div className="flex-1 p-8 overflow-y-auto">
                     {parsedPlan ? (
                       <div className="prose prose-sm prose-slate max-w-none">
-                        <div className="whitespace-pre-wrap text-gray-700 leading-relaxed font-sans">
+                        <div className="whitespace-pre-wrap text-zinc-700 leading-relaxed font-sans">
                           {parsedPlan}
                         </div>
                       </div>
                     ) : (
                       <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
-                        <div className="p-4 bg-gray-50 rounded-full">
-                          <ListTodo className="w-12 h-12 text-gray-300" />
+                        <div className="p-4 bg-zinc-50 rounded-full">
+                          <ListTodo className="w-12 h-12 text-zinc-300" />
                         </div>
                         <div>
-                          <p className="text-gray-500 font-medium">No plan imported yet.</p>
-                          <p className="text-gray-400 text-xs">Pasted plan data will appear here once synced.</p>
+                          <p className="text-zinc-500 font-medium">No plan imported yet.</p>
+                          <p className="text-zinc-400 text-xs">Pasted plan data will appear here once synced.</p>
                         </div>
                       </div>
                     )}
@@ -648,34 +648,34 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             {/* Keeping current filter logic from previous implementation for backward compatibility */}
             {activeView === 'users' ? (
               <div className="space-y-6">
-                <div className="flex flex-col md:flex-row gap-4 justify-between bg-white p-4 rounded-xl border border-gray-200">
+                <div className="flex flex-col md:flex-row gap-4 justify-between bg-white p-4 rounded-xl border border-zinc-200">
                   <div className="relative">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Filter by User</label>
+                    <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Filter by User</label>
                     <select
                       value={selectedUser}
                       onChange={(e) => setSelectedUser(e.target.value)}
-                      className="w-full md:w-64 bg-gray-50 border border-gray-300 text-sm rounded-lg p-2.5"
+                      className="w-full md:w-64 bg-zinc-50 border border-zinc-300 text-sm rounded-lg p-2.5"
                     >
                       <option value="All">All Users</option>
                       {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </div>
                 </div>
-                <div className="bg-white shadow-sm rounded-xl overflow-hidden border border-gray-200">
-                  <ul className="divide-y divide-gray-100">
+                <div className="bg-white shadow-sm rounded-xl overflow-hidden border border-zinc-200">
+                  <ul className="divide-y divide-zinc-100">
                     {filteredLogs.map(log => (
-                      <li key={log.id} className="p-5 hover:bg-gray-50 transition-colors">
+                      <li key={log.id} className="p-5 hover:bg-zinc-50 transition-colors">
                         <div className="flex justify-between items-start">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">
                               {log.userName.split(' ').map(n => n[0]).join('')}
                             </div>
                             <div>
-                              <div className="font-bold text-gray-900 text-sm">{log.userName}</div>
-                              <div className="text-xs text-gray-500">{log.department} • {log.task}</div>
+                              <div className="font-bold text-zinc-900 text-sm">{log.userName}</div>
+                              <div className="text-xs text-zinc-500">{log.department} • {log.task}</div>
                             </div>
                           </div>
-                          <div className="text-xs text-gray-400">
+                          <div className="text-xs text-zinc-400">
                             {new Date(log.timestamp).toLocaleDateString()}
                           </div>
                         </div>
@@ -686,17 +686,17 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-gray-200">
+                <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-zinc-200">
                   <div className="flex items-center gap-4 w-full lg:w-auto">
-                    <div className="p-2 bg-blue-50 rounded-lg">
-                      <CalendarRange className="w-5 h-5 text-blue-600" />
+                    <div className="p-2 bg-zinc-50 rounded-lg">
+                      <CalendarRange className="w-5 h-5 text-zinc-900" />
                     </div>
                     <div className="flex-1">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Current Cycle</label>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-0.5">Current Cycle</label>
                       <select
                         value={selectedPeriodIdx}
                         onChange={(e) => setSelectedPeriodIdx(parseInt(e.target.value))}
-                        className="font-bold text-gray-800 bg-transparent border-none p-0 focus:ring-0 cursor-pointer text-sm"
+                        className="font-bold text-zinc-800 bg-transparent border-none p-0 focus:ring-0 cursor-pointer text-sm"
                       >
                         {periods.map((p, i) => (
                           <option key={i} value={i}>{p.label}</option>
@@ -707,20 +707,20 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
                   <div className="flex flex-col lg:flex-row items-center gap-3 w-full lg:w-auto border-t lg:border-t-0 pt-4 lg:pt-0">
                     <div className="flex flex-col gap-1 w-full lg:w-auto">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1 lg:hidden">Export Range</label>
-                      <div className="flex items-center gap-2 text-sm bg-gray-50 border border-gray-200 rounded-lg p-1">
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-1 lg:hidden">Export Range</label>
+                      <div className="flex items-center gap-2 text-sm bg-zinc-50 border border-zinc-200 rounded-lg p-1">
                         <input
                           type="date"
                           value={exportStartDate}
                           onChange={e => setExportStartDate(e.target.value)}
-                          className="bg-transparent border-none text-gray-700 text-xs font-bold focus:ring-0 cursor-pointer p-1"
+                          className="bg-transparent border-none text-zinc-700 text-xs font-bold focus:ring-0 cursor-pointer p-1"
                         />
-                        <span className="text-gray-400 text-xs font-bold">to</span>
+                        <span className="text-zinc-400 text-xs font-bold">to</span>
                         <input
                           type="date"
                           value={exportEndDate}
                           onChange={e => setExportEndDate(e.target.value)}
-                          className="bg-transparent border-none text-gray-700 text-xs font-bold focus:ring-0 cursor-pointer p-1"
+                          className="bg-transparent border-none text-zinc-700 text-xs font-bold focus:ring-0 cursor-pointer p-1"
                         />
                       </div>
                     </div>
@@ -732,9 +732,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                     </button>
                   </div>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
                   <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase text-[10px]">
+                    <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-bold uppercase text-[10px]">
                       <tr>
                         <th className="px-6 py-3">Member</th>
                         <th className="px-6 py-3">Date</th>
@@ -744,10 +744,10 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                         <th className="px-6 py-3 text-right">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-zinc-100">
                       {groupedTimeCards.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
+                          <td colSpan={6} className="px-6 py-12 text-center text-zinc-400">
                             No data found for this period.
                           </td>
                         </tr>
@@ -761,63 +761,63 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                           return (
                             <React.Fragment key={group.userId}>
                               <tr
-                                className="hover:bg-gray-50 transition-colors cursor-pointer"
+                                className="hover:bg-zinc-50 transition-colors cursor-pointer"
                                 onClick={() => toggleUserExpanded(group.userId)}
                               >
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-3">
                                     {isExpanded ? (
-                                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                                      <ChevronDown className="w-4 h-4 text-zinc-400" />
                                     ) : (
-                                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                                      <ChevronRight className="w-4 h-4 text-zinc-400" />
                                     )}
                                     <div>
-                                      <div className="font-bold text-gray-900">{user?.name || 'Unknown'}</div>
-                                      <div className="text-[10px] text-gray-500">{user?.role}</div>
+                                      <div className="font-bold text-zinc-900">{user?.name || 'Unknown'}</div>
+                                      <div className="text-[10px] text-zinc-500">{user?.role}</div>
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 text-gray-400 text-xs font-medium">
+                                <td className="px-6 py-4 text-zinc-400 text-xs font-medium">
                                   {group.cards.length} {group.cards.length === 1 ? 'Record' : 'Records'}
                                 </td>
                                 <td className="px-6 py-4">
                                   {group.cards.length > 0 ? (
                                     <>
-                                      <div className="text-xs font-medium text-gray-900">
+                                      <div className="text-xs font-medium text-zinc-900">
                                         {new Date(group.cards[0].clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                       </div>
-                                      <div className="text-[10px] text-gray-500">
+                                      <div className="text-[10px] text-zinc-500">
                                         {group.cards[0].clockOut ? new Date(group.cards[0].clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
                                       </div>
                                     </>
                                   ) : (
-                                    <div className="text-xs text-gray-400">-</div>
+                                    <div className="text-xs text-zinc-400">-</div>
                                   )}
                                 </td>
                                 <td className="px-6 py-4">
-                                  <div className={`text-xs font-bold ${group.totalIdle && group.totalIdle > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                                  <div className={`text-xs font-bold ${group.totalIdle && group.totalIdle > 0 ? 'text-amber-600' : 'text-zinc-400'}`}>
                                     -{group.totalIdle.toFixed(2)} hr
                                   </div>
-                                  <div className="text-[10px] text-gray-400">Cycle Idle</div>
+                                  <div className="text-[10px] text-zinc-400">Cycle Idle</div>
                                 </td>
                                 <td className="px-6 py-4">
-                                  <div className="text-xs font-bold text-blue-600">
+                                  <div className="text-xs font-bold text-zinc-900">
                                     {group.totalHours.toFixed(2)} hr
                                   </div>
-                                  <div className="text-[10px] text-gray-400 font-medium">Cycle Total</div>
+                                  <div className="text-[10px] text-zinc-400 font-medium">Cycle Total</div>
                                 </td>
                                 <td className="px-6 py-4 flex flex-col items-end gap-1.5 justify-center mt-1">
                                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
-                                    ${group.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' :
-                                      group.status === 'Active' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                    ${group.status === 'Complete' ? 'bg-zinc-50 text-zinc-800 border-zinc-200' :
+                                      group.status === 'Active' ? 'bg-zinc-50 text-zinc-800 border-zinc-200' :
                                         group.status === 'Incomplete' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                          'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                                          'bg-zinc-50 text-zinc-500 border-zinc-200'}`}>
                                     {group.status}
                                   </span>
                                   {group.status !== 'Active' && onClockIn && user && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); onClockIn(user); }}
-                                      className="text-[10px] font-bold bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded shadow-sm transition-colors"
+                                      className="text-[10px] font-bold bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50 px-2 py-1 rounded shadow-sm transition-colors"
                                     >Clock In</button>
                                   )}
                                   {group.status === 'Active' && onClockOut && user && (
@@ -843,16 +843,16 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                 return (
                                   <React.Fragment key={card.id}>
                                     <tr
-                                      className="bg-gray-50/50 hover:bg-gray-100/50 transition-colors cursor-pointer"
+                                      className="bg-zinc-50/50 hover:bg-zinc-100/50 transition-colors cursor-pointer"
                                       onClick={() => toggleCardExpanded(card.id)}
                                     >
                                       <td className="px-6 py-3 pl-16">
                                         <div className="flex items-center gap-2">
-                                          {isCardExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                                          <div className="text-xs text-gray-600 font-bold">Total Time</div>
+                                          {isCardExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
+                                          <div className="text-xs text-zinc-600 font-bold">Total Time</div>
                                         </div>
                                       </td>
-                                      <td className="px-6 py-3 text-gray-600 font-medium">
+                                      <td className="px-6 py-3 text-zinc-600 font-medium">
                                         {new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                       </td>
                                       <td className="px-6 py-3" onClick={e => e.stopPropagation()}>
@@ -862,52 +862,52 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                               type="datetime-local"
                                               value={editClockIn}
                                               onChange={e => setEditClockIn(e.target.value)}
-                                              className="text-xs border border-gray-300 rounded p-1"
+                                              className="text-xs border border-zinc-300 rounded p-1"
                                             />
                                             <input
                                               type="datetime-local"
                                               value={editClockOut}
                                               onChange={e => setEditClockOut(e.target.value)}
-                                              className="text-xs border border-gray-300 rounded p-1"
+                                              className="text-xs border border-zinc-300 rounded p-1"
                                               disabled={!card.clockOut && !editClockOut}
                                             />
                                           </div>
                                         ) : (
                                           <>
-                                            <div className="text-xs font-medium text-gray-900">
+                                            <div className="text-xs font-medium text-zinc-900">
                                               {new Date(card.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </div>
-                                            <div className="text-[10px] text-gray-500">
+                                            <div className="text-[10px] text-zinc-500">
                                               {card.clockOut ? new Date(card.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
                                             </div>
                                           </>
                                         )}
                                       </td>
                                       <td className="px-6 py-3">
-                                        <div className={`text-xs font-medium ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                                        <div className={`text-xs font-medium ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-zinc-400'}`}>
                                           -{card.totalIdleHours?.toFixed(2) || '0.00'} hr
                                         </div>
                                       </td>
                                       <td className="px-6 py-3">
-                                        <div className="text-xs font-medium text-blue-600">
+                                        <div className="text-xs font-medium text-zinc-900">
                                           {card.totalHours.toFixed(2)} hr
                                         </div>
                                       </td>
                                       <td className="px-6 py-3 text-right" onClick={e => e.stopPropagation()}>
                                         <div className="flex flex-col items-end gap-1.5">
                                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
-                                            ${card.status === 'Complete' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                            ${card.status === 'Complete' ? 'bg-zinc-50 text-zinc-800 border-zinc-200' : 'bg-zinc-50 text-zinc-800 border-zinc-200'}`}>
                                             {card.status}
                                           </span>
                                           {isEditing ? (
                                             <div className="flex gap-1 mt-1">
-                                              <button onClick={() => setEditingCardId(null)} className="text-[10px] font-bold text-gray-500 hover:text-gray-700">Cancel</button>
-                                              <button onClick={() => saveEditedCard(card)} className="text-[10px] font-bold text-green-600 hover:text-green-700">Save</button>
+                                              <button onClick={() => setEditingCardId(null)} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700">Cancel</button>
+                                              <button onClick={() => saveEditedCard(card)} className="text-[10px] font-bold text-zinc-900 hover:text-zinc-800">Save</button>
                                             </div>
                                           ) : (
                                             <button
                                               onClick={() => startEditingCard(card)}
-                                              className="text-[10px] font-bold text-gray-400 hover:text-blue-600 transition-colors underline"
+                                              className="text-[10px] font-bold text-zinc-400 hover:text-zinc-600 transition-colors underline"
                                             >
                                               Edit
                                             </button>
@@ -919,14 +919,14 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                     {isCardExpanded && (
                                       cardLogs.length > 0 ? (
                                         cardLogs.map(log => (
-                                          <tr key={log.id} className="bg-gray-100/30">
+                                          <tr key={log.id} className="bg-zinc-100/30">
                                             <td className="px-6 py-2 pl-[4.5rem]">
-                                              <div className="text-[10px] font-mono text-gray-400 whitespace-nowrap">
+                                              <div className="text-[10px] font-mono text-zinc-400 whitespace-nowrap">
                                                 {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                               </div>
                                             </td>
                                             <td colSpan={5} className="px-6 py-2">
-                                              <div className="text-xs text-gray-600 flex items-center gap-2">
+                                              <div className="text-xs text-zinc-600 flex items-center gap-2">
                                                 <span className="font-bold">{log.department}:</span>
                                                 <span>{log.task || log.notes || 'Routine check-in'}</span>
                                               </div>
@@ -934,9 +934,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                           </tr>
                                         ))
                                       ) : (
-                                        <tr className="bg-gray-100/30">
+                                        <tr className="bg-zinc-100/30">
                                           <td className="px-6 py-2 pl-[4.5rem]" colSpan={6}>
-                                            <div className="text-xs text-gray-400 italic">No check-ins logged for this period.</div>
+                                            <div className="text-xs text-zinc-400 italic">No check-ins logged for this period.</div>
                                           </td>
                                         </tr>
                                       )

@@ -92,16 +92,16 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                     </div>
                 )}
                 {/* Header Row */}
-                <div className="flex border-b border-gray-200">
-                    <div className="w-16 shrink-0 border-r border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase">GMT</span>
+                <div className="flex border-b border-zinc-200">
+                    <div className="w-16 shrink-0 border-r border-zinc-200 bg-zinc-50 flex flex-col items-center justify-center">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase">GMT</span>
                     </div>
                     {dates.map((d, i) => (
-                        <div key={i} className={`flex-1 p-2 text-center border-r border-gray-100 last:border-r-0 ${isToday(d) ? 'bg-indigo-50/30' : ''}`}>
-                            <div className={`text-xs font-bold uppercase ${isToday(d) ? 'text-indigo-600' : 'text-gray-500'}`}>
+                        <div key={i} className={`flex-1 p-2 text-center border-r border-zinc-100 last:border-r-0 ${isToday(d) ? 'bg-zinc-50/30' : ''}`}>
+                            <div className={`text-xs font-bold uppercase ${isToday(d) ? 'text-zinc-900' : 'text-zinc-500'}`}>
                                 {d.toLocaleDateString('en-US', { weekday: 'short' })}
                             </div>
-                            <div className={`text-xl font-light ${isToday(d) ? 'text-indigo-600' : 'text-gray-800'}`}>
+                            <div className={`text-xl font-light ${isToday(d) ? 'text-zinc-900' : 'text-zinc-800'}`}>
                                 {d.getDate()}
                             </div>
                         </div>
@@ -111,14 +111,14 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                 {/* Grid Area */}
                 <div className="flex-1 flex overflow-y-auto overflow-x-hidden relative">
                     {/* Time Column */}
-                    <div className="w-16 shrink-0 flex flex-col border-r border-gray-200 bg-white relative pb-8">
+                    <div className="w-16 shrink-0 flex flex-col border-r border-zinc-200 bg-white relative pb-8">
                         {Array.from({ length: TOTAL_HOURS + 1 }).map((_, i) => {
                             const hour = START_HOUR + i;
                             const displayHour = hour > 12 ? hour - 12 : hour;
                             const ampm = hour >= 12 ? 'pm' : 'am';
                             return (
                                 <div key={i} className="h-16 relative w-full text-right pr-2">
-                                    <span className="text-[10px] text-gray-500 relative -top-2">
+                                    <span className="text-[10px] text-zinc-500 relative -top-2">
                                         {displayHour}{ampm}
                                     </span>
                                 </div>
@@ -131,7 +131,7 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                         {/* Background lines */}
                         <div className="absolute inset-0 pointer-events-none">
                             {Array.from({ length: TOTAL_HOURS + 1 }).map((_, i) => (
-                                <div key={i} className="h-16 border-t border-gray-100 w-full" />
+                                <div key={i} className="h-16 border-t border-zinc-100 w-full" />
                             ))}
                         </div>
 
@@ -143,7 +143,7 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                             });
 
                             return (
-                                <div key={colIndex} className={`flex-1 border-r border-gray-100 last:border-r-0 relative ${isToday(d) ? 'bg-indigo-50/10' : ''}`}>
+                                <div key={colIndex} className={`flex-1 border-r border-zinc-100 last:border-r-0 relative ${isToday(d) ? 'bg-zinc-50/10' : ''}`}>
                                     {dayBlocks.map((b) => {
                                         const bStart = new Date(b.startTime);
                                         const bEnd = new Date(b.endTime);
@@ -202,16 +202,16 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                     </div>
                 )}
-                <div className="flex grid-cols-7 border-b border-gray-200 bg-gray-50 shrink-0">
+                <div className="flex grid-cols-7 border-b border-zinc-200 bg-zinc-50 shrink-0">
                     {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                        <div key={day} className="flex-1 py-2 text-center text-xs font-bold text-gray-500 uppercase border-r border-gray-200 last:border-r-0">
+                        <div key={day} className="flex-1 py-2 text-center text-xs font-bold text-zinc-500 uppercase border-r border-zinc-200 last:border-r-0">
                             {day}
                         </div>
                     ))}
                 </div>
                 <div className="flex-1 flex flex-col overflow-y-auto">
                     {weeks.map((week, wIndex) => (
-                        <div key={wIndex} className="flex-1 flex border-b border-gray-200 min-h-[120px]">
+                        <div key={wIndex} className="flex-1 flex border-b border-zinc-200 min-h-[120px]">
                             {week.map((d, dIndex) => {
                                 const isCurrentMonth = d.getMonth() === currentDate.getMonth();
                                 const dayBlocks = firebaseShiftBlocks.filter((b) => {
@@ -222,8 +222,8 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                                 dayBlocks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
                                 return (
-                                    <div key={dIndex} className={`flex-1 border-r border-gray-200 last:border-r-0 p-1 flex flex-col ${!isCurrentMonth ? 'bg-gray-50' : 'bg-white'} ${isToday(d) ? 'ring-2 ring-indigo-500 ring-inset relative z-10' : ''}`}>
-                                        <div className={`text-xs p-1 ${isToday(d) ? 'text-indigo-700 font-bold' : (!isCurrentMonth ? 'text-gray-400' : 'text-gray-700 font-medium')}`}>
+                                    <div key={dIndex} className={`flex-1 border-r border-zinc-200 last:border-r-0 p-1 flex flex-col ${!isCurrentMonth ? 'bg-zinc-50' : 'bg-white'} ${isToday(d) ? 'ring-2 ring-indigo-500 ring-inset relative z-10' : ''}`}>
+                                        <div className={`text-xs p-1 ${isToday(d) ? 'text-indigo-700 font-bold' : (!isCurrentMonth ? 'text-zinc-400' : 'text-zinc-700 font-medium')}`}>
                                             {d.getDate() === 1 ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : d.getDate()}
                                         </div>
                                         <div className="flex-1 overflow-y-auto space-y-1 mt-1 pr-1 custom-scrollbar">
