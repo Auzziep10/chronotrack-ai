@@ -314,7 +314,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         totalHours,
         status: statusStr
       };
-    }).sort((a: any, b: any) => {
+    })
+    .filter(group => group.cards.length > 0)
+    .sort((a: any, b: any) => {
       const nameA = users.find(u => u.id === a.userId)?.name || '';
       const nameB = users.find(u => u.id === b.userId)?.name || '';
       return nameA.localeCompare(nameB);
