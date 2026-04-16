@@ -79,7 +79,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
     return (
       <div className="max-w-2xl mx-auto py-12 animate-fade-in">
         <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-zinc-100">
-          <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-8 text-center text-white">
+          <div className="bg-black p-8 text-center text-white">
             <div className="w-16 h-16 bg-white/10 rounded-full mx-auto flex items-center justify-center text-2xl font-bold mb-4 border border-white/20">
               {actionMenuUser.avatarInitials}
             </div>
@@ -147,7 +147,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
       {/* Left Column: Clock In/Out Action */}
       <div className="lg:col-span-5 space-y-6">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-zinc-100 h-full flex flex-col">
-          <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-8 text-white text-center">
+          <div className="bg-black p-8 text-white text-center">
             <h2 className="text-3xl font-bold mb-2">Master Time Station</h2>
             <p className="text-slate-300">Identify yourself to start or end your shift.</p>
           </div>

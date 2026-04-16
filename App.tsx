@@ -987,7 +987,7 @@ const App: React.FC = () => {
       <header className="bg-white border-b border-zinc-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-zinc-900 to-indigo-700 p-2 rounded-lg shadow-md">
+            <div className="bg-black p-2 rounded-lg shadow-md">
               <div className="w-4 h-4 border-2 border-white rounded-full"></div>
             </div>
             <div className="flex items-center gap-2">
