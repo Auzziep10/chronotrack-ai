@@ -17,35 +17,83 @@ export const PrintableForms: React.FC<Props> = ({ currentUser }) => {
     window.print();
   };
 
+import { PDFDocument } from 'pdf-lib';
+
   const handleUploadToAdmin = async () => {
     if (!currentUser) {
       alert("You must be logged in to submit documents.");
       return;
     }
 
-    const element = document.getElementById('printable-form-container');
-    if (!element) return;
-
     setIsUploading(true);
     try {
-      // Generate canvas
-      const canvas = await html2canvas(element, { 
-        scale: 2,
-        useCORS: true,
-        logging: false
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      
-      // Calculate PDF dimensions (A4 ratio approx)
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'px',
-        format: [canvas.width, canvas.height]
-      });
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-      const pdfDataUri = pdf.output('datauristring');
+      let pdfDataUri = '';
+
+      if (activeForm === 'w9') {
+        // Fetch the official W-9 form we downloaded to public/fw9.pdf
+        const formPdfBytes = await fetch('/fw9.pdf').then(res => res.arrayBuffer());
+        const pdfDoc = await PDFDocument.load(formPdfBytes);
+        const form = pdfDoc.getForm();
+        
+        // Read values from DOM
+        const name = (document.getElementById('w9-name') as HTMLInputElement)?.value || '';
+        const business = (document.getElementById('w9-business') as HTMLInputElement)?.value || '';
+        const address = (document.getElementById('w9-address') as HTMLInputElement)?.value || '';
+        const city = (document.getElementById('w9-city') as HTMLInputElement)?.value || '';
+        const ssn = (document.getElementById('w9-ssn') as HTMLInputElement)?.value || '';
+        const ein = (document.getElementById('w9-ein') as HTMLInputElement)?.value || '';
+        const taxClassRadios = document.getElementsByName('tax_class') as NodeListOf<HTMLInputElement>;
+        let taxClass = '';
+        taxClassRadios.forEach(r => { if (r.checked) taxClass = r.value; });
+
+        // Fill form fields based on the IRS fw9.pdf AcroForm names
+        try { form.getTextField('topmostSubform[0].Page1[0].f1_01[0]').setText(name); } catch(e){}
+        try { form.getTextField('topmostSubform[0].Page1[0].f1_02[0]').setText(business); } catch(e){}
+        try { form.getTextField('topmostSubform[0].Page1[0].Address_ReadOrder[0].f1_07[0]').setText(address); } catch(e){}
+        try { form.getTextField('topmostSubform[0].Page1[0].Address_ReadOrder[0].f1_08[0]').setText(city); } catch(e){}
+        
+        // SSN
+        if (ssn) {
+          const ssnClean = ssn.replace(/\D/g, '');
+          try { form.getTextField('topmostSubform[0].Page1[0].f1_09[0]').setText(ssnClean.substring(0,3)); } catch(e){}
+          try { form.getTextField('topmostSubform[0].Page1[0].f1_10[0]').setText(ssnClean.substring(3,5)); } catch(e){}
+          try { form.getTextField('topmostSubform[0].Page1[0].f1_11[0]').setText(ssnClean.substring(5,9)); } catch(e){}
+        }
+
+        // EIN
+        if (ein) {
+          const einClean = ein.replace(/\D/g, '');
+          try { form.getTextField('topmostSubform[0].Page1[0].f1_12[0]').setText(einClean.substring(0,2)); } catch(e){}
+          try { form.getTextField('topmostSubform[0].Page1[0].f1_13[0]').setText(einClean.substring(2,9)); } catch(e){}
+        }
+
+        // Tax Class Checkboxes (c1_1[0] to [6] etc)
+        try {
+          if (taxClass === '1') form.getCheckBox('topmostSubform[0].Page1[0].Boxes3a-b_ReadOrder[0].c1_1[0]').check();
+          if (taxClass === '2') form.getCheckBox('topmostSubform[0].Page1[0].Boxes3a-b_ReadOrder[0].c1_1[1]').check();
+          if (taxClass === '3') form.getCheckBox('topmostSubform[0].Page1[0].Boxes3a-b_ReadOrder[0].c1_1[2]').check();
+          if (taxClass === '4') form.getCheckBox('topmostSubform[0].Page1[0].Boxes3a-b_ReadOrder[0].c1_1[3]').check();
+          if (taxClass === '5') form.getCheckBox('topmostSubform[0].Page1[0].Boxes3a-b_ReadOrder[0].c1_1[4]').check();
+        } catch(e){}
+
+        form.flatten();
+        const savedPdf = await pdfDoc.saveAsBase64({ dataUri: true });
+        pdfDataUri = savedPdf;
+
+      } else {
+        // Fallback to html2canvas for Direct Deposit
+        const element = document.getElementById('printable-form-container');
+        if (!element) throw new Error("Form container not found");
+        
+        element.classList.add('print:shadow-none', 'print:border-none');
+        const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false });
+        element.classList.remove('print:shadow-none', 'print:border-none');
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [canvas.width, canvas.height] });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdfDataUri = pdf.output('datauristring');
+      }
       
       await firebaseUploadDocument(currentUser.id, activeForm, pdfDataUri);
       
@@ -224,33 +272,33 @@ export const PrintableForms: React.FC<Props> = ({ currentUser }) => {
             <div className="grid grid-cols-2 gap-x-8 gap-y-4 pt-2">
               <div className="col-span-2">
                 <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">1 Name (as shown on your income tax return)</label>
-                <input type="text" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" defaultValue={currentUser?.name || ''} />
+                <input id="w9-name" type="text" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" defaultValue={currentUser?.name || ''} />
               </div>
               
               <div className="col-span-2">
                 <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">2 Business name/disregarded entity name, if different from above</label>
-                <input type="text" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" />
+                <input id="w9-business" type="text" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" />
               </div>
 
               <div className="col-span-2 sm:col-span-1 border border-zinc-200 p-3 rounded">
                 <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">3 Check appropriate box for federal tax classification</label>
                 <div className="space-y-2 text-sm text-zinc-700">
-                  <label className="flex items-center gap-2"><input type="radio" name="tax_class" /> Individual/sole proprietor</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="tax_class" /> C Corporation</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="tax_class" /> S Corporation</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="tax_class" /> Partnership</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="tax_class" /> Trust/estate</label>
+                  <label className="flex items-center gap-2"><input type="radio" name="tax_class" value="1" /> Individual/sole proprietor</label>
+                  <label className="flex items-center gap-2"><input type="radio" name="tax_class" value="2" /> C Corporation</label>
+                  <label className="flex items-center gap-2"><input type="radio" name="tax_class" value="3" /> S Corporation</label>
+                  <label className="flex items-center gap-2"><input type="radio" name="tax_class" value="4" /> Partnership</label>
+                  <label className="flex items-center gap-2"><input type="radio" name="tax_class" value="5" /> Trust/estate</label>
                 </div>
               </div>
 
               <div className="col-span-2 sm:col-span-1">
                 <div className="mb-4">
                   <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">5 Address (number, street, and apt. or suite no.)</label>
-                  <input type="text" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" />
+                  <input id="w9-address" type="text" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">6 City, state, and ZIP code</label>
-                  <input type="text" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" />
+                  <input id="w9-city" type="text" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" />
                 </div>
               </div>
 
@@ -260,11 +308,11 @@ export const PrintableForms: React.FC<Props> = ({ currentUser }) => {
                 <div className="grid grid-cols-2 gap-8">
                   <div>
                     <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Social security number</label>
-                    <input type="text" placeholder="XXX-XX-XXXX" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" />
+                    <input id="w9-ssn" type="text" placeholder="XXX-XX-XXXX" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Employer identification number</label>
-                    <input type="text" placeholder="XX-XXXXXXX" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" />
+                    <input id="w9-ein" type="text" placeholder="XX-XXXXXXX" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" />
                   </div>
                 </div>
               </div>
