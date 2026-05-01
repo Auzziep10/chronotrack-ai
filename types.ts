@@ -97,6 +97,7 @@ export interface AppSettings {
   payFrequency: PayFrequency;
   payPeriodStartDay: DayOfWeek;
   checkInIntervalHours?: number;
+  autoPauseEnabled?: boolean;
 }
 
 export interface ScheduleBlock {
@@ -111,6 +112,7 @@ export interface ScheduleBlock {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   status: 'pending' | 'in_progress' | 'completed' | 'delayed';
   location?: string;
+  department?: Department;
   checkIns?: Array<{
     id?: string;
     timestamp: any;

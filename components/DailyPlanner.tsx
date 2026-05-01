@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy } from 'lucide-react';
-import { User, DailySchedule, ScheduleBlock } from '../types';
+import { User, DailySchedule, ScheduleBlock, Department } from '../types';
 import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock } from '../services/firebaseService';
 import { ShiftCalendarViews } from './ShiftCalendarViews';
 
@@ -59,6 +59,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [editStart, setEditStart] = useState('');
     const [editEnd, setEditEnd] = useState('');
     const [editNotes, setEditNotes] = useState('');
+    const [editDepartment, setEditDepartment] = useState<Department | ''>('');
     const [isUpdating, setIsUpdating] = useState(false);
 
     // Shift Blocks State (From Firebase)
@@ -289,6 +290,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         setEditStart(startStr);
         setEditEnd(endStr);
         setEditNotes('');
+        setEditDepartment('');
         setContextMenu(null);
     };
 
@@ -303,6 +305,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         setEditEnd(`${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`);
 
         setEditNotes(block.description || '');
+        setEditDepartment(block.department || '');
     };
 
     const handleSaveEdit = async () => {
@@ -320,6 +323,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             const blockData = {
                 title: editingBlock.title,
                 description: editNotes,
+                department: editDepartment || undefined,
                 startTime: bStart.toISOString(),
                 endTime: bEnd.toISOString(),
                 assignedTo: editingBlock.assignedTo,
@@ -985,6 +989,22 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                     />
                                 </div>
                             </div>
+
+                            {editingBlock.title.startsWith('[SHIFT]') && (
+                                <div>
+                                    <label className="block text-xs font-bold text-zinc-600 mb-1">Department</label>
+                                    <select
+                                        value={editDepartment}
+                                        onChange={(e) => setEditDepartment(e.target.value as Department | '')}
+                                        className="w-full text-sm p-2 border border-zinc-300 rounded focus:ring-2 focus:ring-zinc-500 outline-none bg-white"
+                                    >
+                                        <option value="">No Department Specified</option>
+                                        {Object.values(Department).map(dept => (
+                                            <option key={dept} value={dept}>{dept}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
 
                             <div>
                                 <label className="block text-xs font-bold text-zinc-600 mb-1">Notes / Description</label>

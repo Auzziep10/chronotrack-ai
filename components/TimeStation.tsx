@@ -15,9 +15,10 @@ interface Props {
   onResumeSession?: (user: User) => void;
   isAdmin?: boolean;
   appSettings?: AppSettings;
+  onUpdateSettings?: (settings: AppSettings) => void;
 }
 
-export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession, isAdmin, appSettings }) => {
+export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession, isAdmin, appSettings, onUpdateSettings }) => {
   const [showPinPad, setShowPinPad] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [pinMessage, setPinMessage] = useState<string>('');
@@ -190,25 +191,46 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
             </h3>
             <div className="flex items-center gap-4">
               {isAdmin && (
-                <select
-                  className="text-xs border border-zinc-300 rounded px-2 py-1 bg-white cursor-pointer font-bold text-zinc-900"
-                  onChange={(e) => {
-                    const u = users.find(u => u.id === e.target.value);
-                    if (u) {
-                      onClockIn(u);
-                      e.target.value = '';
-                    }
-                  }}
-                  defaultValue=""
-                >
-                  <option value="" disabled>+ Admin Clock In</option>
-                  {users.filter(u => !activeSessions[u.id]).map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
+                <>
+                  <button
+                    onClick={() => {
+                      if (onUpdateSettings && appSettings) {
+                        onUpdateSettings({
+                          ...appSettings,
+                          autoPauseEnabled: !(appSettings.autoPauseEnabled ?? true)
+                        });
+                      }
+                    }}
+                    className={`text-xs border rounded-lg px-3 py-1.5 font-bold flex items-center gap-2 transition-colors ${
+                      (appSettings?.autoPauseEnabled ?? true) 
+                        ? 'bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200' 
+                        : 'bg-zinc-100 text-zinc-500 border-zinc-300 hover:bg-zinc-200'
+                    }`}
+                    title="Toggle automatic shift pause when idle"
+                  >
+                    <Pause className="w-3 h-3" />
+                    Auto-Pause: {(appSettings?.autoPauseEnabled ?? true) ? 'ON' : 'OFF'}
+                  </button>
+                  <select
+                    className="text-xs border border-zinc-300 rounded-lg px-3 py-1.5 bg-white cursor-pointer font-bold text-zinc-900"
+                    onChange={(e) => {
+                      const u = users.find(u => u.id === e.target.value);
+                      if (u) {
+                        onClockIn(u);
+                        e.target.value = '';
+                      }
+                    }}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>+ Admin Clock In</option>
+                    {users.filter(u => !activeSessions[u.id]).map(u => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                </>
               )}
-              <div className="flex items-center gap-2 text-xs text-zinc-500">
-                <span className="w-2 h-2 bg-zinc-500 rounded-full animate-pulse"></span>
+              <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium bg-white border border-zinc-200 px-3 py-1.5 rounded-lg shadow-sm">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
                 Live Tracking
               </div>
             </div>

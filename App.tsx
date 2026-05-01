@@ -553,11 +553,12 @@ const App: React.FC = () => {
       if (isFirebaseConfigured()) {
         import('./services/firebaseService').then(async (mod) => {
           const IDLE_THRESHOLD_MS = ((appSettings?.checkInIntervalHours || 1) * 60 * 60 * 1000) + (10 * 60 * 1000);
-          const isOverdueForPause = (now - session.lastLogTime) >= IDLE_THRESHOLD_MS;
+          const autoPauseEnabled = appSettings?.autoPauseEnabled !== false; // Default to true
+          const isOverdueForPause = autoPauseEnabled && ((now - session.lastLogTime) >= IDLE_THRESHOLD_MS);
 
           if (session.isPaused || isOverdueForPause) {
             // If they weren't officially "paused" yet but were overdue, 
-            // we treat them as paused since the 70m mark.
+            // we treat them as paused since the idle threshold mark.
             let effectiveSession = session;
             if (!session.isPaused && isOverdueForPause) {
               // Mock a session state that currentIdleStartTime was at 70m mark
@@ -740,6 +741,7 @@ const App: React.FC = () => {
               onResumeSession={handleResumeSession}
               isAdmin={isAdminOrManager}
               appSettings={appSettings}
+              onUpdateSettings={handleUpdateSettings}
             />
           ) : activeTab === 'activity' ? (
             <ActivityTracker
