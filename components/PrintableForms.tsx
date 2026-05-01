@@ -4,6 +4,7 @@ import { FileText, Printer, Download, CreditCard, FileSignature, UploadCloud } f
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { PDFDocument } from 'pdf-lib';
+import SignatureCanvas from 'react-signature-canvas';
 import { firebaseUploadDocument } from '../services/firebaseService';
 
 interface Props {
@@ -13,6 +14,13 @@ interface Props {
 export const PrintableForms: React.FC<Props> = ({ currentUser }) => {
   const [activeForm, setActiveForm] = useState<'direct_deposit' | 'w9'>('direct_deposit');
   const [isUploading, setIsUploading] = useState(false);
+  const sigPadDD = React.useRef<SignatureCanvas>(null);
+  const sigPadW9 = React.useRef<SignatureCanvas>(null);
+
+  const clearSignature = (form: 'dd' | 'w9') => {
+    if (form === 'dd') sigPadDD.current?.clear();
+    if (form === 'w9') sigPadW9.current?.clear();
+  };
 
   const handlePrint = () => {
     window.print();
@@ -73,7 +81,29 @@ export const PrintableForms: React.FC<Props> = ({ currentUser }) => {
           if (taxClass === '3') form.getCheckBox('topmostSubform[0].Page1[0].Boxes3a-b_ReadOrder[0].c1_1[2]').check();
           if (taxClass === '4') form.getCheckBox('topmostSubform[0].Page1[0].Boxes3a-b_ReadOrder[0].c1_1[3]').check();
           if (taxClass === '5') form.getCheckBox('topmostSubform[0].Page1[0].Boxes3a-b_ReadOrder[0].c1_1[4]').check();
-        } catch(e){}
+        } catch(e) {}
+
+        // Signature for W-9
+        if (sigPadW9.current && !(sigPadW9.current as any).isEmpty()) {
+          const sigDataUrl = (sigPadW9.current as any).getTrimmedCanvas().toDataURL('image/png');
+          const pngImage = await pdfDoc.embedPng(sigDataUrl);
+          const pngDims = pngImage.scale(0.5); // scale down to fit
+          pdfDoc.getPages()[0].drawImage(pngImage, {
+            x: 130,
+            y: 240, // Approximate Y coordinate from bottom
+            width: pngDims.width > 200 ? 200 : pngDims.width,
+            height: pngDims.height > 50 ? 50 : pngDims.height,
+          });
+
+          // Draw the Timestamp next to the signature (approx X: 450, Y: 240)
+          const dateVal = (document.getElementById('w9-date') as HTMLInputElement)?.value || new Date().toLocaleDateString();
+          const timestamp = `${dateVal} ${new Date().toLocaleTimeString()}`;
+          pdfDoc.getPages()[0].drawText(timestamp, {
+            x: 430,
+            y: 250,
+            size: 10
+          });
+        }
 
         form.flatten();
         const savedPdf = await pdfDoc.saveAsBase64({ dataUri: true });
@@ -185,8 +215,17 @@ export const PrintableForms: React.FC<Props> = ({ currentUser }) => {
 
             <div className="grid grid-cols-2 gap-x-8 gap-y-6 pt-4">
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Signature</label>
-                <input type="text" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900 font-signature text-xl" />
+                <div className="flex justify-between items-end mb-1">
+                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Signature</label>
+                  <button onClick={() => clearSignature('dd')} className="text-[10px] text-zinc-400 hover:text-red-500 print:hidden">Clear</button>
+                </div>
+                <div className="border-b border-zinc-300 bg-blue-50/30">
+                  <SignatureCanvas 
+                    ref={sigPadDD} 
+                    canvasProps={{ className: 'w-full h-12 cursor-crosshair' }} 
+                    penColor="#000"
+                  />
+                </div>
               </div>
               <div className="col-span-2 sm:col-span-1">
                 <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Date</label>
@@ -326,12 +365,21 @@ export const PrintableForms: React.FC<Props> = ({ currentUser }) => {
                 </p>
                 <div className="grid grid-cols-2 gap-8">
                   <div>
-                    <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Signature of U.S. Person</label>
-                    <input type="text" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900 font-signature text-xl" />
+                    <div className="flex justify-between items-end mb-1">
+                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Signature of U.S. Person</label>
+                      <button onClick={() => clearSignature('w9')} className="text-[10px] text-zinc-400 hover:text-red-500 print:hidden">Clear</button>
+                    </div>
+                    <div className="border-b border-zinc-300 bg-blue-50/30">
+                      <SignatureCanvas 
+                        ref={sigPadW9} 
+                        canvasProps={{ className: 'w-full h-12 cursor-crosshair' }} 
+                        penColor="#000"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Date</label>
-                    <input type="date" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" defaultValue={new Date().toISOString().split('T')[0]} />
+                    <input id="w9-date" type="date" className="w-full border-b border-zinc-300 bg-blue-50/30 px-2 py-1.5 focus:outline-none focus:border-zinc-900" defaultValue={new Date().toISOString().split('T')[0]} />
                   </div>
                 </div>
               </div>

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/react-signature-canvas": "^1.0.7",
     "firebase": "^12.9.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
@@ -16,7 +17,8 @@
     "pdf-lib": "^1.17.1",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react-dom": "^19.2.3",
+    "react-signature-canvas": "^1.1.0-alpha.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
