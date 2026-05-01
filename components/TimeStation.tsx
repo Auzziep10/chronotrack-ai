@@ -184,12 +184,12 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
       {/* Right Column: Active Users Dashboard */}
       <div className="lg:col-span-7">
         <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-zinc-50">
-            <h3 className="text-lg font-bold text-zinc-800 flex items-center gap-2">
-              <UserIcon className="w-5 h-5 text-zinc-900" />
+          <div className="px-6 py-4 border-b border-zinc-100 flex flex-wrap justify-between items-center gap-4 bg-zinc-50">
+            <h3 className="text-lg font-bold text-zinc-800 flex items-center gap-2 whitespace-nowrap">
+              <UserIcon className="w-5 h-5 text-zinc-900 shrink-0" />
               Active Team Members ({sessionsList.length})
             </h3>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               {isAdmin && (
                 <>
                   <button
@@ -201,18 +201,18 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                         });
                       }
                     }}
-                    className={`text-xs border rounded-lg px-3 py-1.5 font-bold flex items-center gap-2 transition-colors ${
+                    className={`text-xs border rounded-full px-3 py-1.5 font-bold flex items-center gap-1.5 transition-colors whitespace-nowrap shadow-sm ${
                       (appSettings?.autoPauseEnabled ?? true) 
                         ? 'bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200' 
                         : 'bg-zinc-100 text-zinc-500 border-zinc-300 hover:bg-zinc-200'
                     }`}
                     title="Toggle automatic shift pause when idle"
                   >
-                    <Pause className="w-3 h-3" />
-                    Auto-Pause: {(appSettings?.autoPauseEnabled ?? true) ? 'ON' : 'OFF'}
+                    <Pause className="w-3 h-3 shrink-0" />
+                    Auto-Pause {(appSettings?.autoPauseEnabled ?? true) ? 'ON' : 'OFF'}
                   </button>
                   <select
-                    className="text-xs border border-zinc-300 rounded-lg px-3 py-1.5 bg-white cursor-pointer font-bold text-zinc-900"
+                    className="text-xs border border-zinc-300 rounded-lg px-3 py-1.5 bg-white cursor-pointer font-bold text-zinc-900 shadow-sm"
                     onChange={(e) => {
                       const u = users.find(u => u.id === e.target.value);
                       if (u) {
@@ -229,8 +229,8 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                   </select>
                 </>
               )}
-              <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium bg-white border border-zinc-200 px-3 py-1.5 rounded-lg shadow-sm">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
+              <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium bg-white border border-zinc-200 px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)] shrink-0"></span>
                 Live Tracking
               </div>
             </div>
