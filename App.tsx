@@ -75,14 +75,6 @@ const App: React.FC = () => {
   // Shift Blocks State (From Firebase)
   const [shiftBlocks, setShiftBlocks] = useState<any[]>([]);
 
-  // Replit Bridge State
-  const [lastReplitSync, setLastReplitSync] = useState<number>(0);
-  const [isSyncingReplit, setIsSyncingReplit] = useState(false);
-  const [replitSyncError, setReplitSyncError] = useState<string | null>(null);
-  const [replitSyncTrigger, setReplitSyncTrigger] = useState(0);
-  const syncedLogIdsRef = useRef<Set<string>>(new Set());
-  const warnedIntervalsRef = useRef<Record<string, number[]>>({});
-
   // Track when we last made a local user update (to avoid sync overwriting unsaved data)
   const lastUserUpdateRef = useRef<number>(0);
 
@@ -109,97 +101,6 @@ const App: React.FC = () => {
   // Daily Schedule State
   const [todaySchedule, setTodaySchedule] = useState<any>(null);
 
-  // Sync Users from Replit helper
-  const syncUsersFromReplit = async (token: string) => {
-    // Don't overwrite if a local update happened in the last 15 seconds
-    const timeSinceLastUpdate = Date.now() - lastUserUpdateRef.current;
-    if (timeSinceLastUpdate < 15000) {
-      console.log('Skipping user sync — local update was just made.');
-      return;
-    }
-
-    try {
-      const replitUrl = localStorage.getItem('replitAppUrl');
-      if (replitUrl) {
-        const { supplyWatchService } = await import('./services/supplyWatchService');
-        try {
-          const remoteUsers = await supplyWatchService.getUsers(replitUrl, token);
-          if (Array.isArray(remoteUsers)) {
-            setUsers(prevUsers => {
-              const defaultAvail: any = {
-                'Monday': { active: true, start: '09:00', end: '17:00' },
-                'Tuesday': { active: true, start: '09:00', end: '17:00' },
-                'Wednesday': { active: true, start: '09:00', end: '17:00' },
-                'Thursday': { active: true, start: '09:00', end: '17:00' },
-                'Friday': { active: true, start: '09:00', end: '17:00' },
-                'Saturday': { active: false, start: '09:00', end: '17:00' },
-                'Sunday': { active: false, start: '09:00', end: '17:00' }
-              };
-
-              const mappedRemoteUsers: User[] = remoteUsers.map((rUser: any) => {
-                const firstName = rUser.firstName || '';
-                const lastName = rUser.lastName || '';
-                const fullName = (firstName || lastName)
-                  ? `${firstName} ${lastName}`.trim()
-                  : (rUser.displayName || rUser.username || 'Unknown');
-
-                const initials = (firstName && lastName)
-                  ? (firstName[0] + lastName[0]).toUpperCase()
-                  : (rUser.username || fullName || '??').substring(0, 2).toUpperCase();
-
-                // Find existing local user to merge with — local data wins for
-                // fields the backend may return as empty/default
-                const existingLocal = prevUsers.find(u => u.id === String(rUser.id) || u.username === rUser.username);
-
-                // For PIN: only trust backend value if it's real (not '0000' or missing)
-                // If backend returns '0000' or empty, prefer local PIN
-                const remotePin = rUser.pin && rUser.pin !== '0000' ? rUser.pin : null;
-                const resolvedPin = remotePin || existingLocal?.pin || '0000';
-
-                return {
-                  // Start with existing local data as base (preserves all edited fields)
-                  ...existingLocal,
-                  // Then overlay with real remote values (non-empty, non-default)
-                  id: String(rUser.id),
-                  name: fullName || existingLocal?.name || 'Unknown',
-                  username: rUser.username || existingLocal?.username,
-                  // We prioritize LOCAL role and permissions since edits happen on this platform
-                  role: existingLocal?.role || rUser.role || 'Staff',
-                  permissions: existingLocal?.permissions || rUser.permissions || [],
-                  primaryDepartment: rUser.primaryDepartment || existingLocal?.primaryDepartment || Department.Production,
-                  avatarInitials: rUser.avatarInitials || existingLocal?.avatarInitials || initials,
-                  pin: resolvedPin,
-                  // For availability: prefer remote if it looks real, else keep local
-                  availability: (rUser.availability && Object.keys(rUser.availability).length > 0)
-                    ? rUser.availability
-                    : (existingLocal?.availability || defaultAvail),
-                  lateDays: rUser.lateDays !== undefined ? rUser.lateDays : (existingLocal?.lateDays || 0),
-                  correctionNotes: rUser.correctionNotes || existingLocal?.correctionNotes || '',
-                  // Personal info: keep local if backend doesn't have it
-                  email: rUser.email || existingLocal?.email,
-                  phoneNumber: rUser.phoneNumber || existingLocal?.phoneNumber,
-                  address: rUser.address || existingLocal?.address,
-                  supportingRole: rUser.supportingRole || existingLocal?.supportingRole,
-                  secondaryDepartment: rUser.secondaryDepartment || existingLocal?.secondaryDepartment
-                };
-              }).filter((u: User) => u.role?.trim().toLowerCase() !== 'client');
-
-              // Only update state if something actually changed
-              if (JSON.stringify(mappedRemoteUsers) !== JSON.stringify(prevUsers)) {
-                return mappedRemoteUsers;
-              }
-              return prevUsers;
-            });
-          }
-        } catch (innerErr) {
-          console.warn("Could not fetch remote users", innerErr);
-        }
-      }
-    } catch (err) {
-      console.error("User sync setup failed", err);
-    }
-  };
-
   // Persist state
   useEffect(() => {
     localStorage.setItem('chronoSessions', JSON.stringify(activeSessions));
@@ -213,32 +114,14 @@ const App: React.FC = () => {
     localStorage.setItem('chronoSettings', JSON.stringify(appSettings));
   }, [appSettings]);
 
-  // Fetch today's schedule and sync users when authenticated
+  // Fetch today's schedule when authenticated
   useEffect(() => {
     const initAuthenticatedData = async () => {
       if (!authToken) return;
-
-      // Sync users immediately
-      await syncUsersFromReplit(authToken);
-
-      const replitUrl = localStorage.getItem('replitAppUrl');
-      if (!replitUrl) return;
-
-      try {
-        const { supplyWatchService } = await import('./services/supplyWatchService');
-
-        // Fetch schedule only — sessions are handled by Firebase listener
-        const schedule = await supplyWatchService.getDailySchedule(replitUrl, authToken, new Date());
-        setTodaySchedule(schedule);
-      } catch (err) {
-        console.warn("Could not fetch remote schedule:", err);
-      }
+      // Any standalone initialization can go here
     };
 
     initAuthenticatedData();
-    // Poll schedule every 25 seconds to keep check-ins fresh
-    const interval = setInterval(initAuthenticatedData, 25 * 1000);
-    return () => clearInterval(interval);
   }, [authToken]);
 
   // ─── FIREBASE REAL-TIME LISTENERS ────────────────────────────────────────────
@@ -377,153 +260,7 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessions, authToken, currentUser]);
 
-  // ─── REPLIT -> FIREBASE LOG BRIDGE ──────────────────────────────────────────
-  // Sync hourly check-ins from Replit Supply Watch into ChronoTrack Firebase
-  useEffect(() => {
-    if (!authToken || !isFirebaseConfigured()) return;
 
-    const syncReplitLogs = async () => {
-      let replitUrlRaw = localStorage.getItem('replitAppUrl');
-      if (!replitUrlRaw) return;
-
-      let replitUrl = replitUrlRaw;
-      try {
-        const urlObj = new URL(replitUrlRaw.startsWith('http') ? replitUrlRaw : `https://${replitUrlRaw}`);
-        replitUrl = urlObj.origin;
-      } catch (e) {
-        if (!replitUrl.startsWith('http')) replitUrl = `https://${replitUrl}`;
-      }
-
-      setIsSyncingReplit(true);
-      setReplitSyncError(null);
-      try {
-        const { supplyWatchService } = await import('./services/supplyWatchService');
-        const remoteLogsRaw = await supplyWatchService.getLogs(replitUrl, authToken);
-
-        const logs = Array.isArray(remoteLogsRaw) ? remoteLogsRaw : [];
-
-        const nowTs = Date.now();
-        const twelveHoursAgo = nowTs - (12 * 60 * 60 * 1000);
-
-        // Helper to normalize strings for robust matching
-        const norm = (s: any) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, '');
-
-        const sortedLogs = [...logs].sort((a, b) => {
-          const tA = Number(a.timestamp || a.startTime || a.createdAt || 0);
-          const tB = Number(b.timestamp || b.startTime || b.createdAt || 0);
-          return tA - tB;
-        });
-
-        let foundMatch = false;
-        const currentUsers = usersRef.current;
-        const currentSessions = activeSessionsRef.current;
-
-        if (logs.length > 0) {
-          console.log(`[ReplitSync] Processing ${logs.length} remote logs...`);
-        }
-
-        for (const rLog of sortedLogs) {
-          const logTime = Number(rLog.timestamp || Date.now());
-          if (isNaN(logTime) || logTime < twelveHoursAgo) continue;
-
-          const rawLogId = rLog.id || `check-${rLog.userId || rLog.userName || rLog.username}-${logTime}`;
-          if (syncedLogIdsRef.current.has(rawLogId)) continue;
-
-          const sessionUser = currentUsers.find(u => {
-            const uId = String(u.id);
-            const uName = norm(u.name);
-            const uUser = norm(u.username);
-
-            const rId = String(rLog.userId || '');
-            const rName = norm(rLog.userName || rLog.user_name || rLog.name);
-            const rUser = norm(rLog.username || rLog.user_username || rLog.user?.username);
-
-            // Match by exact ID or exactly matching both parts of the name
-            if (rId && uId === rId) return true;
-            if (rId && (uName === norm(rId) || uUser === norm(rId))) return true;
-            if (rUser && uUser === rUser) return true;
-
-            // Austin Patterson logic: if uName is "austinpatterson" and rName contains "austin", it's a match
-            if (rName && uName && (uName.includes(rName) || rName.includes(uName))) return true;
-
-            return false;
-          });
-
-          if (sessionUser) {
-            const activeSession = currentSessions[sessionUser.id];
-            if (activeSession) {
-              const logId = `replit-${rLog.id || rawLogId}`;
-
-              const isDuplicate = activeSession.logs?.some(l =>
-                l.id === logId || (Math.abs(l.timestamp - logTime) < 10000 && norm(l.task) === norm(rLog.task))
-              );
-
-              if (isDuplicate) {
-                syncedLogIdsRef.current.add(rLog.id || rawLogId);
-
-                // CRITICAL FIX: Even if it's a duplicate, if it's RECENT activity, 
-                // we should ensure the session is resumed if it's currently paused.
-                // This prevents the "long task idle lock" where the user is working but 
-                // IDs don't change because the task status is the same.
-                if (activeSession.isPaused && (nowTs - logTime) < (45 * 60 * 1000)) {
-                  console.log(`[ReplitSync] RESUME (Pulse): Activity detected for ${sessionUser.name}. ID: ${logId}`);
-                  const { firebaseResumeSession } = await import('./services/firebaseService');
-                  await firebaseResumeSession(sessionUser.id, activeSession);
-                  foundMatch = true;
-                }
-                continue;
-              }
-
-              const pEndRaw = Number(rLog.endTime || rLog.timestamp);
-              let pEnd = isNaN(pEndRaw) ? logTime : pEndRaw;
-              if (pEnd < logTime) pEnd = logTime;
-
-              const chronoLog: WorkLog = {
-                id: logId,
-                userId: sessionUser.id,
-                userName: sessionUser.name,
-                department: (rLog.department as Department) || Department.Production,
-                task: rLog.task || 'Staff Check-in',
-                notes: rLog.notes || 'Imported from Replit',
-                timestamp: logTime,
-                periodStart: Number(rLog.startTime || rLog.timestamp) || logTime,
-                periodEnd: pEnd,
-                productionData: rLog.productionQuantity ? {
-                  quantity: rLog.productionQuantity,
-                  projectName: rLog.projectReference || ''
-                } : undefined
-              };
-
-              console.log(`[ReplitSync] SUCCESS: Bridging "${chronoLog.task}" for ${sessionUser.name} @ ${new Date(logTime).toLocaleTimeString()}`);
-
-              const { firebaseResumeSession, firebaseAddLog } = await import('./services/firebaseService');
-              await firebaseResumeSession(sessionUser.id, activeSession);
-              await firebaseAddLog(sessionUser.id, chronoLog);
-
-              syncedLogIdsRef.current.add(rLog.id || rawLogId);
-              foundMatch = true;
-            } else {
-              console.log(`[ReplitSync] SKIP: Found activity for ${sessionUser.name} but they are NOT clocked in.`);
-            }
-          } else {
-            // Optional trace for unmapped logs
-            // console.log(`[ReplitSync] UNMAPPED LOG: "${rLog.task}" for "${rLog.userName || rLog.username}"`);
-          }
-        }
-
-        if (foundMatch) setLastReplitSync(Date.now());
-      } catch (err: any) {
-        console.warn("[ReplitSync] Sync issue:", err);
-        setReplitSyncError(err.message || String(err));
-      } finally {
-        setIsSyncingReplit(false);
-      }
-    };
-
-    syncReplitLogs();
-    const interval = setInterval(syncReplitLogs, 25 * 1000);
-    return () => clearInterval(interval);
-  }, [authToken, replitSyncTrigger]);
 
   // Keep currentUser state in sync with real-time users list updates (e.g. role demotions)
   useEffect(() => {
@@ -585,9 +322,6 @@ const App: React.FC = () => {
     setCurrentUser(userData);
     localStorage.setItem('chronoAuthToken', token);
     localStorage.setItem('chronoCurrentUser', JSON.stringify(userData));
-
-    // Sync Users from Replit
-    syncUsersFromReplit(token);
   };
 
   const handleLogout = () => {
@@ -602,28 +336,12 @@ const App: React.FC = () => {
   const handleAddUser = async (user: User) => {
     setUsers(prev => [...prev, user]);
 
-    // Sync to Replit
-    const replitUrl = localStorage.getItem('replitAppUrl');
-    if (replitUrl && authToken) {
+    // Save to Firebase
+    if (isFirebaseConfigured()) {
       try {
-        const { supplyWatchService } = await import('./services/supplyWatchService');
-        // Map frontend User fields to backend schema
-        const firstName = user.name.split(' ')[0];
-        const lastName = user.name.split(' ').slice(1).join(' ');
-        await supplyWatchService.createUser(replitUrl, authToken, {
-          username: user.username || user.name.toLowerCase().replace(/\s+/g, '_'),
-          email: user.email || `${user.id}@chronotrack.local`,
-          firstName: firstName,
-          lastName: lastName,
-          role: user.role,
-          pin: user.pin || '0000',
-          primaryDepartment: user.primaryDepartment,
-          availability: user.availability,
-          avatarInitials: user.avatarInitials,
-          password: "chrono123" // Default password
-        });
+        await firebaseSaveUser(user);
       } catch (err) {
-        console.error("Failed to sync new user to Replit:", err);
+        console.error("Failed to save new user to Firebase:", err);
       }
     }
   };
@@ -638,45 +356,13 @@ const App: React.FC = () => {
       return prev;
     });
 
-    // Primary: Save to Firebase
+    // Save to Firebase
     if (isFirebaseConfigured()) {
       try {
         await firebaseSaveUser(updatedUser);
         alert(`✅ ${updatedUser.name}'s profile saved successfully!`);
-        return; // Firebase succeeded — done
       } catch (err) {
         console.error('Firebase save user failed:', err);
-      }
-    }
-
-    // Fallback: Save to Replit
-    const replitUrl = localStorage.getItem('replitAppUrl');
-    if (replitUrl && authToken) {
-      try {
-        const { supplyWatchService } = await import('./services/supplyWatchService');
-        const firstName = updatedUser.name.split(' ')[0];
-        const lastName = updatedUser.name.split(' ').slice(1).join(' ');
-        await supplyWatchService.updateUser(replitUrl, authToken, updatedUser.id, {
-          firstName, lastName,
-          role: updatedUser.role,
-          pin: updatedUser.pin,
-          primaryDepartment: updatedUser.primaryDepartment,
-          availability: updatedUser.availability,
-          avatarInitials: updatedUser.avatarInitials,
-          email: updatedUser.email,
-          username: updatedUser.username,
-          phoneNumber: updatedUser.phoneNumber,
-          address: updatedUser.address,
-          supportingRole: updatedUser.supportingRole,
-          secondaryDepartment: updatedUser.secondaryDepartment,
-          lateDays: updatedUser.lateDays,
-          correctionNotes: updatedUser.correctionNotes,
-          permissions: updatedUser.permissions
-        });
-        alert(`✅ ${updatedUser.name}'s profile saved successfully!`);
-      } catch (err) {
-        console.error('Replit save user failed:', err);
-        alert(`⚠️ Profile saved locally but failed to sync. Changes may not appear on other devices.`);
       }
     }
   };
@@ -702,14 +388,6 @@ const App: React.FC = () => {
         console.error('Firebase clock-in failed:', err);
         alert(`Firebase Save Error: ${err.message || 'Unknown database error. Check your Firebase Security Rules!'}`);
       }
-    }
-
-    // Secondary: Sync to Replit
-    const replitUrl = localStorage.getItem('replitAppUrl');
-    if (replitUrl && authToken) {
-      import('./services/supplyWatchService').then(({ supplyWatchService }) => {
-        supplyWatchService.clockIn(replitUrl, authToken!, user.id, user.primaryDepartment).catch(() => { });
-      });
     }
   };
 
@@ -748,14 +426,6 @@ const App: React.FC = () => {
       };
       import('./services/storageService').then(({ storageService }) => {
         storageService.saveTimeCard(timeCard);
-      });
-    }
-
-    // Secondary: Sync to Replit
-    const replitUrl = localStorage.getItem('replitAppUrl');
-    if (replitUrl && authToken) {
-      import('./services/supplyWatchService').then(({ supplyWatchService }) => {
-        supplyWatchService.clockOut(replitUrl, authToken!, user.id).catch(() => { });
       });
     }
   };
@@ -909,14 +579,6 @@ const App: React.FC = () => {
         storageService.saveLog(newLog);
       });
 
-      // Secondary: Sync to Replit
-      import('./services/supplyWatchService').then(({ supplyWatchService }) => {
-        const replitUrl = localStorage.getItem('replitAppUrl');
-        if (replitUrl && authToken) {
-          supplyWatchService.syncLog(newLog, replitUrl, authToken);
-        }
-      });
-
       return {
         ...prev,
         [userId]: {
@@ -932,26 +594,8 @@ const App: React.FC = () => {
   };
 
   const handleUpdateTaskStatus = async (taskId: string, status: string, taskTitle: string, user: User) => {
-    const replitUrl = localStorage.getItem('replitAppUrl');
-    if (!replitUrl || !authToken) return;
-
-    try {
-      const { supplyWatchService } = await import('./services/supplyWatchService');
-      await supplyWatchService.updateScheduleBlock(replitUrl, authToken, taskId, { status });
-      
-      // Also automatically submit a log so it's tracked in timestamps
-      handleLogSubmit(user.id, {
-        task: taskTitle,
-        notes: `Status updated to: ${status === 'in_progress' ? 'Active' : status.charAt(0).toUpperCase() + status.slice(1)}`,
-        department: user.primaryDepartment
-      });
-      
-      // Refresh schedule manually to show new check-ins immediately
-      setReplitSyncTrigger(prev => prev + 1);
-    } catch (err) {
-      console.error("Failed to update task status:", err);
-      alert("Failed to update task status. Please ensure you are connected to Supply Watch.");
-    }
+    // Note: If using standalone, task statuses could be updated via Firebase
+    console.log("Standalone task update not implemented for Firebase tasks yet:", taskId, status);
   };
 
   const deleteLog = (userId: string, logId: string) => {
@@ -1102,12 +746,12 @@ const App: React.FC = () => {
               activeSessions={activeSessions}
               onLogSubmit={handleLogSubmit}
               onDeleteLog={deleteLog}
-              scheduledTasks={todaySchedule?.blocks || []}
-              onManualSync={() => setReplitSyncTrigger(prev => prev + 1)}
-              isSyncingReplit={isSyncingReplit}
-              lastSyncTime={lastReplitSync}
-              syncError={replitSyncError}
-              replitUrl={localStorage.getItem('replitAppUrl') || undefined}
+              scheduledTasks={[]} // Standalone task fetching from Firebase if needed
+              onManualSync={() => {}}
+              isSyncingReplit={false}
+              lastSyncTime={0}
+              syncError={null}
+              replitUrl={undefined}
               currentUser={currentUser}
               onClockIn={handleClockIn}
               onClockOut={handleClockOut}
@@ -1151,16 +795,6 @@ const App: React.FC = () => {
             }
           }
 
-          // Sync to Replit
-          const replitUrl = localStorage.getItem('replitAppUrl');
-          if (replitUrl && authToken) {
-            try {
-              const { supplyWatchService } = await import('./services/supplyWatchService');
-              await supplyWatchService.deleteUser(replitUrl, authToken, userId);
-            } catch (err) {
-              console.error("Failed to sync user deletion to Replit:", err);
-            }
-          }
         }}
         settings={appSettings}
         onUpdateSettings={handleUpdateSettings}

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy } from 'lucide-react';
 import { User, DailySchedule, ScheduleBlock } from '../types';
-import { supplyWatchService } from '../services/supplyWatchService';
 import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock } from '../services/firebaseService';
 import { ShiftCalendarViews } from './ShiftCalendarViews';
 
@@ -32,7 +31,6 @@ const STATUS_LABELS = {
 
 export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [schedule, setSchedule] = useState<DailySchedule | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +63,16 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     // Shift Blocks State (From Firebase)
     const [shiftBlocks, setShiftBlocks] = useState<ScheduleBlock[]>([]);
+
+    // Context Menu State
+    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, userId: string, hour: number } | null>(null);
+
+    // Close context menu on any click
+    useEffect(() => {
+        const handleClick = () => setContextMenu(null);
+        window.addEventListener('click', handleClick);
+        return () => window.removeEventListener('click', handleClick);
+    }, []);
 
     const isAdminOrManager = (() => {
         let currentPerms: string[] = [];
@@ -125,28 +133,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         return () => unsubscribe();
     }, []);
 
-    useEffect(() => {
-        const fetchSchedule = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const replitUrl = localStorage.getItem('replitAppUrl');
-                const token = localStorage.getItem('chronoAuthToken');
-
-                if (replitUrl && token) {
-                    const data = await supplyWatchService.getDailySchedule(replitUrl, token, currentDate);
-                    setSchedule(data);
-                }
-            } catch (err: any) {
-                console.error("Error loading schedule:", err);
-                setError("Failed to load schedule. Ensure you are connected to Supply Watch.");
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchSchedule();
-    }, [currentDate]);
+    // fetchSchedule removed - standalone uses shiftBlocks directly
 
     const handlePrevDay = () => {
         const newDate = new Date(currentDate);
@@ -161,41 +148,19 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     };
 
     const handleGenerateAI = async () => {
-        if (!transcript.trim()) return;
-        setIsGenerating(true);
-        setError(null);
-
-        try {
-            const replitUrl = localStorage.getItem('replitAppUrl');
-            const token = localStorage.getItem('chronoAuthToken');
-
-            if (replitUrl && token) {
-                const result = await supplyWatchService.generateSchedule(replitUrl, token, transcript, currentDate);
-                setSchedule(prev => ({
-                    ...prev,
-                    id: result.schedule.id,
-                    date: result.schedule.date,
-                    blocks: [...(prev?.blocks || []), ...result.blocks]
-                } as any));
-                setUnassignedBlocks(result.unassignedBlocks || []);
-                setTranscript('');
-                alert("AI Schedule Generated! Review tasks below.");
-            }
-        } catch (err: any) {
-            console.error("Generation failed:", err);
-            setError("AI generation failed. Please try again.");
-        } finally {
-            setIsGenerating(false);
-        }
+        alert("AI Schedule Generation is disabled in Standalone Mode.");
     };
 
     const handleDuplicateSchedule = async () => {
-        const todayShifts = shiftBlocks.filter((b) => {
+        const todayBlocks = shiftBlocks.filter((b) => {
             const bDate = new Date(b.startTime);
             return bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
         });
 
-        const hasTasks = (schedule?.blocks?.filter(b => !b.title.startsWith('[SHIFT]'))?.length || 0) > 0;
+        const todayShifts = todayBlocks.filter(b => b.title.startsWith('[SHIFT]'));
+        const todayTasks = todayBlocks.filter(b => !b.title.startsWith('[SHIFT]'));
+
+        const hasTasks = todayTasks.length > 0;
         const hasShifts = todayShifts.length > 0;
 
         if (!duplicateTargetDate) return;
@@ -211,10 +176,6 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         if (!confirm(`Are you sure you want to copy today's entire ${activeView === 'shifts' ? 'shift schedule' : 'task schedule'} to ${duplicateWholeWeek ? 'the entire work week' : duplicateTargetDate}?`)) return;
 
         try {
-            const replitUrl = localStorage.getItem('replitAppUrl');
-            const token = localStorage.getItem('chronoAuthToken');
-            if (!replitUrl || !token) return;
-
             setLoading(true);
 
             const [y, m, d] = duplicateTargetDate.split('-');
@@ -240,26 +201,26 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             let totalCopies = 0;
 
             for (const tDate of targetDates) {
-                if (activeView === 'tasks') {
-                    // Generate an initial schedule container for the chosen date
-                    const targetGenResult = await supplyWatchService.generateSchedule(replitUrl, token, "Initialize schedule structure", tDate);
-                    const targetScheduleId = targetGenResult.schedule?.id;
-                    if (!targetScheduleId) throw new Error(`Could not initialize target schedule for ${tDate.toLocaleDateString()}`);
+                const blocksToCopy = activeView === 'shifts' ? todayShifts : todayTasks;
+                
+                for (const block of blocksToCopy) {
+                    const bStart = new Date(block.startTime);
+                    const bEnd = new Date(block.endTime);
+                    const newStart = new Date(tDate);
+                    newStart.setHours(bStart.getHours(), bStart.getMinutes(), 0, 0);
+                    const newEnd = new Date(tDate);
+                    newEnd.setHours(bEnd.getHours(), bEnd.getMinutes(), 0, 0);
 
-                    // Iterate all scheduled blocks from current day and copy them
-                    for (const block of schedule.blocks) {
-                        if (block.title.startsWith('[SHIFT]')) continue; // Skip legacy shifts
+                    // Skip duplicating if they already have this exact block
+                    const exists = shiftBlocks.some(b =>
+                        b.title === block.title &&
+                        b.assignedTo === block.assignedTo &&
+                        new Date(b.startTime).getTime() === newStart.getTime() &&
+                        new Date(b.endTime).getTime() === newEnd.getTime()
+                    );
 
-                        const bStart = new Date(block.startTime);
-                        const bEnd = new Date(block.endTime);
-
-                        const newStart = new Date(tDate);
-                        newStart.setHours(bStart.getHours(), bStart.getMinutes(), 0, 0);
-
-                        const newEnd = new Date(tDate);
-                        newEnd.setHours(bEnd.getHours(), bEnd.getMinutes(), 0, 0);
-
-                        const blockData = {
+                    if (!exists) {
+                        await firebaseSaveShiftBlock({
                             title: block.title,
                             description: block.description || '',
                             startTime: newStart.toISOString(),
@@ -267,39 +228,8 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             assignedTo: block.assignedTo,
                             status: 'pending',
                             priority: block.priority || 'medium'
-                        };
-
-                        await supplyWatchService.createScheduleBlock(replitUrl, token, targetScheduleId, blockData);
+                        });
                         totalCopies++;
-                    }
-                } else if (activeView === 'shifts') {
-                    for (const shift of todayShifts) {
-                        const bStart = new Date(shift.startTime);
-                        const bEnd = new Date(shift.endTime);
-                        const newStart = new Date(tDate);
-                        newStart.setHours(bStart.getHours(), bStart.getMinutes(), 0, 0);
-                        const newEnd = new Date(tDate);
-                        newEnd.setHours(bEnd.getHours(), bEnd.getMinutes(), 0, 0);
-
-                        // Skip duplicating if they already have this exact shift
-                        const exists = shiftBlocks.some(b =>
-                            b.assignedTo === shift.assignedTo &&
-                            new Date(b.startTime).getTime() === newStart.getTime() &&
-                            new Date(b.endTime).getTime() === newEnd.getTime()
-                        );
-
-                        if (!exists) {
-                            await firebaseSaveShiftBlock({
-                                title: shift.title,
-                                description: shift.description || '',
-                                startTime: newStart.toISOString(),
-                                endTime: newEnd.toISOString(),
-                                assignedTo: shift.assignedTo,
-                                status: 'pending',
-                                priority: 'medium'
-                            });
-                            totalCopies++;
-                        }
                     }
                 }
             }
@@ -314,6 +244,52 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleContextMenu = (e: React.MouseEvent, userId: string) => {
+        if (!isAdminOrManager) return;
+        e.preventDefault();
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const percentage = x / rect.width;
+        const rawHour = START_HOUR + (percentage * TOTAL_HOURS);
+        const hour = Math.round(rawHour * 2) / 2; // nearest 30 mins
+        setContextMenu({ x: e.clientX, y: e.clientY, userId, hour });
+    };
+
+    const handleContextMenuAdd = () => {
+        if (!contextMenu) return;
+        
+        const sh = Math.floor(contextMenu.hour);
+        const sm = contextMenu.hour % 1 === 0 ? '00' : '30';
+        
+        const eh = Math.floor(contextMenu.hour + 1);
+        const em = sm;
+        
+        const tempStart = new Date(currentDate);
+        tempStart.setHours(sh, sm === '30' ? 30 : 0, 0, 0);
+        
+        const tempEnd = new Date(currentDate);
+        tempEnd.setHours(eh, em === '30' ? 30 : 0, 0, 0);
+
+        setEditingBlock({
+            id: `new-${activeView}-${Date.now()}`,
+            title: activeView === 'shifts' ? '[SHIFT] Scheduled' : 'New Task',
+            description: activeView === 'shifts' ? 'Total Hours Scheduled' : '',
+            startTime: tempStart.toISOString(),
+            endTime: tempEnd.toISOString(),
+            assignedTo: contextMenu.userId,
+            status: 'pending',
+            priority: 'medium'
+        });
+        
+        const startStr = `${String(sh).padStart(2, '0')}:${sm}`;
+        const endStr = `${String(eh).padStart(2, '0')}:${em}`;
+        
+        setEditStart(startStr);
+        setEditEnd(endStr);
+        setEditNotes('');
+        setContextMenu(null);
     };
 
     const handleBlockClick = (block: ScheduleBlock) => {
@@ -333,43 +309,26 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         if (!editingBlock) return;
         setIsUpdating(true);
         try {
-            const replitUrl = localStorage.getItem('replitAppUrl');
-            const token = localStorage.getItem('chronoAuthToken');
-            if (replitUrl && token) {
-                const bStart = new Date(editingBlock.startTime);
-                const [sh, sm] = editStart.split(':').map(Number);
-                bStart.setHours(sh, sm, 0, 0);
+            const bStart = new Date(editingBlock.startTime);
+            const [sh, sm] = editStart.split(':').map(Number);
+            bStart.setHours(sh, sm, 0, 0);
 
-                const bEnd = new Date(editingBlock.endTime);
-                const [eh, em] = editEnd.split(':').map(Number);
-                bEnd.setHours(eh, em, 0, 0);
+            const bEnd = new Date(editingBlock.endTime);
+            const [eh, em] = editEnd.split(':').map(Number);
+            bEnd.setHours(eh, em, 0, 0);
 
-                const blockData = {
-                    title: editingBlock.title,
-                    description: editNotes,
-                    startTime: bStart.toISOString(),
-                    endTime: bEnd.toISOString(),
-                    assignedTo: editingBlock.assignedTo,
-                    status: editingBlock.status,
-                    priority: editingBlock.priority || 'medium'
-                };
+            const blockData = {
+                title: editingBlock.title,
+                description: editNotes,
+                startTime: bStart.toISOString(),
+                endTime: bEnd.toISOString(),
+                assignedTo: editingBlock.assignedTo,
+                status: editingBlock.status,
+                priority: editingBlock.priority || 'medium'
+            };
 
-                if (editingBlock.title.startsWith('[SHIFT]')) {
-                    await firebaseSaveShiftBlock({ ...blockData, id: editingBlock.id });
-                    // No need to update state manually, onSnapshot catches it
-                    // But we can clear the editing block
-                    setEditingBlock(null);
-                } else {
-                    const updatedBlock = await supplyWatchService.updateScheduleBlock(replitUrl, token, editingBlock.id, blockData);
-
-                    setSchedule(prev => prev ? {
-                        ...prev,
-                        blocks: prev.blocks.map(b => b.id === editingBlock.id ? updatedBlock : b)
-                    } : null);
-
-                    setEditingBlock(null);
-                }
-            }
+            await firebaseSaveShiftBlock({ ...blockData, id: editingBlock.id });
+            setEditingBlock(null);
         } catch (err) {
             alert("Failed to update schedule block.");
         } finally {
@@ -378,64 +337,19 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     };
 
     const handlePublish = async () => {
-        if (!schedule?.id) return;
-        setLoading(true);
-
-        try {
-            const replitUrl = localStorage.getItem('replitAppUrl');
-            const token = localStorage.getItem('chronoAuthToken');
-
-            if (replitUrl && token) {
-                await supplyWatchService.publishSchedule(replitUrl, token, schedule.id);
-                setIsPlanningMode(false);
-                alert("Schedule Published! Notifications sent to team.");
-            }
-        } catch (err) {
-            setError("Failed to publish schedule.");
-        } finally {
-            setLoading(false);
-        }
+        alert("Publishing is disabled in Standalone Mode.");
     };
 
     const handleAssignBlock = async (tempBlock: any, userId: string) => {
-        // Time Off Warning
-        const targetUser = users.find(u => u.id === userId);
-        if (targetUser?.timeOffRequests) {
-            const isOff = targetUser.timeOffRequests.some(req => {
-                const reqStart = new Date(req.startDate);
-                reqStart.setHours(0, 0, 0, 0);
-                const reqEnd = new Date(req.endDate);
-                reqEnd.setHours(23, 59, 59, 999);
-                const shiftDate = new Date(currentDate);
-                shiftDate.setHours(12, 0, 0, 0);
-                return (shiftDate >= reqStart && shiftDate <= reqEnd) && req.status !== 'Denied';
-            });
-            if (isOff) {
-                if (!confirm(`Warning: ${targetUser.name} has an active TIME OFF request for this date! Are you sure you want to assign them this task?`)) {
-                    return;
-                }
-            }
-        }
-
         try {
-            const replitUrl = localStorage.getItem('replitAppUrl');
-            const token = localStorage.getItem('chronoAuthToken');
+            await firebaseSaveShiftBlock({
+                ...tempBlock,
+                assignedTo: userId,
+                id: `task-${Date.now()}`
+            });
 
-            if (replitUrl && token && schedule?.id) {
-                const result = await supplyWatchService.createScheduleBlock(replitUrl, token, schedule.id, {
-                    ...tempBlock,
-                    assignedTo: userId
-                });
-
-                // Add to visible blocks
-                setSchedule(prev => prev ? {
-                    ...prev,
-                    blocks: [...prev.blocks, result]
-                } : null);
-
-                // Remove from unassigned
-                setUnassignedBlocks(prev => prev.filter(b => b.tempId !== tempBlock.tempId));
-            }
+            // Remove from unassigned
+            setUnassignedBlocks(prev => prev.filter(b => b.tempId !== tempBlock.tempId));
         } catch (err) {
             alert("Failed to assign task.");
         }
@@ -444,20 +358,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const handleDeleteBlock = async (blockId: string, isShift: boolean = false) => {
         if (!confirm("Delete this?")) return;
         try {
-            if (isShift) {
-                await firebaseDeleteShiftBlock(blockId);
-            } else {
-                const replitUrl = localStorage.getItem('replitAppUrl');
-                const token = localStorage.getItem('chronoAuthToken');
-
-                if (replitUrl && token) {
-                    await supplyWatchService.deleteScheduleBlock(replitUrl, token, blockId);
-                    setSchedule(prev => prev ? {
-                        ...prev,
-                        blocks: prev.blocks.filter(b => b.id !== blockId)
-                    } : null);
-                }
-            }
+            await firebaseDeleteShiftBlock(blockId);
         } catch (err) {
             alert("Failed to delete.");
         }
@@ -583,14 +484,15 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             return false;
         };
 
+        const dayBlocks = shiftBlocks.filter(b => {
+             const bDate = new Date(b.startTime);
+             return isMatch(b.assignedTo) && bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
+        });
+
         if (activeView === 'shifts') {
-            acc[user.id] = shiftBlocks.filter(b => {
-                const bDate = new Date(b.startTime);
-                return isMatch(b.assignedTo) && bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
-            });
+            acc[user.id] = dayBlocks.filter(b => b.title.startsWith('[SHIFT]'));
         } else {
-            const userBlocksRaw = schedule?.blocks.filter(b => isMatch(b.assignedTo)) || [];
-            acc[user.id] = userBlocksRaw.filter(b => !b.title.startsWith('[SHIFT]'));
+            acc[user.id] = dayBlocks.filter(b => !b.title.startsWith('[SHIFT]'));
         }
         return acc;
     }, {} as Record<string, ScheduleBlock[]>);
@@ -980,7 +882,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                     </div>
 
                                     {/* Timeline Area for this User */}
-                                    <div className="flex-1 relative h-full">
+                                    <div 
+                                        className="flex-1 relative h-full"
+                                        onContextMenu={(e) => handleContextMenu(e, user.id)}
+                                    >
                                         {/* Render Blocks */}
                                         {(userBlocks[user.id] || []).map(block => {
                                             const styles = getBlockStyles(block);
@@ -1107,6 +1012,24 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <div 
+                    className="fixed bg-white border border-zinc-200 shadow-xl rounded-md py-1 z-[200] text-sm animate-fade-in"
+                    style={{ left: contextMenu.x, top: contextMenu.y }}
+                >
+                    <button 
+                        onClick={handleContextMenuAdd}
+                        className="w-full text-left px-4 py-2 hover:bg-zinc-100 flex items-center gap-2 text-zinc-800"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add {activeView === 'shifts' ? 'Shift' : 'Task'} at {
+                            new Date(new Date().setHours(Math.floor(contextMenu.hour), contextMenu.hour % 1 === 0 ? 0 : 30)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                        }
+                    </button>
                 </div>
             )}
         </div>
