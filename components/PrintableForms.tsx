@@ -3,6 +3,7 @@ import { User } from '../types';
 import { FileText, Printer, Download, CreditCard, FileSignature, UploadCloud } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { PDFDocument } from 'pdf-lib';
 import { firebaseUploadDocument } from '../services/firebaseService';
 
 interface Props {
@@ -16,8 +17,6 @@ export const PrintableForms: React.FC<Props> = ({ currentUser }) => {
   const handlePrint = () => {
     window.print();
   };
-
-import { PDFDocument } from 'pdf-lib';
 
   const handleUploadToAdmin = async () => {
     if (!currentUser) {
