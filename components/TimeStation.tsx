@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserSession, User, AppSettings } from '../types';
+import { UserSession, User, AppSettings, Department, ScheduleBlock } from '../types';
 import { Timer } from './Timer';
 import { PinPad } from './PinPad';
 import { Play, Pause, ShieldCheck, User as UserIcon, LogOut, CheckCircle2, QrCode as QrCodeIcon, X } from 'lucide-react';
@@ -9,20 +9,22 @@ import { QRCodeSVG } from 'qrcode.react';
 interface Props {
   activeSessions: Record<string, UserSession>;
   users: User[];
-  onClockIn: (user: User) => void;
+  onClockIn: (user: User, clockInDepartment?: string, isUnscheduled?: boolean) => void;
   onClockOut: (user: User) => void;
   onPauseSession?: (user: User) => void;
   onResumeSession?: (user: User) => void;
   isAdmin?: boolean;
   appSettings?: AppSettings;
   onUpdateSettings?: (settings: AppSettings) => void;
+  shiftBlocks?: ScheduleBlock[];
 }
 
-export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession, isAdmin, appSettings, onUpdateSettings }) => {
+export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession, isAdmin, appSettings, onUpdateSettings, shiftBlocks }) => {
   const [showPinPad, setShowPinPad] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [pinMessage, setPinMessage] = useState<string>('');
   const [actionMenuUser, setActionMenuUser] = useState<User | null>(null);
+  const [unscheduledUser, setUnscheduledUser] = useState<User | null>(null);
 
   const handlePinAction = () => {
     setPinMessage('');
@@ -38,13 +40,29 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
       setActionMenuUser(user);
       setShowPinPad(false);
     } else {
-      // Clock In Logic
-      onClockIn(user);
-      setPinMessage(`Welcome, ${user.name}! Clocked in successfully.`);
-      setTimeout(() => {
+      // Check if they are scheduled right now
+      const now = new Date();
+      const currentShift = shiftBlocks?.find(b => {
+        if (b.assignedTo !== user.id || !b.title.startsWith('[SHIFT]')) return false;
+        const start = new Date(b.startTime);
+        const end = new Date(b.endTime);
+        // Shift starts within 60 mins or is currently active
+        return (now >= new Date(start.getTime() - 60 * 60000)) && (now <= end);
+      });
+
+      if (currentShift) {
+        // Scheduled - clock in immediately
+        onClockIn(user, currentShift.department, false);
+        setPinMessage(`Welcome, ${user.name}! Clocked in successfully.`);
+        setTimeout(() => {
+          setShowPinPad(false);
+          setPinMessage('');
+        }, 1500);
+      } else {
+        // Unscheduled - ask for department
+        setUnscheduledUser(user);
         setShowPinPad(false);
-        setPinMessage('');
-      }, 1500);
+      }
     }
   };
 
@@ -64,6 +82,45 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
             onCancel={() => setShowPinPad(false)}
           />
         )}
+      </div>
+    );
+  }
+
+  if (unscheduledUser) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 animate-fade-in">
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-zinc-100 text-center">
+          <div className="bg-amber-500 p-8 text-white">
+            <h2 className="text-3xl font-bold mb-2">Unscheduled Shift</h2>
+            <p className="text-amber-50">You do not have a shift scheduled right now.</p>
+          </div>
+          <div className="p-8">
+            <h3 className="text-xl font-bold text-zinc-800 mb-6">Select your department for this session:</h3>
+            <div className="flex flex-wrap justify-center gap-3">
+              {Object.values(Department).map(dept => (
+                <button
+                  key={dept}
+                  onClick={() => {
+                    onClockIn(unscheduledUser, dept, true);
+                    setPinMessage(`Welcome, ${unscheduledUser.name}! Clocked in (Unscheduled).`);
+                    setUnscheduledUser(null);
+                    setShowPinPad(true);
+                    setTimeout(() => { setShowPinPad(false); setPinMessage(''); }, 2000);
+                  }}
+                  className="px-6 py-3 rounded-full bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 font-bold text-zinc-800 transition-colors"
+                >
+                  {dept}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { setUnscheduledUser(null); setShowPinPad(true); }}
+              className="mt-8 text-zinc-500 hover:text-zinc-800 font-bold"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -216,7 +273,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                     onChange={(e) => {
                       const u = users.find(u => u.id === e.target.value);
                       if (u) {
-                        onClockIn(u);
+                        onClockIn(u, u.primaryDepartment, true);
                         e.target.value = '';
                       }
                     }}

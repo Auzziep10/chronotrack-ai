@@ -371,19 +371,19 @@ const App: React.FC = () => {
     setAppSettings(settings);
   };
 
-  const handleClockIn = async (user: User) => {
+  const handleClockIn = async (user: User, clockInDepartment?: string, isUnscheduled?: boolean) => {
     const now = Date.now();
 
     // Optimistic local update (UI feels instant)
     setActiveSessions(prev => ({
       ...prev,
-      [user.id]: { userId: user.id, user, startTime: now, lastLogTime: now, logs: [] }
+      [user.id]: { userId: user.id, user, startTime: now, lastLogTime: now, logs: [], clockInDepartment, isUnscheduled }
     }));
 
     // Primary: Write to Firebase (broadcasts to ALL devices instantly)
     if (isFirebaseConfigured()) {
       try {
-        await firebaseClockIn(user);
+        await firebaseClockIn(user, clockInDepartment, isUnscheduled);
       } catch (err: any) {
         console.error('Firebase clock-in failed:', err);
         alert(`Firebase Save Error: ${err.message || 'Unknown database error. Check your Firebase Security Rules!'}`);
@@ -742,6 +742,7 @@ const App: React.FC = () => {
               isAdmin={isAdminOrManager}
               appSettings={appSettings}
               onUpdateSettings={handleUpdateSettings}
+              shiftBlocks={shiftBlocks}
             />
           ) : activeTab === 'activity' ? (
             <ActivityTracker

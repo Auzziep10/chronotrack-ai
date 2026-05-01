@@ -77,6 +77,8 @@ export interface UserSession {
   pauseReason?: 'lunch' | 'idle';
   currentIdleStartTime?: number | null;
   totalIdleTimeMs?: number;
+  clockInDepartment?: string;
+  isUnscheduled?: boolean;
 }
 
 export interface DailyTimeCard {
@@ -88,6 +90,8 @@ export interface DailyTimeCard {
   totalHours: number;
   totalIdleHours?: number; // Subtracted from total due to missed check-ins
   status: 'Complete' | 'Active' | 'Missing';
+  clockInDepartment?: string;
+  isUnscheduled?: boolean;
 }
 
 // App Configuration

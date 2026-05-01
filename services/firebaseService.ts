@@ -76,7 +76,7 @@ export const subscribeToActiveSessions = (
 };
 
 /** Clock in — writes/overwrites session document in Firestore */
-export const firebaseClockIn = async (user: User): Promise<void> => {
+export const firebaseClockIn = async (user: User, clockInDepartment?: string, isUnscheduled?: boolean): Promise<void> => {
     const now = Date.now();
     await setDoc(doc(db, SESSIONS_COL, user.id), {
         userId: user.id,
@@ -91,6 +91,8 @@ export const firebaseClockIn = async (user: User): Promise<void> => {
         currentIdleStartTime: null,
         totalIdleTimeMs: 0,
         clockedOut: false,
+        clockInDepartment: clockInDepartment || null,
+        isUnscheduled: isUnscheduled || false,
         updatedAt: serverTimestamp()
     });
 };
