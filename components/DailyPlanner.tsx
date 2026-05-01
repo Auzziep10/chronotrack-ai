@@ -996,20 +996,35 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                 ></textarea>
                             </div>
                         </div>
-                        <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex justify-end gap-2">
-                            <button
-                                onClick={() => setEditingBlock(null)}
-                                className="px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-200 rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSaveEdit}
-                                disabled={isUpdating}
-                                className="px-4 py-2 text-sm font-bold text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg shadow transition-colors flex items-center gap-2 disabled:opacity-50"
-                            >
-                                {isUpdating ? 'Saving...' : 'Save Changes'}
-                            </button>
+                        <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex justify-between items-center gap-2">
+                            {editingBlock.id.startsWith('new-') ? (
+                                <div></div>
+                            ) : (
+                                <button
+                                    onClick={() => {
+                                        handleDeleteBlock(editingBlock.id, activeView === 'shifts');
+                                        setEditingBlock(null);
+                                    }}
+                                    className="px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 hover:text-red-700 rounded-lg transition-colors flex items-center gap-2"
+                                >
+                                    <Trash2 className="w-4 h-4" /> Delete
+                                </button>
+                            )}
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setEditingBlock(null)}
+                                    className="px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-200 rounded-lg transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveEdit}
+                                    disabled={isUpdating}
+                                    className="px-4 py-2 text-sm font-bold text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg shadow transition-colors flex items-center gap-2 disabled:opacity-50"
+                                >
+                                    {isUpdating ? 'Saving...' : 'Save Changes'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
