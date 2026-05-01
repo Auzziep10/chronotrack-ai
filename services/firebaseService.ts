@@ -13,6 +13,7 @@ import {
     arrayUnion
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
+import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { User, UserSession, WorkLog, DailyTimeCard } from '../types';
 
 const firebaseConfig = {
@@ -26,6 +27,7 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getFirestore(app);
+export const storage = getStorage(app);
 
 export const isFirebaseConfigured = () => !!firebaseConfig.projectId;
 
@@ -361,3 +363,33 @@ export const firebaseDeleteShiftBlock = async (blockId: string): Promise<void> =
 };
 
 export { db };
+
+export const firebaseUploadDocument = async (userId: string, formType: string, pdfDataUrl: string): Promise<string> => {
+    try {
+        const timestamp = Date.now();
+        const fileRef = ref(storage, `onboarding-docs/${userId}/${formType}_${timestamp}.pdf`);
+        
+        // Upload base64 PDF
+        await uploadString(fileRef, pdfDataUrl, 'data_url');
+        
+        // Get the download URL
+        const downloadUrl = await getDownloadURL(fileRef);
+        
+        // Save reference to the user's document
+        const userRef = doc(db, USERS_COL, userId);
+        await updateDoc(userRef, {
+            onboardingDocuments: arrayUnion({
+                id: `doc_${timestamp}`,
+                formType,
+                url: downloadUrl,
+                uploadedAt: new Date().toISOString(),
+                fileName: `${formType}_${timestamp}.pdf`
+            })
+        });
+        
+        return downloadUrl;
+    } catch (err) {
+        console.error("Error uploading document:", err);
+        throw err;
+    }
+};

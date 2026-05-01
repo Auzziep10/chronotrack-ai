@@ -65,6 +65,7 @@ export interface User {
   lateDays?: number;
   correctionNotes?: string;
   timeOffRequests?: TimeOffRequest[];
+  onboardingDocuments?: Array<{ id: string, formType: string, url: string, uploadedAt: string, fileName: string }>;
 }
 
 export interface UserSession {

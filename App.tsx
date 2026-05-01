@@ -5,10 +5,11 @@ import { WorkLogForm } from './components/WorkLogForm';
 import { TimeStation } from './components/TimeStation';
 import { ActivityTracker } from './components/ActivityTracker';
 import { ActivityManager } from './components/ActivityManager';
+import { PrintableForms } from './components/PrintableForms';
 import { SettingsDialog } from './components/SettingsDialog';
 import { LoginScreen } from './components/LoginScreen';
 import { DailyPlanner } from './components/DailyPlanner';
-import { Radio, ClipboardList, BarChart4, Settings, LogOut, Calendar } from 'lucide-react';
+import { Radio, ClipboardList, BarChart4, Settings, LogOut, Calendar, Users, FileText } from 'lucide-react';
 import {
   subscribeToActiveSessions,
   subscribeToUsers,
@@ -26,7 +27,7 @@ import {
   firebaseSilentAuth
 } from './services/firebaseService';
 
-type Tab = 'station' | 'activity' | 'manager' | 'planner';
+type Tab = 'station' | 'activity' | 'manager' | 'planner' | 'documents';
 
 const App: React.FC = () => {
   // Global State: Auth Token (Session Persistence)
@@ -195,6 +196,7 @@ const App: React.FC = () => {
   }, [authToken, isFirebaseAuthed]); // Add dependency to ensure mapping works when users list changes
 
   // ─── IDLE ENFORCEMENT MONITOR ──────────────────────────────────────────────
+  const warnedIntervalsRef = useRef<Record<string, number[]>>({});
   useEffect(() => {
     if (!isFirebaseConfigured() || !authToken) return;
 
@@ -203,7 +205,6 @@ const App: React.FC = () => {
     if (!isAdminTerminal) return;
 
     const IDLE_THRESHOLD_MS = 70 * 60 * 1000; // 70 minutes (60m lock + 10m grace)
-    const WARNING_THRESHOLD_MS = 60 * 60 * 1000; // 60 minutes
 
     const checkIdleSessions = async () => {
       const now = Date.now();
@@ -629,7 +630,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col font-sans">
       {/* Header */}
-      <header className="bg-white border-b border-zinc-200 sticky top-0 z-10 shadow-sm">
+      <header className="bg-white border-b border-zinc-200 sticky top-0 z-10 shadow-sm print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-black p-2 rounded-lg shadow-md">
@@ -673,7 +674,7 @@ const App: React.FC = () => {
       </header>
 
       {/* Tab Navigation */}
-      <div className="bg-white border-b border-zinc-200">
+      <div className="bg-white border-b border-zinc-200 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
             {(isAdminOrManager || isTerminal) && (
@@ -721,16 +722,29 @@ const App: React.FC = () => {
                   : 'border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300'
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
               >
-                <BarChart4 className="w-4 h-4" />
-                Activity Manager
+                <Users className="w-4 h-4" />
+                Team Activity
+              </button>
+            )}
+
+            {!isTerminal && (
+              <button
+                onClick={() => setActiveTab('documents')}
+                className={`${activeTab === 'documents'
+                  ? 'border-zinc-300 text-zinc-900'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors print:hidden`}
+              >
+                <FileText className="w-4 h-4" />
+                Forms & Docs
               </button>
             )}
           </nav>
         </div>
       </div>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full relative">
-        <div className="mt-4 h-[calc(100vh-12rem)] flex flex-col">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full relative print:p-0 print:m-0 print:max-w-none">
+        <div className="mt-4 h-[calc(100vh-12rem)] flex flex-col print:h-auto print:mt-0 print:block">
           {activeTab === 'station' ? (
             <TimeStation
               activeSessions={activeSessions}
@@ -763,8 +777,9 @@ const App: React.FC = () => {
               appSettings={appSettings}
             />
           ) : activeTab === 'planner' ? (
-            // Lazy load nicely or just static
             <DailyPlanner users={users} currentUser={currentUser} />
+          ) : activeTab === 'documents' ? (
+            <PrintableForms currentUser={currentUser} />
           ) : (
             <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} onClockIn={handleClockIn} onClockOut={handleClockOut} onUpdateUser={handleUpdateUser} />
           )}
