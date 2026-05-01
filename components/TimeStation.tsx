@@ -45,9 +45,13 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
       const currentShift = shiftBlocks?.find(b => {
         if (b.assignedTo !== user.id || !b.title.startsWith('[SHIFT]')) return false;
         const start = new Date(b.startTime);
-        const end = new Date(b.endTime);
-        // Shift starts within 60 mins or is currently active
-        return (now >= new Date(start.getTime() - 60 * 60000)) && (now <= end);
+        
+        // Match if the shift is scheduled for today
+        return (
+          start.getDate() === now.getDate() &&
+          start.getMonth() === now.getMonth() &&
+          start.getFullYear() === now.getFullYear()
+        );
       });
 
       if (currentShift) {
