@@ -217,7 +217,27 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                   />
                 </div>
 
-                {/* Row 3: PIN & Late Days */}
+                {/* Row 3: Web Login */}
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Web Username</label>
+                  <input
+                    type="text"
+                    value={formData.username || ''}
+                    onChange={e => setFormData({ ...formData, username: e.target.value.replace(/\s/g, '') })}
+                    className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-zinc-50"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Web Password</label>
+                  <input
+                    type="text"
+                    value={formData.password || ''}
+                    onChange={e => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-zinc-50"
+                  />
+                </div>
+
+                {/* Row 4: PIN & Late Days */}
                 <div className="col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">Access PIN</label>
                   <input

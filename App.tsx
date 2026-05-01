@@ -624,7 +624,7 @@ const App: React.FC = () => {
   };
 
   if (!authToken) {
-    return <LoginScreen onLogin={handleLoginSuccess} />;
+    return <LoginScreen onLogin={handleLoginSuccess} users={users} />;
   }
 
   return (

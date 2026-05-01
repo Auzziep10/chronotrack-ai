@@ -1,15 +1,17 @@
 
 import React, { useState } from 'react';
-import { LogIn, Key, Loader2, Link2, Smartphone } from 'lucide-react';
+import { LogIn, Key, Loader2, Smartphone } from 'lucide-react';
+
+import { User } from '../types';
 
 interface Props {
     onLogin: (token: string, userData: any) => void;
+    users?: User[];
 }
 
-export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
+export const LoginScreen: React.FC<Props> = ({ onLogin, users }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [replitUrl, setReplitUrl] = useState('https://dtf-supply-watch-catalyst.replit.app');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -22,20 +24,32 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
         const p = customCreds ? customCreds.p : password;
 
         try {
-            const baseUrl = replitUrl.replace(/\/$/, '');
-            const response = await fetch(`${baseUrl}/api/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: u, password: p })
-            });
-
-            if (!response.ok) {
-                throw new Error('Invalid credentials or server error');
+            // Check hardcoded Warehouse terminal first
+            if (u === 'warehouse' && p === 'Catalyst1!') {
+                 onLogin('warehouse-token', {
+                     id: 'warehouse-1',
+                     name: 'Warehouse iPad',
+                     role: 'Terminal',
+                     avatarInitials: 'WH',
+                     permissions: ['terminal']
+                 });
+                 return;
             }
 
-            const data = await response.json();
-            localStorage.setItem('replitAppUrl', baseUrl);
-            onLogin(data.token, data.user);
+            // Authenticate against local users array
+            if (users && users.length > 0) {
+                const foundUser = users.find(user => 
+                    user.username && user.username.toLowerCase() === u && user.password === p
+                );
+
+                if (foundUser) {
+                    onLogin(`local-token-${foundUser.id}`, foundUser);
+                    return;
+                }
+            }
+
+            // If we reach here, no valid user was found
+            setError('Invalid username or password.');
         } catch (err: any) {
             setError(err.message || 'Login failed. Please check your credentials.');
         } finally {
@@ -66,24 +80,7 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
                             </div>
                         )}
 
-                        <div>
-                            <label htmlFor="replitUrl" className="block text-xs font-medium text-zinc-500 mb-1">
-                                Supply Watch App URL
-                            </label>
-                            <div className="mt-1 relative rounded-md shadow-sm">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Link2 className="h-4 w-4 text-zinc-400" />
-                                </div>
-                                <input
-                                    id="replitUrl"
-                                    type="url"
-                                    required
-                                    value={replitUrl}
-                                    onChange={(e) => setReplitUrl(e.target.value)}
-                                    className="block w-full pl-10 text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 text-zinc-500 py-2 border px-3"
-                                />
-                            </div>
-                        </div>
+
 
                         <div>
                             <label htmlFor="username" className="block text-sm font-medium text-zinc-700">
@@ -143,7 +140,7 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
 
                             <button
                                 type="button"
-                                onClick={() => handleLogin(undefined, { u: 'Warehouse', p: 'Catalyst1!' })}
+                                onClick={() => handleLogin(undefined, { u: 'warehouse', p: 'Catalyst1!' })}
                                 disabled={isLoading}
                                 className="w-full flex justify-center py-2 px-4 border border-zinc-200 rounded-md shadow-sm text-sm font-medium text-zinc-800 bg-zinc-50 hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-500 disabled:opacity-50 transition-all gap-2"
                             >

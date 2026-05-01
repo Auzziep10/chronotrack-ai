@@ -16,7 +16,7 @@ interface Props {
 }
 
 export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddUser, onUpdateUser, onDeleteUser, settings, onUpdateSettings }) => {
-  const [newUser, setNewUser] = useState({ name: '', role: '', pin: '' });
+  const [newUser, setNewUser] = useState({ name: '', role: '', pin: '', username: '', password: '' });
   const [userError, setUserError] = useState('');
 
   // Profile Dialog State
@@ -27,7 +27,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUser.name || !newUser.role || !newUser.pin) {
-      setUserError('All fields are required.');
+      setUserError('Name, Role, and PIN are required.');
       return;
     }
     if (newUser.pin.length !== 4 || isNaN(Number(newUser.pin))) {
@@ -36,6 +36,10 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
     }
     if (users.some(u => u.pin === newUser.pin)) {
       setUserError('This PIN is already in use.');
+      return;
+    }
+    if (newUser.username && users.some(u => u.username?.toLowerCase() === newUser.username.toLowerCase())) {
+      setUserError('This Username is already in use.');
       return;
     }
 
@@ -60,6 +64,8 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
       id: `u-${Date.now()}`,
       name: newUser.name,
       role: newUser.role,
+      username: newUser.username || undefined,
+      password: newUser.password || undefined,
       primaryDepartment: Department.Production, // Default to Production
       avatarInitials: initials,
       pin: newUser.pin,
@@ -69,7 +75,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
     };
 
     onAddUser(user);
-    setNewUser({ name: '', role: '', pin: '' });
+    setNewUser({ name: '', role: '', pin: '', username: '', password: '' });
     setUserError('');
     alert(`User ${user.name} created successfully!`);
   };
@@ -161,7 +167,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
                   <UserPlus className="w-4 h-4 text-zinc-500" />
                   <span className="text-sm font-semibold text-zinc-700">Add New Team Member</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-zinc-500 mb-1">Full Name</label>
                     <input
@@ -191,6 +197,26 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
                       onChange={e => setNewUser({ ...newUser, pin: e.target.value.replace(/\D/g, '') })}
                       placeholder="####"
                       className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-500 font-mono tracking-widest"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">Web Username (Optional)</label>
+                    <input
+                      type="text"
+                      value={newUser.username}
+                      onChange={e => setNewUser({ ...newUser, username: e.target.value.replace(/\s/g, '') })}
+                      placeholder="johndoe"
+                      className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">Web Password (Optional)</label>
+                    <input
+                      type="text"
+                      value={newUser.password}
+                      onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                      placeholder="password123"
+                      className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-500"
                     />
                   </div>
                 </div>

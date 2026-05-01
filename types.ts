@@ -46,7 +46,8 @@ export interface TimeOffRequest {
 export interface User {
   id: string;
   name: string;
-  username?: string; // Mapped from external auth
+  username?: string; // Mapped from external auth or local auth
+  password?: string; // Local auth password
   role: string; // Primary Role
   permissions?: string[]; // RBAC Permissions
   primaryDepartment?: Department;
