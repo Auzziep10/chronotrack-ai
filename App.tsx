@@ -487,7 +487,7 @@ const App: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [isFirebaseAuthed]);
 
   // ─── AUTO CLOCK-OUT MONITOR ──────────────────────────────────────────────
   useEffect(() => {
