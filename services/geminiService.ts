@@ -35,13 +35,12 @@ export const processExternalPlan = async (rawPlanText: string): Promise<string> 
   try {
     const ai = getAI(app);
     const model = getGenerativeModel(ai, { 
-        model: "gemini-1.5-flash",
-        generationConfig: {
-            responseMimeType: "application/json"
-        }
+        model: "gemini-1.5-flash"
     });
 
     const prompt = `You are an assistant for a manager. Your job is to parse the following messy plain language schedule / external plan text into a structured JSON array of tasks.
+Return ONLY valid JSON. Do not include any other text, markdown formatting like \`\`\`json, or explanations. 
+
 Each task object in the array should conform to this schema:
 {
   "assignedToName": "The name of the staff member",
@@ -57,9 +56,17 @@ ${rawPlanText}
 `;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
-  } catch (error) {
+    let text = result.response.text();
+    
+    // Attempt to extract JSON array using regex if there's markdown or text wrapping
+    const match = text.match(/\[[\s\S]*\]/);
+    if (match) {
+        text = match[0];
+    }
+    
+    return text;
+  } catch (error: any) {
     console.error("Error parsing external plan:", error);
-    return JSON.stringify({ error: "Failed to parse the plan using AI." });
+    return JSON.stringify({ error: `Failed to parse the plan using AI: ${error.message || error}` });
   }
 };
