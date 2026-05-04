@@ -56,6 +56,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     // Edit Block State
     const [editingBlock, setEditingBlock] = useState<ScheduleBlock | null>(null);
+    const [editTitle, setEditTitle] = useState('');
     const [editStart, setEditStart] = useState('');
     const [editEnd, setEditEnd] = useState('');
     const [editNotes, setEditNotes] = useState('');
@@ -287,6 +288,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         const startStr = `${String(sh).padStart(2, '0')}:${sm}`;
         const endStr = `${String(eh).padStart(2, '0')}:${em}`;
         
+        setEditTitle(activeView === 'shifts' ? '[SHIFT] Scheduled' : 'New Task');
         setEditStart(startStr);
         setEditEnd(endStr);
         setEditNotes('');
@@ -298,6 +300,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         if (!isAdminOrManager) return;
         setEditingBlock(block);
 
+        setEditTitle(block.title);
         const start = new Date(block.startTime);
         setEditStart(`${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`);
 
@@ -321,7 +324,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             bEnd.setHours(eh, em, 0, 0);
 
             const blockData = {
-                title: editingBlock.title,
+                title: editTitle,
                 description: editNotes,
                 department: editDepartment || undefined,
                 startTime: bStart.toISOString(),
@@ -638,10 +641,9 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             </button>
                                             <button
                                                 onClick={handleDuplicateSchedule}
-                                                disabled={!duplicateTargetDate || (activeView === 'tasks' ? (schedule?.blocks?.filter(b => !b.title.startsWith('[SHIFT]'))?.length || 0) === 0 : !shiftBlocks.some(b => {
-                                                    const d = new Date(b.startTime);
-                                                    return d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth() && d.getFullYear() === currentDate.getFullYear();
-                                                }))}
+                                                disabled={!duplicateTargetDate || (activeView === 'tasks' 
+                                                    ? shiftBlocks.filter(b => !b.title.startsWith('[SHIFT]') && new Date(b.startTime).toDateString() === currentDate.toDateString()).length === 0 
+                                                    : !shiftBlocks.some(b => b.title.startsWith('[SHIFT]') && new Date(b.startTime).toDateString() === currentDate.toDateString()))}
                                                 className="flex-1 px-3 py-1.5 text-xs text-white bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 rounded-lg font-bold transition-colors shadow-sm"
                                             >
                                                 Confirm
@@ -669,7 +671,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             </div>
                             <button
                                 onClick={handlePublish}
-                                disabled={!schedule?.blocks.length || loading}
+                                disabled={loading}
                                 className="flex items-center gap-2 px-6 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-bold shadow-lg shadow-zinc-100 transition-all disabled:opacity-50"
                             >
                                 <CheckCircle className="w-4 h-4" />
@@ -965,9 +967,22 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             </button>
                         </div>
                         <div className="p-6 flex flex-col gap-4">
-                            <div className="text-sm font-medium text-zinc-700 bg-zinc-50 p-2 rounded border border-zinc-100">
-                                {editingBlock.title}
-                            </div>
+                            {editingBlock.title.startsWith('[SHIFT]') ? (
+                                <div className="text-sm font-medium text-zinc-700 bg-zinc-50 p-2 rounded border border-zinc-100">
+                                    {editingBlock.title}
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="block text-xs font-bold text-zinc-600 mb-1">Task Name</label>
+                                    <input
+                                        type="text"
+                                        value={editTitle}
+                                        onChange={(e) => setEditTitle(e.target.value)}
+                                        className="w-full text-sm p-2 border border-zinc-300 rounded focus:ring-2 focus:ring-zinc-500 outline-none"
+                                        placeholder="e.g. New Task"
+                                    />
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
