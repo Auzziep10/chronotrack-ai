@@ -9,13 +9,15 @@ interface Props {
   isRequired?: boolean; // If true, visually emphasize importance
   title?: string;
   prefillNotes?: string;
+  initialDepartment?: Department | string;
 }
 
-export const WorkLogForm: React.FC<Props> = ({ onSubmit, isRequired, title, prefillNotes }) => {
-  const [department, setDepartment] = useState<Department | ''>('');
+export const WorkLogForm: React.FC<Props> = ({ onSubmit, isRequired, title, prefillNotes, initialDepartment }) => {
+  const [department, setDepartment] = useState<Department | ''>((initialDepartment as Department) || '');
   const [task, setTask] = useState<string>('');
   const [productionData, setProductionData] = useState<ProductionData>({ projectName: '', quantity: 0 });
   const [notes, setNotes] = useState<string>(prefillNotes || '');
+  const [progress, setProgress] = useState<number | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
 
   useEffect(() => {
@@ -51,7 +53,7 @@ export const WorkLogForm: React.FC<Props> = ({ onSubmit, isRequired, title, pref
     const logData: any = {
       department: department as Department,
       task,
-      notes,
+      notes: progress !== null ? `[${progress}% Complete] ${notes}`.trim() : notes,
     };
 
     if (department === Department.Production) {
@@ -61,9 +63,9 @@ export const WorkLogForm: React.FC<Props> = ({ onSubmit, isRequired, title, pref
     onSubmit(logData);
     
     // Clear form
-    setDepartment('');
     setTask('');
     setNotes('');
+    setProgress(null);
     setProductionData({ projectName: '', quantity: 0 });
     setErrors([]);
   };
@@ -132,6 +134,26 @@ export const WorkLogForm: React.FC<Props> = ({ onSubmit, isRequired, title, pref
               className="w-full border border-zinc-300 rounded-md shadow-sm p-2 focus:ring-zinc-500 focus:border-zinc-300"
               rows={2}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-2">Task Progress</label>
+            <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
+              {[0, 25, 50, 75, 100].map(pct => (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => setProgress(pct)}
+                  className={`flex-1 shrink-0 px-3 py-1.5 rounded-md text-sm font-bold transition-all border ${
+                    progress === pct 
+                      ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm' 
+                      : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900'
+                  }`}
+                >
+                  {pct}%
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

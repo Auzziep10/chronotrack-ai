@@ -636,6 +636,7 @@ export const ActivityTracker: React.FC<Props> = ({
               }}
               title="Log Voluntary Activity"
               prefillNotes={prefillNotes}
+              initialDepartment={selectedSession?.user?.primaryDepartment}
             />
           </div>
         </div>
