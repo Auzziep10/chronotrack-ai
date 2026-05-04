@@ -79,6 +79,7 @@ export const ActivityTracker: React.FC<Props> = ({
     }
     setExpandedTaskId(null);
     setTaskNotes('');
+    setIsLocked(false);
   };
 
   const activeUsers = Object.values(activeSessions) as UserSession[];
@@ -381,7 +382,8 @@ export const ActivityTracker: React.FC<Props> = ({
                     {userTasks.map(task => (
                       <div
                         key={task.id}
-                        className={`p-2.5 rounded-lg border-l-4 ${getTaskStatusColor(task.status)} bg-zinc-50/50 text-sm`}
+                        onClick={() => handleTaskClick(task.id)}
+                        className={`p-2.5 rounded-lg border-l-4 ${getTaskStatusColor(task.status)} bg-zinc-50/50 text-sm cursor-pointer hover:bg-zinc-100 transition-colors`}
                       >
                         <div className="flex items-start gap-2">
                           <div className="mt-0.5 shrink-0">
@@ -403,6 +405,40 @@ export const ActivityTracker: React.FC<Props> = ({
                             </div>
                           </div>
                         </div>
+
+                        {/* Expanded Quick Log Form */}
+                        {expandedTaskId === task.id && (
+                          <div className="mt-4 pt-4 border-t border-zinc-200/50 space-y-3" onClick={(e) => e.stopPropagation()}>
+                            <div>
+                              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Optional Notes</label>
+                              <textarea
+                                value={taskNotes}
+                                onChange={(e) => setTaskNotes(e.target.value)}
+                                className="w-full text-sm border border-zinc-200 rounded p-2 focus:ring-1 focus:ring-zinc-400 focus:border-zinc-400 bg-white"
+                                placeholder="What are you currently working on?"
+                                rows={1}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Log Progress to Submit</label>
+                              <div className="flex gap-2">
+                                {[0, 25, 50, 75, 100].map(pct => (
+                                  <button
+                                    key={pct}
+                                    onClick={() => handleQuickLog(task, pct)}
+                                    className={`flex-1 py-1.5 rounded border text-sm font-bold transition-all ${
+                                      pct === 100 
+                                        ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600' 
+                                        : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-900 hover:text-white hover:border-zinc-900'
+                                    }`}
+                                  >
+                                    {pct}%
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
