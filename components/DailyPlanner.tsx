@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy } from 'lucide-react';
 import { User, DailySchedule, ScheduleBlock, Department } from '../types';
 import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock } from '../services/firebaseService';
+import { processExternalPlan } from '../services/geminiService';
 import { ShiftCalendarViews } from './ShiftCalendarViews';
 
 interface Props {
@@ -150,7 +151,82 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     };
 
     const handleGenerateAI = async () => {
-        alert("AI Schedule Generation is disabled in Standalone Mode.");
+        if (!transcript.trim()) return;
+        setIsGenerating(true);
+        try {
+            const resultStr = await processExternalPlan(transcript);
+            let tasks;
+            try {
+                tasks = JSON.parse(resultStr);
+            } catch (e) {
+                // Sometimes Gemini returns JSON wrapped in markdown even after our regex in the service
+                const cleaned = resultStr.replace(/```json/g, '').replace(/```/g, '').trim();
+                tasks = JSON.parse(cleaned);
+            }
+            
+            if (!Array.isArray(tasks)) {
+                throw new Error("Parsed result is not an array");
+            }
+
+            const newUnassigned: any[] = [];
+            let autoAssigned = 0;
+
+            const currentTeamMembers = users.filter(u => u.role?.trim().toLowerCase() !== 'client' && u.username);
+
+            for (const task of tasks) {
+                // Find matching user (fuzzy match name)
+                const targetName = (task.assignedToName || '').toLowerCase();
+                const user = currentTeamMembers.find(u => 
+                    targetName && (
+                        u.name.toLowerCase().includes(targetName) || 
+                        (u.username && u.username.toLowerCase().includes(targetName)) ||
+                        targetName.includes(u.name.toLowerCase()) ||
+                        (u.username && targetName.includes(u.username.toLowerCase()))
+                    )
+                );
+
+                const tStart = new Date(currentDate);
+                const [sh, sm] = (task.startTime || '09:00').split(':').map(Number);
+                tStart.setHours(sh, sm || 0, 0, 0);
+
+                const tEnd = new Date(currentDate);
+                const [eh, em] = (task.endTime || '10:00').split(':').map(Number);
+                tEnd.setHours(eh, em || 0, 0, 0);
+
+                const blockData = {
+                    title: task.title || 'AI Task',
+                    description: task.description || '',
+                    department: task.department || undefined,
+                    startTime: tStart.toISOString(),
+                    endTime: tEnd.toISOString(),
+                    status: 'pending',
+                    priority: 'medium'
+                };
+
+                if (user) {
+                    await firebaseSaveShiftBlock({
+                        ...blockData,
+                        assignedTo: user.id
+                    });
+                    autoAssigned++;
+                } else {
+                    newUnassigned.push({
+                        ...blockData,
+                        tempId: `temp-${Date.now()}-${Math.random()}`,
+                        suggestedName: task.assignedToName || 'Unknown'
+                    });
+                }
+            }
+
+            setUnassignedBlocks(prev => [...prev, ...newUnassigned]);
+            setTranscript('');
+            alert(`AI Generation Complete! Auto-assigned ${autoAssigned} tasks. ${newUnassigned.length > 0 ? `${newUnassigned.length} tasks need manual assignment.` : ''}`);
+        } catch (err) {
+            console.error("AI Generation failed:", err);
+            alert("Failed to parse schedule from text. Please ensure it contains recognizable names and times.");
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     const handleDuplicateSchedule = async () => {
