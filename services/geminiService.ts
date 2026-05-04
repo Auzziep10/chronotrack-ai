@@ -9,7 +9,7 @@ export const generateDailySummary = async (logs: WorkLog[]): Promise<string> => 
 
   try {
     const ai = getAI(app, { backend: new GoogleAIBackend() });
-    const model = getGenerativeModel(ai, { model: "gemini-3.1-flash" });
+    const model = getGenerativeModel(ai, { model: "gemini-3-flash-preview" });
 
     const logsContext = logs.map(log => 
       `- Department: ${log.department}, Task: ${log.task}, Notes: ${log.notes || 'None'}, Duration: ${
@@ -35,7 +35,7 @@ export const processExternalPlan = async (rawPlanText: string): Promise<string> 
   try {
     const ai = getAI(app, { backend: new GoogleAIBackend() });
     const model = getGenerativeModel(ai, { 
-        model: "gemini-3.1-flash"
+        model: "gemini-3-flash-preview"
     });
 
     const prompt = `You are an assistant for a manager. Your job is to parse the following messy plain language schedule / external plan text into a structured JSON array of tasks.
