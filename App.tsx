@@ -770,7 +770,7 @@ const App: React.FC = () => {
               activeSessions={activeSessions}
               onLogSubmit={handleLogSubmit}
               onDeleteLog={deleteLog}
-              scheduledTasks={[]} // Standalone task fetching from Firebase if needed
+              scheduledTasks={shiftBlocks}
               onManualSync={() => {}}
               isSyncingReplit={false}
               lastSyncTime={0}
