@@ -309,6 +309,25 @@ export const firebaseGetLogs = async (): Promise<WorkLog[]> => {
     });
 };
 
+// ─── APP SETTINGS ────────────────────────────────────────────────────────────
+const SETTINGS_COL = 'settings';
+
+export const firebaseSaveSettings = async (settings: any): Promise<void> => {
+    await setDoc(doc(db, SETTINGS_COL, 'appSettings'), {
+        ...settings,
+        updatedAt: serverTimestamp()
+    }, { merge: true });
+};
+
+export const subscribeToSettings = (onUpdate: (settings: any) => void) => {
+    return onSnapshot(doc(db, SETTINGS_COL, 'appSettings'), (snapshot) => {
+        if (snapshot.exists()) {
+            const { updatedAt, ...settings } = snapshot.data();
+            onUpdate(settings);
+        }
+    });
+};
+
 // ─── SHIFT SCHEDULES ────────────────────────────────────────────────────────
 const SHIFTS_COL = 'shiftSchedules';
 

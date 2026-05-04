@@ -24,7 +24,9 @@ import {
   subscribeToShiftBlocks,
   firebasePauseSession,
   firebaseResumeSession,
-  firebaseSilentAuth
+  firebaseSilentAuth,
+  subscribeToSettings,
+  firebaseSaveSettings
 } from './services/firebaseService';
 
 type Tab = 'station' | 'activity' | 'manager' | 'planner' | 'documents';
@@ -197,8 +199,14 @@ const App: React.FC = () => {
       }
     });
 
+    // 3. Real-time settings listener
+    const unsubSettings = subscribeToSettings((firebaseSettings) => {
+      setAppSettings(prev => ({ ...prev, ...firebaseSettings }));
+    });
+
     return () => {
       unsubUsers();
+      unsubSettings();
     };
   }, [isFirebaseAuthed]); 
 
@@ -375,8 +383,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateSettings = (settings: AppSettings) => {
+  const handleUpdateSettings = async (settings: AppSettings) => {
     setAppSettings(settings);
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseSaveSettings(settings);
+      } catch (err) {
+        console.error('Firebase save settings failed:', err);
+      }
+    }
   };
 
   const handleClockIn = async (user: User, clockInDepartment?: string, isUnscheduled?: boolean) => {
