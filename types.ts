@@ -95,6 +95,7 @@ export interface DailyTimeCard {
   status: 'Complete' | 'Active' | 'Missing';
   clockInDepartment?: string;
   isUnscheduled?: boolean;
+  managerNotes?: string;
 }
 
 // App Configuration

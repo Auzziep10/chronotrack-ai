@@ -48,8 +48,13 @@ export const processExternalPlan = async (rawPlanText: string): Promise<string> 
   }
 
   try {
+    const now = new Date();
     const prompt = `You are an assistant for a manager. Your job is to parse the following messy plain language schedule / external plan text into a structured JSON array of tasks.
 Return ONLY valid JSON. Do not include any other text, markdown formatting like \`\`\`json, or explanations. 
+
+The current date and time is: ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
+If the user says "right now", use the current time rounded to the nearest half hour.
+If the user DOES NOT specify any time or duration, DO NOT include the "startTime" or "endTime" fields in the JSON.
 
 Each task object in the array should conform to this schema:
 {
@@ -57,8 +62,8 @@ Each task object in the array should conform to this schema:
   "title": "A short descriptive title for the task",
   "description": "More detailed description, including goals, unit counts, etc.",
   "department": "One of: Design, Print, Warehousing, Production, Facility, Event",
-  "startTime": "Start time in 24-hour HH:mm format (e.g. '09:00' for 9:00 AM or '15:15' for 3:15 PM)",
-  "endTime": "End time in 24-hour HH:mm format (e.g. '12:00' for 12:00 PM or '17:00' for 5:00 PM)"
+  "startTime": "Start time in 24-hour HH:mm format (ONLY if a time is specified or implied)",
+  "endTime": "End time in 24-hour HH:mm format (ONLY if a time is specified or implied)"
 }
 
 Raw Plan Text:

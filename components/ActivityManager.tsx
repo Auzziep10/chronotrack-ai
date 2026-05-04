@@ -143,6 +143,25 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
+  // Note State
+  const handleContextMenuCard = async (e: React.MouseEvent, card: DailyTimeCard) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const newNote = window.prompt(`Manager note for ${new Date(card.date).toLocaleDateString()}:`, card.managerNotes || "");
+    if (newNote !== null) {
+      const updatedCard = { ...card, managerNotes: newNote };
+      setTimeCards(prev => prev.map(c => c.id === card.id ? updatedCard : c));
+      
+      const { storageService } = await import('../services/storageService');
+      storageService.saveTimeCard(updatedCard);
+
+      const { firebaseSaveTimeCard, isFirebaseConfigured } = await import('../services/firebaseService');
+      if (isFirebaseConfigured() && !updatedCard.id.startsWith('active-')) {
+         firebaseSaveTimeCard(updatedCard).catch(console.error);
+      }
+    }
+  };
+
   // Timecard Editing State
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [editClockIn, setEditClockIn] = useState<string>('');
@@ -1014,11 +1033,19 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                       <tr
                                         className="bg-zinc-50/50 hover:bg-zinc-100/50 transition-colors cursor-pointer"
                                         onClick={() => toggleCardExpanded(card.id)}
+                                        onContextMenu={(e) => handleContextMenuCard(e, card)}
                                       >
                                         <td className="px-6 py-3 pl-16">
                                           <div className="flex items-center gap-2">
                                             {isCardExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
-                                            <div className="text-xs text-zinc-600 font-bold">Total Time</div>
+                                            <div className="flex flex-col">
+                                              <div className="text-xs text-zinc-600 font-bold">Total Time</div>
+                                              {card.managerNotes && (
+                                                <div className="text-[10px] text-amber-600 font-normal mt-0.5 truncate max-w-[150px]" title={card.managerNotes}>
+                                                  📝 {card.managerNotes}
+                                                </div>
+                                              )}
+                                            </div>
                                           </div>
                                         </td>
                                         <td className="px-6 py-3 text-zinc-600 font-medium">
