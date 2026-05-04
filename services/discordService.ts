@@ -15,11 +15,11 @@ export const sendDiscordWarning = async (
     const replitLink = `\n\n📝 **Log Activity:** https://dtf-supply-watch-catalyst.replit.app/daily-planner`;
     content += replitLink;
 
-    if (isTest) content = `🔔 ${mention}, this is a successful test ping from ChronoTrack! You're all set.`;
+    if (isTest) content = `🔔 ${mention}, this is a successful test ping from Clockwork! You're all set.`;
 
     const payload = {
         content,
-        username: 'ChronoTrack Alerts',
+        username: 'Clockwork Alerts',
         avatar_url: 'https://i.imgur.com/rE5C77L.png' // Optional generic bot avatar
     };
 

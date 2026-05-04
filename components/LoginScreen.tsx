@@ -64,7 +64,7 @@ export const LoginScreen: React.FC<Props> = ({ onLogin, users }) => {
                     <div className="w-8 h-8 border-2 border-white rounded-full"></div>
                 </div>
                 <h2 className="mt-6 text-center text-3xl font-extrabold text-zinc-900">
-                    ChronoTrack AI
+                    Clockwork
                 </h2>
                 <p className="mt-2 text-center text-sm text-zinc-600">
                     Sign in with your Supply Watch account

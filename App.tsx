@@ -637,7 +637,7 @@ const App: React.FC = () => {
               <div className="w-4 h-4 border-2 border-white rounded-full"></div>
             </div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-zinc-900 tracking-tight">ChronoTrack AI</h1>
+              <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Clockwork</h1>
               {!isFirebaseConfigured() && isAdmin && (
                 <span className="hidden sm:inline-block px-2 py-0.5 bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold rounded shadow-sm">
                   Firebase Keys Missing!
