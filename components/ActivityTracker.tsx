@@ -50,13 +50,35 @@ export const ActivityTracker: React.FC<Props> = ({
   const [isDiscordSetupOpen, setIsDiscordSetupOpen] = useState(false);
   const [isRequestingTimeOff, setIsRequestingTimeOff] = useState(false);
   const [prefillNotes, setPrefillNotes] = useState<string>('');
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [taskNotes, setTaskNotes] = useState<string>('');
 
-  const handleTaskClick = (taskTitle: string) => {
-    setPrefillNotes(taskTitle);
-    const formElement = document.getElementById('work-log-form');
-    if (formElement) {
-      formElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const handleTaskClick = (taskId: string) => {
+    if (expandedTaskId === taskId) {
+      setExpandedTaskId(null);
+      setTaskNotes('');
+    } else {
+      setExpandedTaskId(taskId);
+      setTaskNotes('');
     }
+  };
+
+  const handleQuickLog = (task: any, pct: number) => {
+    const session = activeSessions[selectedUserId];
+    if (!session) return;
+    
+    onLogSubmit(selectedUserId, {
+      department: session.user.primaryDepartment || 'Uncategorized' as any,
+      task: task.title,
+      notes: `[${pct}% Complete] ${taskNotes}`.trim()
+    });
+
+    if (onUpdateTaskStatus) {
+       const status = pct === 100 ? 'completed' : 'in_progress';
+       onUpdateTaskStatus(task.id, status, task.title, session.user);
+    }
+    setExpandedTaskId(null);
+    setTaskNotes('');
   };
 
   const activeUsers = Object.values(activeSessions) as UserSession[];
@@ -288,10 +310,10 @@ export const ActivityTracker: React.FC<Props> = ({
 
   const getTaskStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'text-zinc-900 bg-zinc-50 border-zinc-200';
-      case 'in_progress': return 'text-zinc-900 bg-zinc-50 border-zinc-200';
-      case 'delayed': return 'text-zinc-900 bg-zinc-50 border-zinc-200';
-      default: return 'text-orange-600 bg-orange-50 border-orange-200';
+      case 'completed': return 'text-green-900 bg-green-50 border-green-500';
+      case 'in_progress': return 'text-blue-900 bg-blue-50 border-blue-500';
+      case 'delayed': return 'text-red-900 bg-red-50 border-red-500';
+      default: return 'text-orange-600 bg-orange-50 border-orange-300';
     }
   };
 
@@ -534,8 +556,8 @@ export const ActivityTracker: React.FC<Props> = ({
                 {userTasks.map(task => (
                   <div
                     key={task.id}
-                    onClick={() => handleTaskClick(task.title)}
-                    className={`p-3 rounded-lg border-l-4 ${getTaskStatusColor(task.status)} transition-all hover:shadow-md cursor-pointer active:scale-[0.99]`}
+                    onClick={() => handleTaskClick(task.id)}
+                    className={`p-3 rounded-lg border-l-4 ${getTaskStatusColor(task.status)} transition-all hover:shadow-md cursor-pointer`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3 flex-1">
@@ -587,26 +609,39 @@ export const ActivityTracker: React.FC<Props> = ({
                             </div>
                           )}
 
-                          {onUpdateTaskStatus && (!isDedicatedTerminal && currentUser?.id === selectedUserId) && (
-                            <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-zinc-100">
-                              <button
-                                onClick={() => onUpdateTaskStatus(task.id, 'in_progress', task.title, selectedSession.user)}
-                                className="text-[10px] px-2.5 py-1.5 bg-zinc-50 text-zinc-800 hover:bg-zinc-100 font-bold rounded transition-colors uppercase tracking-wider"
-                              >
-                                In Progress
-                              </button>
-                              <button
-                                onClick={() => onUpdateTaskStatus(task.id, 'completed', task.title, selectedSession.user)}
-                                className="text-[10px] px-2.5 py-1.5 bg-zinc-50 text-zinc-800 hover:bg-zinc-100 font-bold rounded transition-colors uppercase tracking-wider"
-                              >
-                                Complete
-                              </button>
-                              <button
-                                onClick={() => onUpdateTaskStatus(task.id, 'delayed', task.title, selectedSession.user)}
-                                className="text-[10px] px-2.5 py-1.5 bg-zinc-50 text-zinc-900 hover:bg-zinc-100 font-bold rounded transition-colors uppercase tracking-wider"
-                              >
-                                Delayed
-                              </button>
+                          )}
+                          
+                          {/* Expanded Quick Log Form */}
+                          {expandedTaskId === task.id && (!isDedicatedTerminal && currentUser?.id === selectedUserId || isAdminOrManager) && (
+                            <div className="mt-4 pt-4 border-t border-zinc-200/50 space-y-3" onClick={(e) => e.stopPropagation()}>
+                              <div>
+                                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Optional Notes</label>
+                                <textarea
+                                  value={taskNotes}
+                                  onChange={(e) => setTaskNotes(e.target.value)}
+                                  className="w-full text-sm border border-zinc-200 rounded p-2 focus:ring-1 focus:ring-zinc-400 focus:border-zinc-400 bg-white"
+                                  placeholder="What are you currently working on?"
+                                  rows={1}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Log Progress to Submit</label>
+                                <div className="flex gap-2">
+                                  {[0, 25, 50, 75, 100].map(pct => (
+                                    <button
+                                      key={pct}
+                                      onClick={() => handleQuickLog(task, pct)}
+                                      className={`flex-1 py-1.5 rounded border text-sm font-bold transition-all ${
+                                        pct === 100 
+                                          ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600' 
+                                          : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-900 hover:text-white hover:border-zinc-900'
+                                      }`}
+                                    >
+                                      {pct}%
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>
