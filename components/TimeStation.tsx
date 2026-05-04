@@ -310,7 +310,8 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                 const now = Date.now();
                 const elapsedSinceLog = now - session.lastLogTime;
                 const intervalMs = (appSettings?.checkInIntervalHours || 1) * 60 * 60 * 1000;
-                const isOverdue = elapsedSinceLog > intervalMs;
+                // Only mark as overdue/at-risk if Auto-Pause is actually enabled
+                const isOverdue = appSettings?.autoPauseEnabled ? elapsedSinceLog > intervalMs : false;
 
                 return (
                   <div key={session.userId} className={`p-4 rounded-xl border-2 transition-all hover:shadow-md
