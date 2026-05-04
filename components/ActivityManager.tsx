@@ -4,7 +4,7 @@ import { Department, WorkLog, DailyTimeCard, User, AppSettings, UserSession } fr
 import {
   BarChart3, Users, Clock, Calendar, ChevronDown, ChevronRight, Download,
   Briefcase, CalendarRange, Sparkles, Zap, ListTodo, RefreshCw,
-  Target, TrendingUp, AlertCircle
+  Target, TrendingUp, AlertCircle, X, Save
 } from 'lucide-react';
 import { processExternalPlan } from '../services/geminiService';
 import { UserProfileDialog } from './UserProfileDialog';
@@ -948,93 +948,116 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
                                 return (
                                   <React.Fragment key={card.id}>
-                                    <tr
-                                      className="bg-zinc-50/50 hover:bg-zinc-100/50 transition-colors cursor-pointer"
-                                      onClick={() => toggleCardExpanded(card.id)}
-                                    >
-                                      <td className="px-6 py-3 pl-16">
-                                        <div className="flex items-center gap-2">
-                                          {isCardExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
-                                          <div className="text-xs text-zinc-600 font-bold">Total Time</div>
-                                        </div>
-                                      </td>
-                                      <td className="px-6 py-3 text-zinc-600 font-medium">
-                                        {new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                      </td>
-                                      <td className="px-6 py-3" onClick={e => e.stopPropagation()}>
-                                        {isEditing ? (
-                                          <div className="flex flex-col gap-1">
-                                            <input
-                                              type="datetime-local"
-                                              value={editClockIn}
-                                              onChange={e => setEditClockIn(e.target.value)}
-                                              className="text-xs border border-zinc-300 rounded p-1"
-                                            />
-                                            <input
-                                              type="datetime-local"
-                                              value={editClockOut}
-                                              onChange={e => setEditClockOut(e.target.value)}
-                                              className="text-xs border border-zinc-300 rounded p-1"
-                                            />
-                                          </div>
-                                        ) : (
-                                          <>
-                                            <div className="text-xs font-medium text-zinc-900">
-                                              {new Date(card.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    {isEditing ? (
+                                      <tr>
+                                        <td colSpan={6} className="p-0 border-b border-zinc-100 bg-zinc-50/30">
+                                          <div className="bg-white m-3 p-5 rounded-xl border border-zinc-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-black/5 animate-in slide-in-from-top-2 duration-200">
+                                            <div className="flex items-center justify-between mb-4">
+                                              <div className="flex items-center gap-2">
+                                                <div className="p-2 bg-orange-50 text-orange-600 rounded-lg">
+                                                  <Clock className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                  <h4 className="text-sm font-bold text-zinc-900">Edit Time Record</h4>
+                                                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                                </div>
+                                              </div>
+                                              <button onClick={() => setEditingCardId(null)} className="p-2 hover:bg-zinc-100 rounded-lg transition-colors text-zinc-400 hover:text-zinc-600">
+                                                <X className="w-4 h-4" />
+                                              </button>
                                             </div>
-                                            <div className="text-[10px] text-zinc-500">
-                                              {card.clockOut ? new Date(card.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
+                                            
+                                            <div className="flex flex-wrap gap-4 items-end bg-zinc-50/50 p-4 rounded-lg border border-zinc-100">
+                                              <div className="flex-1 min-w-[200px]">
+                                                <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-1.5 ml-1">Clock In Time</label>
+                                                <input
+                                                  type="datetime-local"
+                                                  value={editClockIn}
+                                                  onChange={e => setEditClockIn(e.target.value)}
+                                                  className="w-full text-sm font-medium border border-zinc-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-sm"
+                                                />
+                                              </div>
+                                              <div className="flex-1 min-w-[200px]">
+                                                <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-1.5 ml-1">Clock Out Time</label>
+                                                <input
+                                                  type="datetime-local"
+                                                  value={editClockOut}
+                                                  onChange={e => setEditClockOut(e.target.value)}
+                                                  className="w-full text-sm font-medium border border-zinc-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-sm"
+                                                />
+                                              </div>
+                                              <div className="w-32">
+                                                <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-1.5 ml-1">Idle (Unpaid)</label>
+                                                <div className="relative">
+                                                  <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={editIdleTime}
+                                                    onChange={e => setEditIdleTime(e.target.value)}
+                                                    className="w-full text-sm font-medium border border-zinc-200 rounded-lg pl-3 pr-8 py-2 bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-sm"
+                                                  />
+                                                  <span className="absolute right-3 top-2 text-xs text-zinc-400 font-bold">hr</span>
+                                                </div>
+                                              </div>
+                                              <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0 ml-auto">
+                                                <button onClick={() => setEditingCardId(null)} className="flex-1 md:flex-none px-5 py-2 text-xs font-bold text-zinc-600 bg-white border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-900 rounded-lg transition-all shadow-sm">Cancel</button>
+                                                <button onClick={() => saveEditedCard(card)} className="flex-1 md:flex-none px-5 py-2 text-xs font-bold text-white bg-zinc-900 hover:bg-zinc-800 rounded-lg transition-all shadow-md shadow-zinc-200 flex items-center justify-center gap-2">
+                                                  <Save className="w-3.5 h-3.5" /> Save Changes
+                                                </button>
+                                              </div>
                                             </div>
-                                          </>
-                                        )}
-                                      </td>
-                                      <td className="px-6 py-3" onClick={e => e.stopPropagation()}>
-                                        {isEditing ? (
-                                          <div className="flex items-center gap-1">
-                                            <span className="text-xs text-zinc-500">-</span>
-                                            <input
-                                              type="number"
-                                              step="0.01"
-                                              min="0"
-                                              value={editIdleTime}
-                                              onChange={e => setEditIdleTime(e.target.value)}
-                                              className="text-xs border border-zinc-300 rounded p-1 w-16"
-                                            />
-                                            <span className="text-xs text-zinc-500">hr</span>
                                           </div>
-                                        ) : (
+                                        </td>
+                                      </tr>
+                                    ) : (
+                                      <tr
+                                        className="bg-zinc-50/50 hover:bg-zinc-100/50 transition-colors cursor-pointer"
+                                        onClick={() => toggleCardExpanded(card.id)}
+                                      >
+                                        <td className="px-6 py-3 pl-16">
+                                          <div className="flex items-center gap-2">
+                                            {isCardExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
+                                            <div className="text-xs text-zinc-600 font-bold">Total Time</div>
+                                          </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-zinc-600 font-medium">
+                                          {new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </td>
+                                        <td className="px-6 py-3" onClick={e => e.stopPropagation()}>
+                                          <div className="text-xs font-medium text-zinc-900">
+                                            {new Date(card.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                          </div>
+                                          <div className="text-[10px] text-zinc-500">
+                                            {card.clockOut ? new Date(card.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active...'}
+                                          </div>
+                                        </td>
+                                        <td className="px-6 py-3" onClick={e => e.stopPropagation()}>
                                           <div className={`text-xs font-medium ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-zinc-400'}`}>
                                             -{card.totalIdleHours?.toFixed(2) || '0.00'} hr
                                           </div>
-                                        )}
-                                      </td>
-                                      <td className="px-6 py-3">
-                                        <div className="text-xs font-medium text-zinc-900">
-                                          {card.totalHours.toFixed(2)} hr
-                                        </div>
-                                      </td>
-                                      <td className="px-6 py-3 text-right" onClick={e => e.stopPropagation()}>
-                                        <div className="flex flex-col items-end gap-1.5">
-                                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
-                                            ${card.status === 'Complete' ? 'bg-zinc-50 text-zinc-800 border-zinc-200' : 'bg-zinc-50 text-zinc-800 border-zinc-200'}`}>
-                                            {card.status}
-                                          </span>
-                                          {isEditing ? (
-                                            <div className="flex gap-1 mt-1">
-                                              <button onClick={() => setEditingCardId(null)} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700">Cancel</button>
-                                              <button onClick={() => saveEditedCard(card)} className="text-[10px] font-bold text-zinc-900 hover:text-zinc-800">Save</button>
-                                            </div>
-                                          ) : (
+                                        </td>
+                                        <td className="px-6 py-3">
+                                          <div className="text-xs font-medium text-zinc-900">
+                                            {card.totalHours.toFixed(2)} hr
+                                          </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-right" onClick={e => e.stopPropagation()}>
+                                          <div className="flex flex-col items-end gap-1.5">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
+                                              ${card.status === 'Complete' ? 'bg-zinc-50 text-zinc-800 border-zinc-200' : 'bg-zinc-50 text-zinc-800 border-zinc-200'}`}>
+                                              {card.status}
+                                            </span>
                                             <button
                                               onClick={() => startEditingCard(card)}
                                               className="text-[10px] font-bold text-zinc-400 hover:text-zinc-600 transition-colors underline"
                                             >
                                               Edit
                                             </button>
-                                          )}
-                                        </div>
-                                      </td>
-                                    </tr>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
 
                                     {isCardExpanded && (
                                       cardLogs.length > 0 ? (
