@@ -147,6 +147,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [editClockIn, setEditClockIn] = useState<string>('');
   const [editClockOut, setEditClockOut] = useState<string>('');
+  const [editIdleTime, setEditIdleTime] = useState<string>('');
 
   // State for real data
   const [timeCards, setTimeCards] = useState<DailyTimeCard[]>([]);
@@ -506,11 +507,13 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     const toLocalFormat = (ts: number) => new Date(ts - offset).toISOString().slice(0, 16);
     setEditClockIn(toLocalFormat(card.clockIn));
     setEditClockOut(card.clockOut ? toLocalFormat(card.clockOut) : '');
+    setEditIdleTime((card.totalIdleHours || 0).toFixed(2));
   };
 
   const saveEditedCard = async (card: DailyTimeCard) => {
     const inTime = new Date(editClockIn).getTime();
     const outTime = editClockOut ? new Date(editClockOut).getTime() : null;
+    const idleTimeNum = parseFloat(editIdleTime) || 0;
     if (isNaN(inTime) || (editClockOut && isNaN(outTime!))) {
       alert("Invalid date/time format.");
       return;
@@ -519,7 +522,8 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
       ...card,
       clockIn: inTime,
       clockOut: outTime,
-      totalHours: outTime ? Math.max(0, ((outTime - inTime) / 3600000) - (card.totalIdleHours || 0)) : card.totalHours,
+      totalIdleHours: idleTimeNum,
+      totalHours: outTime ? Math.max(0, ((outTime - inTime) / 3600000) - idleTimeNum) : card.totalHours,
       status: outTime ? 'Complete' : 'Active'
     };
 
@@ -971,7 +975,6 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                               value={editClockOut}
                                               onChange={e => setEditClockOut(e.target.value)}
                                               className="text-xs border border-zinc-300 rounded p-1"
-                                              disabled={!card.clockOut && !editClockOut}
                                             />
                                           </div>
                                         ) : (
@@ -985,10 +988,25 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                           </>
                                         )}
                                       </td>
-                                      <td className="px-6 py-3">
-                                        <div className={`text-xs font-medium ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-zinc-400'}`}>
-                                          -{card.totalIdleHours?.toFixed(2) || '0.00'} hr
-                                        </div>
+                                      <td className="px-6 py-3" onClick={e => e.stopPropagation()}>
+                                        {isEditing ? (
+                                          <div className="flex items-center gap-1">
+                                            <span className="text-xs text-zinc-500">-</span>
+                                            <input
+                                              type="number"
+                                              step="0.01"
+                                              min="0"
+                                              value={editIdleTime}
+                                              onChange={e => setEditIdleTime(e.target.value)}
+                                              className="text-xs border border-zinc-300 rounded p-1 w-16"
+                                            />
+                                            <span className="text-xs text-zinc-500">hr</span>
+                                          </div>
+                                        ) : (
+                                          <div className={`text-xs font-medium ${card.totalIdleHours && card.totalIdleHours > 0 ? 'text-amber-600' : 'text-zinc-400'}`}>
+                                            -{card.totalIdleHours?.toFixed(2) || '0.00'} hr
+                                          </div>
+                                        )}
                                       </td>
                                       <td className="px-6 py-3">
                                         <div className="text-xs font-medium text-zinc-900">
