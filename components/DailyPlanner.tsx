@@ -64,6 +64,17 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [editDepartment, setEditDepartment] = useState<Department | ''>('');
     const [isUpdating, setIsUpdating] = useState(false);
 
+    // Drag & Drop State
+    const timelineRef = React.useRef<HTMLDivElement>(null);
+    const [dragState, setDragState] = useState<{
+        block: ScheduleBlock;
+        type: 'move' | 'resize';
+        startX: number;
+        originalStart: Date;
+        originalEnd: Date;
+    } | null>(null);
+    const [previewBlock, setPreviewBlock] = useState<ScheduleBlock | null>(null);
+
     // Shift Blocks State (From Firebase)
     const [shiftBlocks, setShiftBlocks] = useState<ScheduleBlock[]>([]);
 
@@ -108,6 +119,63 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         const interval = setInterval(updateTimeLine, 60000);
         return () => clearInterval(interval);
     }, []);
+
+    // Handle Dragging and Resizing
+    useEffect(() => {
+        if (!dragState) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!timelineRef.current) return;
+            const timelineWidth = timelineRef.current.getBoundingClientRect().width;
+            
+            const deltaX = e.clientX - dragState.startX;
+            const deltaHours = (deltaX / timelineWidth) * TOTAL_HOURS;
+            const deltaMs = deltaHours * 60 * 60 * 1000;
+            
+            // Snap to 15-minute intervals (15 * 60 * 1000 = 900000 ms)
+            const snapMs = 15 * 60 * 1000;
+
+            if (dragState.type === 'move') {
+                const newStartMs = Math.round((dragState.originalStart.getTime() + deltaMs) / snapMs) * snapMs;
+                const duration = dragState.originalEnd.getTime() - dragState.originalStart.getTime();
+                const newEndMs = newStartMs + duration;
+                
+                setPreviewBlock({
+                    ...dragState.block,
+                    startTime: new Date(newStartMs).toISOString(),
+                    endTime: new Date(newEndMs).toISOString()
+                });
+            } else if (dragState.type === 'resize') {
+                const newEndMs = Math.round((dragState.originalEnd.getTime() + deltaMs) / snapMs) * snapMs;
+                // Ensure it's at least 15 minutes long
+                if (newEndMs > dragState.originalStart.getTime()) {
+                    setPreviewBlock({
+                        ...dragState.block,
+                        endTime: new Date(newEndMs).toISOString()
+                    });
+                }
+            }
+        };
+
+        const handleMouseUp = async () => {
+            if (previewBlock) {
+                try {
+                    await firebaseSaveShiftBlock(previewBlock);
+                } catch (err) {
+                    console.error("Failed to save dragged block", err);
+                }
+            }
+            setDragState(null);
+            setPreviewBlock(null);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [dragState, previewBlock]);
 
     useEffect(() => {
         // Subscribe to shifts purely from Firebase and actively trim duplicates
@@ -186,12 +254,24 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 );
 
                 const tStart = new Date(currentDate);
-                const [sh, sm] = (task.startTime || '09:00').split(':').map(Number);
-                tStart.setHours(sh, sm || 0, 0, 0);
-
                 const tEnd = new Date(currentDate);
-                const [eh, em] = (task.endTime || '10:00').split(':').map(Number);
-                tEnd.setHours(eh, em || 0, 0, 0);
+                
+                if (task.startTime && task.endTime) {
+                    const [sh, sm] = task.startTime.split(':').map(Number);
+                    tStart.setHours(sh, sm || 0, 0, 0);
+                    const [eh, em] = task.endTime.split(':').map(Number);
+                    tEnd.setHours(eh, em || 0, 0, 0);
+                } else {
+                    // Default to right now, rounded to the nearest half hour
+                    const now = new Date();
+                    const currentHour = now.getHours();
+                    const currentMinute = now.getMinutes();
+                    const roundedMinute = currentMinute < 30 ? 30 : 0;
+                    const roundedHour = currentMinute < 30 ? currentHour : currentHour + 1;
+                    
+                    tStart.setHours(roundedHour, roundedMinute, 0, 0);
+                    tEnd.setHours(roundedHour + 1, roundedMinute, 0, 0); // 1 hour duration default
+                }
 
                 const blockData = {
                     title: task.title || 'AI Task',
@@ -923,7 +1003,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                         <div className="flex-1 relative">
                             {/* Vertical Grid Lines (Background) */}
                             <div className="absolute inset-0 pl-48 pointer-events-none">
-                                <div className="relative w-full h-full">
+                                <div className="relative w-full h-full" ref={timelineRef}>
                                     {Array.from({ length: TOTAL_HOURS + 1 }).map((_, i) => (
                                         <div
                                             key={i}
@@ -969,14 +1049,36 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         onContextMenu={(e) => handleContextMenu(e, user.id)}
                                     >
                                         {/* Render Blocks */}
-                                        {(userBlocks[user.id] || []).map(block => {
+                                        {(userBlocks[user.id] || []).map(originalBlock => {
+                                            const isDragged = previewBlock?.id === originalBlock.id;
+                                            const block = isDragged ? previewBlock : originalBlock;
                                             const styles = getBlockStyles(block);
                                             return (
                                                 <div
                                                     key={block.id}
-                                                    onClick={() => handleBlockClick(block)}
+                                                    onClick={() => {
+                                                        // Prevent click if we were dragging
+                                                        if (isDragged || dragState) return;
+                                                        handleBlockClick(block);
+                                                    }}
+                                                    onMouseDown={(e) => {
+                                                        if (!isAdminOrManager) return;
+                                                        e.stopPropagation();
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        // If clicked within 10px of the right edge, treat as resize
+                                                        const isResize = e.clientX > rect.right - 10;
+                                                        
+                                                        setDragState({
+                                                            block: originalBlock,
+                                                            type: isResize ? 'resize' : 'move',
+                                                            startX: e.clientX,
+                                                            originalStart: new Date(originalBlock.startTime),
+                                                            originalEnd: new Date(originalBlock.endTime)
+                                                        });
+                                                        setPreviewBlock(originalBlock);
+                                                    }}
                                                     style={{ left: styles.left, width: styles.width }}
-                                                    className={styles.className + " group " + (isAdminOrManager ? "cursor-pointer" : "")}
+                                                    className={styles.className + " group " + (isAdminOrManager ? "cursor-pointer" : "") + (isDragged ? " opacity-70 scale-105 z-50 shadow-xl" : "")}
                                                     title={`${block.title} (${new Date(block.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${new Date(block.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`}
                                                 >
                                                     {block.title}
