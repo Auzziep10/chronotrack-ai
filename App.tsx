@@ -630,8 +630,19 @@ const App: React.FC = () => {
   };
 
   const handleUpdateTaskStatus = async (taskId: string, status: string, taskTitle: string, user: User) => {
-    // Note: If using standalone, task statuses could be updated via Firebase
-    console.log("Standalone task update not implemented for Firebase tasks yet:", taskId, status);
+    if (isFirebaseConfigured()) {
+      const task = shiftBlocks.find(b => b.id === taskId);
+      if (task) {
+        import('./services/firebaseService').then(({ firebaseSaveShiftBlock }) => {
+          firebaseSaveShiftBlock({
+            ...task,
+            status: status
+          }).catch(err => console.error('Failed to update task status in Firebase', err));
+        });
+      }
+    } else {
+      console.log("Standalone task update not implemented for Firebase tasks yet:", taskId, status);
+    }
   };
 
   const deleteLog = (userId: string, logId: string) => {

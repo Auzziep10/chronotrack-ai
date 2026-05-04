@@ -15,11 +15,11 @@ const TOTAL_HOURS = END_HOUR - START_HOUR;
 
 // Colors matching the screenshot (approximate)
 const STATUS_COLORS = {
-    active: 'bg-zinc-500 text-white border-zinc-900',
-    pending: 'bg-orange-400 text-white border-orange-500', // "Not Started" / "Print 1..."
-    completed: 'bg-zinc-500 text-white border-zinc-900',
+    active: 'bg-blue-500 text-white border-blue-600',
+    pending: 'bg-orange-500 text-white border-orange-600', // "Not Started" / "Print 1..."
+    completed: 'bg-green-500 text-white border-green-600',
     delayed: 'bg-red-500 text-white border-red-600',
-    default: 'bg-zinc-400 text-white border-zinc-500'
+    default: 'bg-orange-400 text-white border-orange-500'
 };
 
 const STATUS_LABELS = {
