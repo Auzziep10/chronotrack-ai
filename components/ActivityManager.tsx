@@ -463,9 +463,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         const grossPresses = '';
         const shirtsDowned = '';
         const netPresses = '';
-        const shiftHrlyPay = '';
+        const shiftHrlyPay = user?.payRate ? (card.totalHours * user.payRate).toFixed(2) : '';
         const shiftInctvPay = '';
-        const shiftTotalPay = '';
+        const shiftTotalPay = user?.payRate ? (card.totalHours * user.payRate).toFixed(2) : '';
         const timePaused = (card.totalIdleHours || 0).toFixed(2);
 
         return [

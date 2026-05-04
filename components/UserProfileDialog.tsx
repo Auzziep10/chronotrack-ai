@@ -237,7 +237,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                   />
                 </div>
 
-                {/* Row 4: PIN & Late Days */}
+                {/* Row 4: PIN, Late Days & Pay Rate */}
                 <div className="col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">Access PIN</label>
                   <input
@@ -258,6 +258,23 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                       value={formData.lateDays || 0}
                       onChange={e => setFormData({ ...formData, lateDays: parseInt(e.target.value) || 0 })}
                       className="w-full pl-9 text-sm border-zinc-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 5: Compensation */}
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Hourly Pay Rate</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-zinc-400 font-medium">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.payRate || ''}
+                      onChange={e => setFormData({ ...formData, payRate: parseFloat(e.target.value) || undefined })}
+                      placeholder="e.g. 15.50"
+                      className="w-full pl-7 text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-zinc-50"
                     />
                   </div>
                 </div>

@@ -58,6 +58,7 @@ export interface User {
   // Personal Info
   phoneNumber?: string;
   email?: string;
+  payRate?: number;
   address?: string;
   discordId?: string;
   discordAlertPrefs?: number[]; // [30, 45, 60]

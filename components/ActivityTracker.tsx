@@ -149,14 +149,22 @@ export const ActivityTracker: React.FC<Props> = ({
     const intervalMs = (appSettings?.checkInIntervalHours || 1) * 60 * 60 * 1000;
 
     const checkInterval = setInterval(() => {
+      if (!appSettings?.autoPauseEnabled) {
+        setIsLocked(false);
+        return;
+      }
       const now = Date.now();
       const elapsed = now - selectedSession.lastLogTime;
       setIsLocked(elapsed >= intervalMs);
     }, 1000);
 
     // Initial check
-    const now = Date.now();
-    setIsLocked(now - selectedSession.lastLogTime >= intervalMs);
+    if (!appSettings?.autoPauseEnabled) {
+      setIsLocked(false);
+    } else {
+      const now = Date.now();
+      setIsLocked(now - selectedSession.lastLogTime >= intervalMs);
+    }
 
     return () => clearInterval(checkInterval);
   }, [selectedSession, appSettings]);
