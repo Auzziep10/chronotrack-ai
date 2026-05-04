@@ -554,7 +554,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
           <h2 className="text-xl font-bold tracking-tight">Manager Console</h2>
         </div>
 
-        <div className="flex bg-zinc-800 rounded-xl p-1 overflow-x-auto max-w-full">
+        <div className="flex bg-zinc-800 rounded-xl p-1 overflow-x-auto max-w-full hide-scrollbar">
           {[
             { id: 'departments', icon: BarChart3, label: 'Depts' },
             { id: 'users', icon: Users, label: 'Users' },

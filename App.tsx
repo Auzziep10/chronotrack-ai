@@ -652,14 +652,19 @@ const App: React.FC = () => {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex flex-col items-end text-right mr-2">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            <div className="hidden sm:flex flex-col items-end text-right mr-2">
               <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Active Staff</span>
               <span className="text-sm font-semibold text-zinc-800">
                 {Object.keys(activeSessions).length} Checked In
               </span>
             </div>
-            <div className="h-8 w-px bg-zinc-200 mx-2"></div>
+            {/* Mobile-only compact view */}
+            <div className="flex sm:hidden flex-col items-end text-right mr-1">
+              <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Staff In</span>
+              <span className="text-xs font-bold text-zinc-800">{Object.keys(activeSessions).length}</span>
+            </div>
+            <div className="hidden sm:block h-8 w-px bg-zinc-200 mx-2"></div>
             {isAdmin && !isTerminal && (
               <button
                 onClick={() => setShowSettings(true)}
@@ -683,7 +688,7 @@ const App: React.FC = () => {
       {/* Tab Navigation */}
       <div className="bg-white border-b border-zinc-200 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
+          <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto hide-scrollbar" aria-label="Tabs">
             {(isAdminOrManager || isTerminal) && (
               <button
                 onClick={() => setActiveTab('station')}
