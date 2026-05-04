@@ -167,7 +167,15 @@ const App: React.FC = () => {
       });
     });
 
-    // 2. Real-time users listener — Firebase is source of truth for user profiles
+    return () => {
+      unsubSessions();
+    };
+  }, [authToken, isFirebaseAuthed]); // Add dependency to ensure mapping works when users list changes
+
+  // 2. Real-time users listener — MUST run before login so new devices have the users list to authenticate against!
+  useEffect(() => {
+    if (!isFirebaseConfigured() || !isFirebaseAuthed) return;
+    
     const unsubUsers = subscribeToUsers((firebaseUsers) => {
       if (firebaseUsers.length > 0) {
         // Merge: Firebase data wins for every field it has
@@ -190,10 +198,9 @@ const App: React.FC = () => {
     });
 
     return () => {
-      unsubSessions();
       unsubUsers();
     };
-  }, [authToken, isFirebaseAuthed]); // Add dependency to ensure mapping works when users list changes
+  }, [isFirebaseAuthed]); 
 
   // ─── IDLE ENFORCEMENT MONITOR ──────────────────────────────────────────────
   const warnedIntervalsRef = useRef<Record<string, number[]>>({});
