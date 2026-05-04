@@ -319,11 +319,13 @@ export const firebaseSaveSettings = async (settings: any): Promise<void> => {
     }, { merge: true });
 };
 
-export const subscribeToSettings = (onUpdate: (settings: any) => void) => {
+export const subscribeToSettings = (onUpdate: (settings: any | null) => void) => {
     return onSnapshot(doc(db, SETTINGS_COL, 'appSettings'), (snapshot) => {
         if (snapshot.exists()) {
             const { updatedAt, ...settings } = snapshot.data();
             onUpdate(settings);
+        } else {
+            onUpdate(null);
         }
     });
 };

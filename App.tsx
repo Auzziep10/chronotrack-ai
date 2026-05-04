@@ -201,7 +201,17 @@ const App: React.FC = () => {
 
     // 3. Real-time settings listener
     const unsubSettings = subscribeToSettings((firebaseSettings) => {
-      setAppSettings(prev => ({ ...prev, ...firebaseSettings }));
+      if (firebaseSettings) {
+        setAppSettings(prev => ({ ...prev, ...firebaseSettings }));
+      } else {
+        // Seed settings from local state if Firebase is empty
+        import('./services/firebaseService').then(({ firebaseSaveSettings }) => {
+           setAppSettings(prev => {
+             firebaseSaveSettings(prev).catch(() => {});
+             return prev;
+           });
+        });
+      }
     });
 
     return () => {
