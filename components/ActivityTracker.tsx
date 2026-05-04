@@ -75,6 +75,9 @@ export const ActivityTracker: React.FC<Props> = ({
   // Filter tasks for the selected user with robust matching
   const userTasks = selectedSession
     ? scheduledTasks.filter(task => {
+      // Exclude main shift blocks from being displayed as individual tasks
+      if (task.title && task.title.startsWith('[SHIFT]')) return false;
+
       const userId = String(selectedSession.userId);
       const userName = selectedSession.user.name.toLowerCase();
       const userUser = selectedSession.user.username?.toLowerCase();
