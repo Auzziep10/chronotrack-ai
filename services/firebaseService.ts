@@ -25,7 +25,7 @@ const firebaseConfig = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID || ''
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getFirestore(app);
 export const storage = getStorage(app);
 

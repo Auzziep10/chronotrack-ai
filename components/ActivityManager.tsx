@@ -138,8 +138,10 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   };
 
   const [externalPlanRaw, setExternalPlanRaw] = useState('');
-  const [parsedPlan, setParsedPlan] = useState<string | null>(null);
+  const [parsedPlan, setParsedPlan] = useState<any[] | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   // Timecard Editing State
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
@@ -326,13 +328,70 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const handleSyncPlan = async () => {
     if (!externalPlanRaw.trim()) return;
     setIsSyncing(true);
+    setPlanError(null);
+    setParsedPlan(null);
     try {
       const result = await processExternalPlan(externalPlanRaw);
-      setParsedPlan(result);
+      const parsed = JSON.parse(result);
+      if (parsed.error) {
+         setPlanError(parsed.error);
+      } else {
+         setParsedPlan(Array.isArray(parsed) ? parsed : [parsed]);
+      }
     } catch (err) {
       console.error(err);
+      setPlanError("Invalid response from AI. Please try again.");
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleSaveToSchedule = async () => {
+    if (!parsedPlan || parsedPlan.length === 0) return;
+    setIsSavingSchedule(true);
+    try {
+      const { firebaseSaveShiftBlock, isFirebaseConfigured } = await import('../services/firebaseService');
+      if (!isFirebaseConfigured()) {
+        alert("Firebase is not configured. Cannot save schedule.");
+        setIsSavingSchedule(false);
+        return;
+      }
+      
+      const today = new Date().toISOString().split('T')[0];
+      let savedCount = 0;
+      
+      for (const block of parsedPlan) {
+        let assignedUser = users.find(u => 
+          u.name.toLowerCase() === (block.assignedToName || '').toLowerCase() || 
+          u.username?.toLowerCase() === (block.assignedToName || '').toLowerCase() ||
+          u.name.toLowerCase().startsWith((block.assignedToName || '').toLowerCase())
+        );
+        
+        const userId = assignedUser ? assignedUser.id : 'unassigned';
+        
+        await firebaseSaveShiftBlock({
+          assignedTo: userId,
+          assignedToName: block.assignedToName || 'Unknown',
+          title: block.title || 'Task',
+          description: block.description || '',
+          department: block.department || Department.Production,
+          startTime: `${today}T08:00:00`,
+          endTime: `${today}T16:00:00`,
+          priority: 'medium',
+          status: 'pending',
+          isShiftBlock: false
+        });
+        savedCount++;
+      }
+      
+      alert(`Successfully saved ${savedCount} tasks to the schedule!`);
+      setParsedPlan(null);
+      setExternalPlanRaw('');
+    } catch (err) {
+      console.error("Error saving schedule:", err);
+      alert("Failed to save schedule.");
+    } finally {
+      setIsSavingSchedule(false);
     }
   };
 
@@ -616,18 +675,44 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                       Extracted Shift Goals
                     </span>
                     {parsedPlan && (
-                      <span className="text-xs font-medium text-zinc-900 bg-zinc-100 px-2 py-1 rounded-full border border-zinc-200">
-                        AI Processed
-                      </span>
+                      <div className="flex gap-2">
+                        <span className="text-xs font-medium text-zinc-900 bg-zinc-100 px-2 py-1 rounded-full border border-zinc-200">
+                          AI Processed
+                        </span>
+                        <button
+                          onClick={handleSaveToSchedule}
+                          disabled={isSavingSchedule}
+                          className="text-xs font-bold bg-zinc-900 text-white px-3 py-1 rounded-full hover:bg-zinc-800 transition-colors flex items-center gap-1"
+                        >
+                          {isSavingSchedule ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Calendar className="w-3 h-3" />}
+                          {isSavingSchedule ? 'Saving...' : 'Save to Schedule'}
+                        </button>
+                      </div>
                     )}
                   </div>
 
                   <div className="flex-1 p-8 overflow-y-auto">
-                    {parsedPlan ? (
-                      <div className="prose prose-sm prose-slate max-w-none">
-                        <div className="whitespace-pre-wrap text-zinc-700 leading-relaxed font-sans">
-                          {parsedPlan}
-                        </div>
+                    {planError ? (
+                      <div className="text-red-500 bg-red-50 p-4 rounded-xl border border-red-100 text-sm">
+                        {planError}
+                      </div>
+                    ) : parsedPlan ? (
+                      <div className="space-y-4">
+                        {parsedPlan.map((task, idx) => (
+                          <div key={idx} className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 shadow-sm hover:shadow-md transition-all">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-bold text-zinc-900">{task.title}</h4>
+                              <span className="text-[10px] font-bold px-2 py-1 bg-zinc-200 text-zinc-700 rounded-full">{task.department}</span>
+                            </div>
+                            <p className="text-sm text-zinc-600 mb-3">{task.description}</p>
+                            <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
+                              <div className="w-5 h-5 rounded-full bg-zinc-300 flex items-center justify-center text-zinc-700 font-bold">
+                                {task.assignedToName?.charAt(0) || '?'}
+                              </div>
+                              {task.assignedToName}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     ) : (
                       <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
