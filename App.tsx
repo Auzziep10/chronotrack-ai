@@ -233,6 +233,8 @@ const App: React.FC = () => {
 
     const checkIdleSessions = async () => {
       const now = Date.now();
+      const autoPauseEnabled = appSettings?.autoPauseEnabled !== false; // default true
+
       for (const [userId, session] of Object.entries(activeSessions) as [string, UserSession][]) {
         if (session.isPaused) {
           delete warnedIntervalsRef.current[userId];
@@ -242,7 +244,7 @@ const App: React.FC = () => {
         const timeSinceLastLog = now - session.lastLogTime;
         const minutesSinceLastLog = Math.floor(timeSinceLastLog / 60000);
 
-        if (timeSinceLastLog >= IDLE_THRESHOLD_MS) {
+        if (autoPauseEnabled && timeSinceLastLog >= IDLE_THRESHOLD_MS) {
           console.log(`[IdleEnforcement] Pausing session for ${session.user.name} (70m threshold reached)`);
           const { firebasePauseSession } = await import('./services/firebaseService');
           await firebasePauseSession(userId, 'idle');
@@ -284,7 +286,7 @@ const App: React.FC = () => {
     const interval = setInterval(checkIdleSessions, 15000); // Check every 15 seconds
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSessions, authToken, currentUser]);
+  }, [activeSessions, authToken, currentUser, appSettings]);
 
 
 
