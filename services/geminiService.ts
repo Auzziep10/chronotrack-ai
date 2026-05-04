@@ -1,5 +1,5 @@
 import { WorkLog, ScheduleBlock, Department } from "../types";
-import { getAI, getGenerativeModel } from "firebase/ai";
+import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
 import { app } from "./firebaseService";
 
 export const generateDailySummary = async (logs: WorkLog[]): Promise<string> => {
@@ -8,7 +8,7 @@ export const generateDailySummary = async (logs: WorkLog[]): Promise<string> => 
   }
 
   try {
-    const ai = getAI(app);
+    const ai = getAI(app, { backend: new GoogleAIBackend() });
     const model = getGenerativeModel(ai, { model: "gemini-1.5-flash" });
 
     const logsContext = logs.map(log => 
@@ -33,7 +33,7 @@ export const processExternalPlan = async (rawPlanText: string): Promise<string> 
   }
 
   try {
-    const ai = getAI(app);
+    const ai = getAI(app, { backend: new GoogleAIBackend() });
     const model = getGenerativeModel(ai, { 
         model: "gemini-1.5-flash"
     });
