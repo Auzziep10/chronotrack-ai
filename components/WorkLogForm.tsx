@@ -8,14 +8,21 @@ interface Props {
   onSubmit: (log: Omit<WorkLog, 'id' | 'timestamp' | 'periodStart' | 'periodEnd'>) => void;
   isRequired?: boolean; // If true, visually emphasize importance
   title?: string;
+  prefillNotes?: string;
 }
 
-export const WorkLogForm: React.FC<Props> = ({ onSubmit, isRequired, title }) => {
+export const WorkLogForm: React.FC<Props> = ({ onSubmit, isRequired, title, prefillNotes }) => {
   const [department, setDepartment] = useState<Department | ''>('');
   const [task, setTask] = useState<string>('');
   const [productionData, setProductionData] = useState<ProductionData>({ projectName: '', quantity: 0 });
-  const [notes, setNotes] = useState<string>('');
+  const [notes, setNotes] = useState<string>(prefillNotes || '');
   const [errors, setErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (prefillNotes) {
+      setNotes(prefillNotes);
+    }
+  }, [prefillNotes]);
 
   // Reset task when department changes
   useEffect(() => {

@@ -49,6 +49,15 @@ export const ActivityTracker: React.FC<Props> = ({
   const [isLocked, setIsLocked] = useState(false);
   const [isDiscordSetupOpen, setIsDiscordSetupOpen] = useState(false);
   const [isRequestingTimeOff, setIsRequestingTimeOff] = useState(false);
+  const [prefillNotes, setPrefillNotes] = useState<string>('');
+
+  const handleTaskClick = (taskTitle: string) => {
+    setPrefillNotes(taskTitle);
+    const formElement = document.getElementById('work-log-form');
+    if (formElement) {
+      formElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
 
   const activeUsers = Object.values(activeSessions) as UserSession[];
 
@@ -525,7 +534,8 @@ export const ActivityTracker: React.FC<Props> = ({
                 {userTasks.map(task => (
                   <div
                     key={task.id}
-                    className={`p-3 rounded-lg border-l-4 ${getTaskStatusColor(task.status)} transition-all hover:shadow-sm`}
+                    onClick={() => handleTaskClick(task.title)}
+                    className={`p-3 rounded-lg border-l-4 ${getTaskStatusColor(task.status)} transition-all hover:shadow-md cursor-pointer active:scale-[0.99]`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3 flex-1">
@@ -618,10 +628,16 @@ export const ActivityTracker: React.FC<Props> = ({
             </p>
           </div>
 
-          <WorkLogForm
-            onSubmit={(data) => onLogSubmit(selectedUserId, data)}
-            title="Log Voluntary Activity"
-          />
+          <div id="work-log-form">
+            <WorkLogForm
+              onSubmit={(data) => {
+                onLogSubmit(selectedUserId, data);
+                setPrefillNotes(''); // clear after submission
+              }}
+              title="Log Voluntary Activity"
+              prefillNotes={prefillNotes}
+            />
+          </div>
         </div>
 
         <div className="lg:col-span-5 flex flex-col gap-6">
