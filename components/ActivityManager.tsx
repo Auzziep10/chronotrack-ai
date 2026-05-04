@@ -361,11 +361,22 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
       let savedCount = 0;
       
       for (const block of parsedPlan) {
-        let assignedUser = users.find(u => 
-          u.name.toLowerCase() === (block.assignedToName || '').toLowerCase() || 
-          u.username?.toLowerCase() === (block.assignedToName || '').toLowerCase() ||
-          u.name.toLowerCase().startsWith((block.assignedToName || '').toLowerCase())
-        );
+        const assignedName = (block.assignedToName || '').toLowerCase().trim();
+        const aiFirstName = assignedName.split(' ')[0];
+
+        let assignedUser = users.find(u => {
+          const dbName = u.name.toLowerCase().trim();
+          const dbUsername = (u.username || '').toLowerCase().trim();
+          const dbFirstName = dbName.split(' ')[0];
+          
+          return dbName === assignedName || 
+                 dbUsername === assignedName ||
+                 dbName.includes(assignedName) || 
+                 assignedName.includes(dbName) ||
+                 dbFirstName === aiFirstName ||
+                 dbFirstName.includes(aiFirstName) ||
+                 aiFirstName.includes(dbFirstName);
+        });
         
         const userId = assignedUser ? assignedUser.id : 'unassigned';
         
