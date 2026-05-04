@@ -1096,9 +1096,17 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                               </div>
                                             </td>
                                             <td colSpan={5} className="px-6 py-2">
-                                              <div className="text-xs text-zinc-600 flex items-center gap-2">
-                                                <span className="font-bold">{log.department}:</span>
-                                                <span>{log.task || log.notes || 'Routine check-in'}</span>
+                                              <div className="text-xs text-zinc-600 flex flex-col gap-1 py-0.5">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="font-bold">{log.department}:</span>
+                                                  <span>{log.task || 'Routine check-in'}</span>
+                                                </div>
+                                                {log.notes && log.notes !== log.task && (
+                                                  <div className="text-[10px] text-zinc-500 italic flex items-start gap-1.5 ml-1">
+                                                    <span className="w-1 h-1 rounded-full bg-zinc-300 mt-1.5 shrink-0"></span>
+                                                    <span className="break-words whitespace-pre-wrap">{log.notes}</span>
+                                                  </div>
+                                                )}
                                               </div>
                                             </td>
                                           </tr>
