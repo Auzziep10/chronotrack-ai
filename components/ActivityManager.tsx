@@ -533,11 +533,11 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     const { storageService } = await import('../services/storageService');
     storageService.saveTimeCard(updatedCard);
 
-    const { firebaseSaveTimeCard, firebaseUpdateSessionStartTime, isFirebaseConfigured } = await import('../services/firebaseService');
+    const { firebaseSaveTimeCard, firebaseUpdateActiveSession, isFirebaseConfigured } = await import('../services/firebaseService');
     if (isFirebaseConfigured()) {
       try {
         if (card.id.startsWith('active-')) {
-          await firebaseUpdateSessionStartTime(card.userId, inTime);
+          await firebaseUpdateActiveSession(card.userId, inTime, outTime, idleTimeNum);
         } else {
           await firebaseSaveTimeCard(updatedCard);
         }

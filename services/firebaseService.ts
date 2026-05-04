@@ -184,6 +184,46 @@ export const firebaseUpdateSessionStartTime = async (userId: string, newStartTim
     });
 };
 
+/** Force update an active session (e.g. from Manager Console) */
+export const firebaseUpdateActiveSession = async (userId: string, inTime: number, outTime: number | null, idleHours: number): Promise<void> => {
+    const idleMs = idleHours * 3600000;
+    
+    if (outTime) {
+        // They are clocking out the active session
+        await updateDoc(doc(db, SESSIONS_COL, userId), {
+            startTime: inTime,
+            clockedOut: true,
+            clockOutTime: outTime,
+            isPaused: false,
+            totalIdleTimeMs: idleMs,
+            updatedAt: serverTimestamp()
+        });
+        
+        // Save the timecard
+        const timeCard: DailyTimeCard = {
+            id: `tc-${userId}-${outTime}`,
+            userId,
+            date: new Date(inTime).toISOString().split('T')[0],
+            clockIn: inTime,
+            clockOut: outTime,
+            totalHours: Math.max(0, ((outTime - inTime) / 3600000) - idleHours),
+            totalIdleHours: idleHours,
+            status: 'Complete'
+        };
+        await setDoc(doc(db, TIMECARDS_COL, timeCard.id), {
+            ...timeCard,
+            createdAt: serverTimestamp()
+        });
+    } else {
+        // Just updating the active session's times
+        await updateDoc(doc(db, SESSIONS_COL, userId), {
+            startTime: inTime,
+            totalIdleTimeMs: idleMs,
+            updatedAt: serverTimestamp()
+        });
+    }
+};
+
 /** Atomic Resume: Calculates accumulated idle time and resumes tracking */
 export const firebaseResumeSession = async (userId: string, currentSession: any): Promise<void> => {
     const now = Date.now();
