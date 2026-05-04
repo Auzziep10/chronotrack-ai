@@ -21,7 +21,7 @@ export const LoginScreen: React.FC<Props> = ({ onLogin, users }) => {
         setError('');
 
         const u = customCreds ? customCreds.u : username.trim().toLowerCase();
-        const p = customCreds ? customCreds.p : password;
+        const p = customCreds ? customCreds.p : password.trim();
 
         try {
             // Check hardcoded Warehouse terminal first
@@ -39,7 +39,7 @@ export const LoginScreen: React.FC<Props> = ({ onLogin, users }) => {
             // Authenticate against local users array
             if (users && users.length > 0) {
                 const foundUser = users.find(user => 
-                    user.username && user.username.toLowerCase() === u && user.password === p
+                    user.username && user.username.trim().toLowerCase() === u && user.password?.trim() === p
                 );
 
                 if (foundUser) {
