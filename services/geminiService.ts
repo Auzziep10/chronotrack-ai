@@ -56,7 +56,9 @@ Each task object in the array should conform to this schema:
   "assignedToName": "The name of the staff member",
   "title": "A short descriptive title for the task",
   "description": "More detailed description, including goals, unit counts, etc.",
-  "department": "One of: Design, Print, Warehousing, Production, Facility, Event"
+  "department": "One of: Design, Print, Warehousing, Production, Facility, Event",
+  "startTime": "Start time in 24-hour HH:mm format (e.g. '09:00' for 9:00 AM or '15:15' for 3:15 PM)",
+  "endTime": "End time in 24-hour HH:mm format (e.g. '12:00' for 12:00 PM or '17:00' for 5:00 PM)"
 }
 
 Raw Plan Text:

@@ -375,8 +375,8 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
           title: block.title || 'Task',
           description: block.description || '',
           department: block.department || Department.Production,
-          startTime: `${today}T08:00:00`,
-          endTime: `${today}T16:00:00`,
+          startTime: `${today}T${block.startTime || '08:00'}:00`,
+          endTime: `${today}T${block.endTime || '16:00'}:00`,
           priority: 'medium',
           status: 'pending',
           isShiftBlock: false
@@ -705,11 +705,17 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                               <span className="text-[10px] font-bold px-2 py-1 bg-zinc-200 text-zinc-700 rounded-full">{task.department}</span>
                             </div>
                             <p className="text-sm text-zinc-600 mb-3">{task.description}</p>
-                            <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
-                              <div className="w-5 h-5 rounded-full bg-zinc-300 flex items-center justify-center text-zinc-700 font-bold">
-                                {task.assignedToName?.charAt(0) || '?'}
+                            <div className="flex justify-between items-center mt-3 pt-3 border-t border-zinc-200/60">
+                              <div className="flex items-center gap-2 text-xs text-zinc-600 font-bold">
+                                <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-white">
+                                  {task.assignedToName?.charAt(0) || '?'}
+                                </div>
+                                {task.assignedToName}
                               </div>
-                              {task.assignedToName}
+                              <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-zinc-500 bg-white px-2 py-1 rounded-md border border-zinc-200">
+                                <Clock className="w-3 h-3" />
+                                {task.startTime || '08:00'} - {task.endTime || '16:00'}
+                              </div>
                             </div>
                           </div>
                         ))}
