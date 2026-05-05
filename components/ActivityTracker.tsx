@@ -64,6 +64,11 @@ export const ActivityTracker: React.FC<Props> = ({
   };
 
   const handleQuickLog = (task: any, pct: number) => {
+    if (!taskNotes.trim()) {
+      alert("Please provide notes before logging progress.");
+      return;
+    }
+
     const session = activeSessions[selectedUserId];
     if (!session) return;
     
@@ -428,7 +433,9 @@ export const ActivityTracker: React.FC<Props> = ({
                         {expandedTaskId === task.id && (
                           <div className="mt-4 pt-4 border-t border-zinc-200/50 space-y-3" onClick={(e) => e.stopPropagation()}>
                             <div>
-                              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Optional Notes</label>
+                              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
+                                Notes <span className="text-red-500">*</span>
+                              </label>
                               <textarea
                                 value={taskNotes}
                                 onChange={(e) => setTaskNotes(e.target.value)}
@@ -443,11 +450,14 @@ export const ActivityTracker: React.FC<Props> = ({
                                 {[0, 25, 50, 75, 100].map(pct => (
                                   <button
                                     key={pct}
+                                    disabled={!taskNotes.trim()}
                                     onClick={() => handleQuickLog(task, pct)}
                                     className={`flex-1 py-1.5 rounded border text-sm font-bold transition-all ${
-                                      pct === 100 
-                                        ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600' 
-                                        : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-900 hover:text-white hover:border-zinc-900'
+                                      !taskNotes.trim()
+                                        ? 'bg-zinc-100 text-zinc-400 border-zinc-200 cursor-not-allowed'
+                                        : pct === 100 
+                                          ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600' 
+                                          : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-900 hover:text-white hover:border-zinc-900'
                                     }`}
                                   >
                                     {pct}%
@@ -668,7 +678,9 @@ export const ActivityTracker: React.FC<Props> = ({
                           {expandedTaskId === task.id && (!isDedicatedTerminal && currentUser?.id === selectedUserId || isAdminOrManager) && (
                             <div className="mt-4 pt-4 border-t border-zinc-200/50 space-y-3" onClick={(e) => e.stopPropagation()}>
                               <div>
-                                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Optional Notes</label>
+                                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
+                                  Notes <span className="text-red-500">*</span>
+                                </label>
                                 <textarea
                                   value={taskNotes}
                                   onChange={(e) => setTaskNotes(e.target.value)}
@@ -683,11 +695,14 @@ export const ActivityTracker: React.FC<Props> = ({
                                   {[0, 25, 50, 75, 100].map(pct => (
                                     <button
                                       key={pct}
+                                      disabled={!taskNotes.trim()}
                                       onClick={() => handleQuickLog(task, pct)}
                                       className={`flex-1 py-1.5 rounded border text-sm font-bold transition-all ${
-                                        pct === 100 
-                                          ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600' 
-                                          : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-900 hover:text-white hover:border-zinc-900'
+                                        !taskNotes.trim()
+                                          ? 'bg-zinc-100 text-zinc-400 border-zinc-200 cursor-not-allowed'
+                                          : pct === 100 
+                                            ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600' 
+                                            : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-900 hover:text-white hover:border-zinc-900'
                                       }`}
                                     >
                                       {pct}%
