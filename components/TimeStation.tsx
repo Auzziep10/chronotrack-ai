@@ -352,11 +352,19 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                       )}
 
                       <div className="text-xs text-zinc-400 pt-2 border-t border-zinc-100 mt-2 flex justify-between items-center">
-                        <span>Last Log: {new Date(session.lastLogTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+                          <span>Last Log: {new Date(session.lastLogTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          {!session.isPaused && (appSettings?.autoPauseEnabled ?? true) && (
+                            <span className="flex items-center gap-1 text-amber-600/80 font-medium bg-amber-50/50 px-1.5 py-0.5 rounded border border-amber-100/50 w-fit">
+                              <Pause className="w-2.5 h-2.5" />
+                              Auto-pauses at {new Date(session.lastLogTime + ((appSettings?.checkInIntervalHours || 1) * 60 * 60 * 1000) + (10 * 60 * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
                         {isAdmin && (
                           <button
                             onClick={() => onClockOut(session.user)}
-                            className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2 py-1 rounded text-xs font-bold transition-colors"
+                            className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2 py-1 rounded text-xs font-bold transition-colors shrink-0"
                           >
                             Clock Out
                           </button>
