@@ -265,7 +265,7 @@ const App: React.FC = () => {
 
                 // Send Discord Warning!
                 const webhookUrl = import.meta.env.VITE_DISCORD_WEBHOOK_URL;
-                if (webhookUrl) {
+                if (webhookUrl && appSettings?.discordNotificationsEnabled !== false) {
                   const { sendDiscordWarning } = await import('./services/discordService');
                   await sendDiscordWarning(webhookUrl, session.user.name, session.user.discordId, thresholdMinutes, false);
                 }

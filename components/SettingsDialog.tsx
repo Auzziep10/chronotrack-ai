@@ -154,6 +154,22 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
                   <p className="text-xs text-zinc-400 mt-1">Prompt staff to log activity every X hours</p>
                 </div>
               </div>
+
+              <div className="mt-4 flex items-center justify-between bg-zinc-50 p-4 rounded-lg border border-zinc-200">
+                <div>
+                  <h5 className="text-sm font-bold text-zinc-800">Discord Notifications</h5>
+                  <p className="text-xs text-zinc-500 mt-1">Send warnings to Discord when staff miss check-ins.</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={settings.discordNotificationsEnabled !== false}
+                    onChange={(e) => onUpdateSettings({ ...settings, discordNotificationsEnabled: e.target.checked })}
+                  />
+                  <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-zinc-900"></div>
+                </label>
+              </div>
             </div>
 
             {/* USER MANAGEMENT SECTION */}

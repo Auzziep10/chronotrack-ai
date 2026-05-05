@@ -106,6 +106,7 @@ export interface AppSettings {
   payPeriodStartDay: DayOfWeek;
   checkInIntervalHours?: number;
   autoPauseEnabled?: boolean;
+  discordNotificationsEnabled?: boolean;
 }
 
 export interface ScheduleBlock {
