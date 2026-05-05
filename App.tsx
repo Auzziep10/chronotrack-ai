@@ -543,7 +543,8 @@ const App: React.FC = () => {
 
       for (const [userId, session] of Object.entries(activeSessions) as [string, UserSession][]) {
         // Find if this user has a shift block that ended
-        const userShift = currentShifts.find((b: any) => b.assignedTo === userId);
+        // We MUST filter by title starting with '[SHIFT]' to ignore regular tasks
+        const userShift = currentShifts.find((b: any) => b.assignedTo === userId && b.title && b.title.startsWith('[SHIFT]'));
         if (userShift) {
           const endTimeRaw = new Date(userShift.endTime).getTime();
           // Add 10 minutes grace period
