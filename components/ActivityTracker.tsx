@@ -110,6 +110,16 @@ export const ActivityTracker: React.FC<Props> = ({
       // Exclude main shift blocks from being displayed as individual tasks
       if (task.title && task.title.startsWith('[SHIFT]')) return false;
 
+      // Only show tasks scheduled for today
+      const taskDate = new Date(task.startTime);
+      const today = new Date();
+      const isToday = taskDate.getDate() === today.getDate() &&
+                      taskDate.getMonth() === today.getMonth() &&
+                      taskDate.getFullYear() === today.getFullYear();
+      
+      if (!isToday) return false;
+
+
       const userId = String(selectedSession.userId);
       const userName = selectedSession.user.name.toLowerCase();
       const userUser = selectedSession.user.username?.toLowerCase();
