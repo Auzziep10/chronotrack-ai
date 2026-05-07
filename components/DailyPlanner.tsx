@@ -185,7 +185,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             const toDelete: string[] = [];
 
             blocks.forEach(b => {
-                const key = `${b.assignedTo}-${b.startTime}-${b.endTime}`;
+                const key = `${b.title}-${b.assignedTo}-${b.startTime}-${b.endTime}`;
                 if (seen.has(key)) {
                     toDelete.push(b.id);
                 } else {
@@ -1065,8 +1065,8 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                         if (!isAdminOrManager) return;
                                                         e.stopPropagation();
                                                         const rect = e.currentTarget.getBoundingClientRect();
-                                                        // If clicked within 10px of the right edge, treat as resize
-                                                        const isResize = e.clientX > rect.right - 10;
+                                                        // If clicked within 24px of the right edge, treat as resize
+                                                        const isResize = e.clientX > rect.right - 24;
                                                         
                                                         setDragState({
                                                             block: originalBlock,
@@ -1082,6 +1082,11 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                     title={`${block.title} (${new Date(block.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${new Date(block.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`}
                                                 >
                                                     {block.title}
+                                                    {isAdminOrManager && (
+                                                        <div className="absolute top-0 right-0 bottom-0 w-6 cursor-e-resize hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100" title="Drag to resize">
+                                                            <div className="w-1 h-3 border-l border-r border-white/50"></div>
+                                                        </div>
+                                                    )}
                                                     {/* Tooltip-ish Details */}
                                                     <div className="hidden group-hover:block absolute top-full left-0 bg-zinc-800 text-white text-xs p-2 rounded shadow-lg z-50 w-48 mt-1 whitespace-normal">
                                                         <div className="flex justify-between items-start mb-1">
