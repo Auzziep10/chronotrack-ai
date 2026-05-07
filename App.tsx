@@ -276,7 +276,6 @@ const App: React.FC = () => {
                        method: 'POST',
                        headers: {
                            Accept: 'application/json',
-                           'Accept-encoding': 'gzip, deflate',
                            'Content-Type': 'application/json',
                        },
                        body: JSON.stringify({

@@ -374,7 +374,6 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                                   method: 'POST',
                                   headers: {
                                     Accept: 'application/json',
-                                    'Accept-encoding': 'gzip, deflate',
                                     'Content-Type': 'application/json',
                                   },
                                   body: JSON.stringify({
