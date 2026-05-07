@@ -370,7 +370,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                                   alert(`${currentUserDoc.name} has not registered for push notifications on their mobile device yet.`);
                                   return;
                                 }
-                                fetch('https://exp.host/--/api/v2/push/send', {
+                                fetch('/api/push', {
                                   method: 'POST',
                                   headers: {
                                     Accept: 'application/json',
