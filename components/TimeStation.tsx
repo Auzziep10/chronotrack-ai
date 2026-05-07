@@ -382,11 +382,11 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                                     title: 'Test Push 🔔',
                                     body: `Hello ${currentUserDoc.name}, this is a test notification!`,
                                   }),
-                                }).then(res => {
-                                  if (res.ok) {
-                                    alert(`Test push sent to ${session.user.name}!`);
+                                }).then(res => res.json()).then(data => {
+                                  if (data.data?.status === 'ok') {
+                                    alert(`Test push sent to ${currentUserDoc.name}!`);
                                   } else {
-                                    alert("Failed to send notification.");
+                                    alert(`Expo Push Error: ${JSON.stringify(data)}`);
                                   }
                                 }).catch(err => {
                                   console.error("Push error:", err);
