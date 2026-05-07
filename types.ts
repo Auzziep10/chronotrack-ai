@@ -62,6 +62,8 @@ export interface User {
   address?: string;
   discordId?: string;
   discordAlertPrefs?: number[]; // [30, 45, 60]
+  expoPushToken?: string;
+  mobileClockInEnabled?: boolean;
   // Work Info
   availability: Record<DayOfWeek, DailyAvailability>;
   lateDays?: number;

@@ -454,3 +454,25 @@ export const firebaseUploadDocument = async (userId: string, formType: string, p
         throw err;
     }
 };
+
+// ─── SETTINGS ────────────────────────────────────────────────────────
+const CONFIG_COL = 'config';
+
+export const firebaseSaveSettings = async (settings: AppSettings): Promise<void> => {
+    await setDoc(doc(db, CONFIG_COL, 'appSettings'), {
+        ...settings,
+        updatedAt: serverTimestamp()
+    }, { merge: true });
+};
+
+export const subscribeToSettings = (onUpdate: (settings: AppSettings | null) => void) => {
+    return onSnapshot(doc(db, CONFIG_COL, 'appSettings'), (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            const { updatedAt, ...settings } = data;
+            onUpdate(settings as AppSettings);
+        } else {
+            onUpdate(null);
+        }
+    });
+};

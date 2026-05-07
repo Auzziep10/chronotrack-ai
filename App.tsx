@@ -212,6 +212,7 @@ const App: React.FC = () => {
            });
         });
       }
+      }
     });
 
     return () => {
@@ -229,7 +230,8 @@ const App: React.FC = () => {
     const isAdminTerminal = currentUser?.role === 'admin' && currentUser?.username?.toLowerCase() !== 'warehouse';
     if (!isAdminTerminal) return;
 
-    const IDLE_THRESHOLD_MS = 70 * 60 * 1000; // 70 minutes (60m lock + 10m grace)
+    const intervalHours = appSettings?.checkInIntervalHours || 1;
+    const IDLE_THRESHOLD_MS = (intervalHours * 60 * 60 * 1000) + (10 * 60 * 1000); // Check-in interval + 10m grace
 
     const checkIdleSessions = async () => {
       const now = Date.now();
@@ -245,15 +247,21 @@ const App: React.FC = () => {
         const minutesSinceLastLog = Math.floor(timeSinceLastLog / 60000);
 
         if (autoPauseEnabled && timeSinceLastLog >= IDLE_THRESHOLD_MS) {
-          console.log(`[IdleEnforcement] Pausing session for ${session.user.name} (70m threshold reached)`);
+          console.log(`[IdleEnforcement] Pausing session for ${session.user.name} (${intervalHours}h + 10m threshold reached)`);
           const { firebasePauseSession } = await import('./services/firebaseService');
           await firebasePauseSession(userId, 'idle');
           delete warnedIntervalsRef.current[userId];
         } else {
           // Determine which intervals this user wants to be notified for
           const alertPrefs = session.user.discordAlertPrefs && session.user.discordAlertPrefs.length > 0
-            ? session.user.discordAlertPrefs
+            ? [...session.user.discordAlertPrefs]
             : [60];
+            
+          // Add the appSettings push interval to alertPrefs so we definitely process it
+          const pushThresholdMinutes = intervalHours * 60;
+          if (!alertPrefs.includes(pushThresholdMinutes)) {
+              alertPrefs.push(pushThresholdMinutes);
+          }
 
           // Sort descending so we process the biggest times first, or just check all of them
           for (const thresholdMinutes of alertPrefs) {
@@ -263,11 +271,31 @@ const App: React.FC = () => {
               if (!warnedIntervalsRef.current[userId].includes(thresholdMinutes)) {
                 warnedIntervalsRef.current[userId].push(thresholdMinutes);
 
-                // Send Discord Warning!
-                const webhookUrl = import.meta.env.VITE_DISCORD_WEBHOOK_URL;
-                if (webhookUrl && appSettings?.discordNotificationsEnabled !== false) {
-                  const { sendDiscordWarning } = await import('./services/discordService');
-                  await sendDiscordWarning(webhookUrl, session.user.name, session.user.discordId, thresholdMinutes, false);
+                // If this threshold matches the push notification threshold, send the Expo Push Notification!
+                if (thresholdMinutes === pushThresholdMinutes && session.user.expoPushToken) {
+                   fetch('https://exp.host/--/api/v2/push/send', {
+                       method: 'POST',
+                       headers: {
+                           Accept: 'application/json',
+                           'Accept-encoding': 'gzip, deflate',
+                           'Content-Type': 'application/json',
+                       },
+                       body: JSON.stringify({
+                           to: session.user.expoPushToken,
+                           sound: 'default',
+                           title: 'Auto-Pause Warning ⏱️',
+                           body: `It's been ${intervalHours} hour${intervalHours > 1 ? 's' : ''}. Don't forget to log your activity!`,
+                       }),
+                   }).catch(err => console.error("Failed to send Expo push:", err));
+                }
+
+                // Send Discord Warning! (Only if they actually wanted this threshold via Discord)
+                if (session.user.discordAlertPrefs?.includes(thresholdMinutes) || (!session.user.discordAlertPrefs && thresholdMinutes === 60)) {
+                    const webhookUrl = import.meta.env.VITE_DISCORD_WEBHOOK_URL;
+                    if (webhookUrl && appSettings?.discordNotificationsEnabled !== false) {
+                      const { sendDiscordWarning } = await import('./services/discordService');
+                      await sendDiscordWarning(webhookUrl, session.user.name, session.user.discordId, thresholdMinutes, false);
+                    }
                 }
               }
             }

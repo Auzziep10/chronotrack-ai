@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { UserSession, User, AppSettings, Department, ScheduleBlock } from '../types';
 import { Timer } from './Timer';
 import { PinPad } from './PinPad';
-import { Play, Pause, ShieldCheck, User as UserIcon, LogOut, CheckCircle2, QrCode as QrCodeIcon, X } from 'lucide-react';
+import { Play, Pause, ShieldCheck, User as UserIcon, LogOut, CheckCircle2, QrCode as QrCodeIcon, X, Bell } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 
@@ -362,12 +362,50 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                           )}
                         </div>
                         {isAdmin && (
-                          <button
-                            onClick={() => onClockOut(session.user)}
-                            className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2 py-1 rounded text-xs font-bold transition-colors shrink-0"
-                          >
-                            Clock Out
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                if (!session.user.expoPushToken) {
+                                  alert(`${session.user.name} has not registered for push notifications on their mobile device yet.`);
+                                  return;
+                                }
+                                fetch('https://exp.host/--/api/v2/push/send', {
+                                  method: 'POST',
+                                  headers: {
+                                    Accept: 'application/json',
+                                    'Accept-encoding': 'gzip, deflate',
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    to: session.user.expoPushToken,
+                                    sound: 'default',
+                                    title: 'Test Push 🔔',
+                                    body: `Hello ${session.user.name}, this is a test notification!`,
+                                  }),
+                                }).then(res => {
+                                  if (res.ok) {
+                                    alert(`Test push sent to ${session.user.name}!`);
+                                  } else {
+                                    alert("Failed to send notification.");
+                                  }
+                                }).catch(err => {
+                                  console.error("Push error:", err);
+                                  alert("Error sending push notification.");
+                                });
+                              }}
+                              className="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 shrink-0"
+                              title="Test iOS Push Notification"
+                            >
+                              <Bell className="w-3 h-3" />
+                              Ping
+                            </button>
+                            <button
+                              onClick={() => onClockOut(session.user)}
+                              className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2 py-1 rounded text-xs font-bold transition-colors shrink-0"
+                            >
+                              Clock Out
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
