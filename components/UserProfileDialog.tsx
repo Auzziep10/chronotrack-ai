@@ -112,7 +112,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[95vh]">
+      <div className="bg-white rounded-xl shadow-2xl w-[95vw] max-w-7xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[95vh]">
         <div className="bg-gradient-to-r from-zinc-900 to-zinc-700 p-6 text-white flex justify-between items-start">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-2xl font-bold border-2 border-white/30">
