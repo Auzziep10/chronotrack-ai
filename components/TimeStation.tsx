@@ -365,8 +365,9 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                           <div className="flex gap-2">
                             <button
                               onClick={() => {
-                                if (!session.user.expoPushToken) {
-                                  alert(`${session.user.name} has not registered for push notifications on their mobile device yet.`);
+                                const currentUserDoc = users.find(u => u.id === session.userId) || session.user;
+                                if (!currentUserDoc.expoPushToken) {
+                                  alert(`${currentUserDoc.name} has not registered for push notifications on their mobile device yet.`);
                                   return;
                                 }
                                 fetch('https://exp.host/--/api/v2/push/send', {
@@ -377,10 +378,10 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                                     'Content-Type': 'application/json',
                                   },
                                   body: JSON.stringify({
-                                    to: session.user.expoPushToken,
+                                    to: currentUserDoc.expoPushToken,
                                     sound: 'default',
                                     title: 'Test Push 🔔',
-                                    body: `Hello ${session.user.name}, this is a test notification!`,
+                                    body: `Hello ${currentUserDoc.name}, this is a test notification!`,
                                   }),
                                 }).then(res => {
                                   if (res.ok) {
