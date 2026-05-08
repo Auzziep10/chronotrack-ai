@@ -1215,7 +1215,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             </div>
                         </div>
                         <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex justify-between items-center gap-2">
-                            {editingBlock.id.startsWith('new-') ? (
+                            {!shiftBlocks.some(b => b.id === editingBlock.id) ? (
                                 <div></div>
                             ) : (
                                 <button
