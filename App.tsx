@@ -270,8 +270,12 @@ const App: React.FC = () => {
               if (!warnedIntervalsRef.current[userId].includes(thresholdMinutes)) {
                 warnedIntervalsRef.current[userId].push(thresholdMinutes);
 
+                // Resolve latest token from usersRef so we aren't relying on stale session data from an iPad clock-in
+                const latestUserDoc = usersRef.current.find(u => u.id === userId);
+                const activePushToken = latestUserDoc?.expoPushToken || session.user.expoPushToken;
+
                 // If this threshold matches the push notification threshold, send the Expo Push Notification!
-                if (thresholdMinutes === pushThresholdMinutes && session.user.expoPushToken) {
+                if (thresholdMinutes === pushThresholdMinutes && activePushToken) {
                    fetch('/api/push', {
                        method: 'POST',
                        headers: {
@@ -279,7 +283,7 @@ const App: React.FC = () => {
                            'Content-Type': 'application/json',
                        },
                        body: JSON.stringify({
-                           to: session.user.expoPushToken,
+                           to: activePushToken,
                            sound: 'default',
                            title: 'Auto-Pause Warning ⏱️',
                            body: `It's been ${intervalHours} hour${intervalHours > 1 ? 's' : ''}. Don't forget to log your activity!`,
