@@ -1,0 +1,36 @@
+{
+  "cli": {
+    "version": ">= 12.5.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBkLr9yA5IV75m_doOLiCdfV26s1Wgx93Q",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "chronotrack-eca5d.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "chronotrack-eca5d",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "chronotrack-eca5d.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "821802476041",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:821802476041:web:c8aafe4c608706a02e4ed8"
+      }
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBkLr9yA5IV75m_doOLiCdfV26s1Wgx93Q",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "chronotrack-eca5d.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "chronotrack-eca5d",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "chronotrack-eca5d.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "821802476041",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:821802476041:web:c8aafe4c608706a02e4ed8"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
