@@ -139,7 +139,7 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                             // Find blocks for this day
                             const dayBlocks = firebaseShiftBlocks.filter((b) => {
                                 const bDate = new Date(b.startTime);
-                                return bDate.getDate() === d.getDate() && bDate.getMonth() === d.getMonth() && bDate.getFullYear() === d.getFullYear();
+                                return b.title.startsWith('[SHIFT]') && bDate.getDate() === d.getDate() && bDate.getMonth() === d.getMonth() && bDate.getFullYear() === d.getFullYear();
                             });
 
                             return (
@@ -216,7 +216,7 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
                                 const isCurrentMonth = d.getMonth() === currentDate.getMonth();
                                 const dayBlocks = firebaseShiftBlocks.filter((b) => {
                                     const bDate = new Date(b.startTime);
-                                    return bDate.getDate() === d.getDate() && bDate.getMonth() === d.getMonth() && bDate.getFullYear() === d.getFullYear();
+                                    return b.title.startsWith('[SHIFT]') && bDate.getDate() === d.getDate() && bDate.getMonth() === d.getMonth() && bDate.getFullYear() === d.getFullYear();
                                 });
                                 // Sort blocks by start time
                                 dayBlocks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());

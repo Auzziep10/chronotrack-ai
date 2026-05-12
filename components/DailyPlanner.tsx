@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy, Zap } from 'lucide-react';
 import { User, DailySchedule, ScheduleBlock, Department } from '../types';
 import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock } from '../services/firebaseService';
 import { processExternalPlan } from '../services/geminiService';
@@ -87,6 +87,72 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         window.addEventListener('click', handleClick);
         return () => window.removeEventListener('click', handleClick);
     }, []);
+
+    // Quick Tasks State
+    const [showQuickTasks, setShowQuickTasks] = useState(false);
+    const [quickTasks, setQuickTasks] = useState<{ id: string; title: string; duration: number }[]>(() => {
+        try {
+            const saved = localStorage.getItem('quickTasks');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    useEffect(() => {
+        localStorage.setItem('quickTasks', JSON.stringify(quickTasks));
+    }, [quickTasks]);
+
+    const [qtNewTitle, setQtNewTitle] = useState('');
+    const [qtNewDuration, setQtNewDuration] = useState('60');
+    const [qtSelectedTask, setQtSelectedTask] = useState<string | null>(null);
+    const [qtSelectedUsers, setQtSelectedUsers] = useState<string[]>([]);
+    const [qtStartTime, setQtStartTime] = useState('09:00');
+
+    const handleAddQuickTaskDef = () => {
+        if (!qtNewTitle.trim()) return;
+        setQuickTasks([...quickTasks, { id: Date.now().toString(), title: qtNewTitle, duration: parseInt(qtNewDuration) || 60 }]);
+        setQtNewTitle('');
+    };
+
+    const handleDeleteQuickTaskDef = (id: string) => {
+        setQuickTasks(quickTasks.filter(t => t.id !== id));
+        if (qtSelectedTask === id) setQtSelectedTask(null);
+    };
+
+    const handleAssignQuickTask = async () => {
+        const taskDef = quickTasks.find(t => t.id === qtSelectedTask);
+        if (!taskDef || qtSelectedUsers.length === 0) return;
+
+        try {
+            setLoading(true);
+            for (const userId of qtSelectedUsers) {
+                const startDateTime = new Date(currentDate);
+                const [sh, sm] = qtStartTime.split(':').map(Number);
+                startDateTime.setHours(sh, sm, 0, 0);
+
+                const endDateTime = new Date(startDateTime.getTime() + taskDef.duration * 60000);
+
+                await firebaseSaveShiftBlock({
+                    id: `task-${Date.now()}-${userId}-${Math.random()}`,
+                    title: taskDef.title,
+                    description: 'Quick Task',
+                    startTime: startDateTime.toISOString(),
+                    endTime: endDateTime.toISOString(),
+                    assignedTo: userId,
+                    status: 'pending',
+                    priority: 'medium'
+                });
+            }
+            setShowQuickTasks(false);
+            setQtSelectedTask(null);
+            setQtSelectedUsers([]);
+        } catch (err) {
+            alert("Failed to assign quick tasks");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const isAdminOrManager = (() => {
         let currentPerms: string[] = [];
@@ -714,16 +780,25 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
                 <div className="flex items-center gap-2">
                     {isAdminOrManager && activeView === 'tasks' && (
-                        <button
-                            onClick={() => setIsPlanningMode(!isPlanningMode)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border ${isPlanningMode
-                                ? 'bg-orange-600 border-orange-700 text-white animate-pulse'
-                                : 'bg-zinc-900 border-zinc-700 text-white hover:bg-zinc-800'
-                                }`}
-                        >
-                            <Wand2 className="w-4 h-4" />
-                            {isPlanningMode ? 'Exit Planning Mode' : 'Build Schedule'}
-                        </button>
+                        <>
+                            <button
+                                onClick={() => setShowQuickTasks(true)}
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                            >
+                                <Zap className="w-4 h-4 text-orange-500" />
+                                Quick Tasks
+                            </button>
+                            <button
+                                onClick={() => setIsPlanningMode(!isPlanningMode)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border ${isPlanningMode
+                                    ? 'bg-orange-600 border-orange-700 text-white animate-pulse'
+                                    : 'bg-zinc-900 border-zinc-700 text-white hover:bg-zinc-800'
+                                    }`}
+                            >
+                                <Wand2 className="w-4 h-4" />
+                                {isPlanningMode ? 'Exit Planning Mode' : 'Build Schedule'}
+                            </button>
+                        </>
                     )}
 
                     <div className="flex bg-white rounded-lg border border-zinc-300 shadow-sm p-1 items-center ml-2">
@@ -1263,6 +1338,131 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             new Date(new Date().setHours(Math.floor(contextMenu.hour), contextMenu.hour % 1 === 0 ? 0 : 30)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
                         }
                     </button>
+                </div>
+            )}
+
+            {/* Quick Tasks Dialog */}
+            {showQuickTasks && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl border border-zinc-200 w-full max-w-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
+                        <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex justify-between items-center shrink-0">
+                            <h3 className="font-bold text-zinc-800 flex items-center gap-2">
+                                <Zap className="w-5 h-5 text-orange-500" />
+                                Quick Tasks
+                            </h3>
+                            <button onClick={() => setShowQuickTasks(false)} className="p-1 hover:bg-zinc-200 rounded text-zinc-500 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 flex overflow-hidden">
+                            {/* Left Panel: Manage Tasks */}
+                            <div className="w-1/2 border-r border-zinc-200 flex flex-col bg-zinc-50/50">
+                                <div className="p-3 border-b border-zinc-200 bg-white">
+                                    <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">Predetermined Tasks</div>
+                                    <div className="flex gap-2">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Task title..." 
+                                            value={qtNewTitle}
+                                            onChange={e => setQtNewTitle(e.target.value)}
+                                            className="flex-1 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                        <input 
+                                            type="number" 
+                                            placeholder="Mins" 
+                                            value={qtNewDuration}
+                                            onChange={e => setQtNewDuration(e.target.value)}
+                                            className="w-16 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                        <button 
+                                            onClick={handleAddQuickTaskDef}
+                                            disabled={!qtNewTitle.trim()}
+                                            className="p-1.5 bg-zinc-800 text-white rounded hover:bg-zinc-700 disabled:opacity-50"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                    {quickTasks.length === 0 ? (
+                                        <div className="text-xs text-zinc-400 text-center mt-4">No quick tasks defined. Create one above.</div>
+                                    ) : (
+                                        quickTasks.map(t => (
+                                            <div 
+                                                key={t.id} 
+                                                onClick={() => setQtSelectedTask(t.id)}
+                                                className={`flex items-center justify-between p-2 rounded cursor-pointer border ${qtSelectedTask === t.id ? 'bg-orange-50 border-orange-300 shadow-sm' : 'bg-white border-zinc-200 hover:border-orange-200'}`}
+                                            >
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="text-sm font-bold text-zinc-800 truncate">{t.title}</div>
+                                                    <div className="text-[10px] text-zinc-500">{t.duration} mins</div>
+                                                </div>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteQuickTaskDef(t.id); }}
+                                                    className="p-1 text-zinc-400 hover:text-red-500 rounded hover:bg-red-50 ml-2 shrink-0"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right Panel: Assign */}
+                            <div className="w-1/2 flex flex-col bg-white">
+                                <div className="p-4 flex-1 overflow-y-auto">
+                                    {!qtSelectedTask ? (
+                                        <div className="h-full flex items-center justify-center text-sm text-zinc-400 text-center px-4">
+                                            Select a task from the left to assign it to team members.
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-4">
+                                            <div>
+                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">1. Select Time</div>
+                                                <input 
+                                                    type="time" 
+                                                    value={qtStartTime}
+                                                    onChange={e => setQtStartTime(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">2. Select Team Members</div>
+                                                <div className="space-y-1 max-h-48 overflow-y-auto border border-zinc-200 rounded p-1">
+                                                    {teamMembers.map(u => (
+                                                        <label key={u.id} className="flex items-center gap-2 p-1.5 hover:bg-zinc-50 rounded cursor-pointer">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={qtSelectedUsers.includes(u.id)}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) setQtSelectedUsers([...qtSelectedUsers, u.id]);
+                                                                    else setQtSelectedUsers(qtSelectedUsers.filter(id => id !== u.id));
+                                                                }}
+                                                                className="rounded border-zinc-300 text-orange-600 focus:ring-orange-500"
+                                                            />
+                                                            <span className="text-sm font-medium text-zinc-700">{u.name}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-4 border-t border-zinc-100 bg-zinc-50 shrink-0">
+                                    <button
+                                        onClick={handleAssignQuickTask}
+                                        disabled={!qtSelectedTask || qtSelectedUsers.length === 0}
+                                        className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                        <Plus className="w-4 h-4" /> Add to Planners
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
