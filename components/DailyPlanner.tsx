@@ -90,7 +90,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     // Quick Tasks State
     const [showQuickTasks, setShowQuickTasks] = useState(false);
-    const [quickTasks, setQuickTasks] = useState<{ id: string; title: string; duration: number; location?: string }[]>(() => {
+    const [quickTasks, setQuickTasks] = useState<{ id: string; title: string; duration: number; location?: string; locations?: string[] }[]>(() => {
         try {
             const saved = localStorage.getItem('quickTasks');
             return saved ? JSON.parse(saved) : [];
@@ -112,13 +112,41 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [qtStartTime, setQtStartTime] = useState('09:00');
     const [qtSearchQuery, setQtSearchQuery] = useState('');
 
-    const uniqueLocations = Array.from(new Set(quickTasks.map(t => t.location).filter(Boolean))) as string[];
-    const filteredQuickTasks = qtLocationFilter ? quickTasks.filter(t => t.location === qtLocationFilter) : quickTasks;
+    const uniqueLocations = Array.from(new Set(quickTasks.flatMap(t => t.locations || (t.location ? [t.location] : [])).filter(Boolean))) as string[];
+    const filteredQuickTasks = qtLocationFilter ? quickTasks.filter(t => {
+        const locs = t.locations || (t.location ? [t.location] : []);
+        return locs.includes(qtLocationFilter);
+    }) : quickTasks;
 
     const handleAddQuickTaskDef = () => {
         if (!qtNewTitle.trim()) return;
-        setQuickTasks([...quickTasks, { id: Date.now().toString(), title: qtNewTitle, duration: parseInt(qtNewDuration) || 60, location: qtNewLocation.trim() || undefined }]);
+        const newLocs = qtNewLocation.trim() ? qtNewLocation.split(',').map(s => s.trim()).filter(Boolean) : [];
+        setQuickTasks([...quickTasks, { id: Date.now().toString(), title: qtNewTitle, duration: parseInt(qtNewDuration) || 60, locations: newLocs }]);
         setQtNewTitle('');
+    };
+
+    const handleAddLocationToTask = (taskId: string) => {
+        const newLoc = window.prompt("Enter new location tag:");
+        if (!newLoc || !newLoc.trim()) return;
+        setQuickTasks(quickTasks.map(t => {
+            if (t.id === taskId) {
+                const locs = t.locations || (t.location ? [t.location] : []);
+                if (!locs.includes(newLoc.trim())) {
+                    return { ...t, locations: [...locs, newLoc.trim()] };
+                }
+            }
+            return t;
+        }));
+    };
+
+    const handleRemoveLocationFromTask = (taskId: string, locToRemove: string) => {
+        setQuickTasks(quickTasks.map(t => {
+            if (t.id === taskId) {
+                const locs = t.locations || (t.location ? [t.location] : []);
+                return { ...t, locations: locs.filter(l => l !== locToRemove) };
+            }
+            return t;
+        }));
     };
 
     const handleDeleteQuickTaskDef = (id: string) => {
@@ -142,7 +170,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 await firebaseSaveShiftBlock({
                     id: `task-${Date.now()}-${userId}-${Math.random()}`,
                     title: taskDef.title,
-                    description: taskDef.location ? `Location: ${taskDef.location}\nQuick Task` : 'Quick Task',
+                    description: (() => {
+                        const locs = taskDef.locations || (taskDef.location ? [taskDef.location] : []);
+                        return locs.length > 0 ? `Locations: ${locs.join(', ')}\nQuick Task` : 'Quick Task';
+                    })(),
                     startTime: startDateTime.toISOString(),
                     endTime: endDateTime.toISOString(),
                     assignedTo: userId,
@@ -1388,10 +1419,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         <input
                                             type="text"
                                             list="qt-locations"
-                                            placeholder="Location..."
+                                            placeholder="Location (comma separated)..."
                                             value={qtNewLocation}
                                             onChange={e => setQtNewLocation(e.target.value)}
-                                            className="w-32 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
+                                            className="w-48 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
                                         />
                                         <datalist id="qt-locations">
                                             {uniqueLocations.map(loc => <option key={loc} value={loc} />)}
@@ -1439,13 +1470,30 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             <div 
                                                 key={t.id} 
                                                 onClick={() => setQtSelectedTask(t.id)}
-                                                className={`flex items-center justify-between p-2 rounded cursor-pointer border ${qtSelectedTask === t.id ? 'bg-orange-50 border-orange-300 shadow-sm' : 'bg-white border-zinc-200 hover:border-orange-200'}`}
+                                                className={`group flex items-center justify-between p-2 rounded cursor-pointer border ${qtSelectedTask === t.id ? 'bg-orange-50 border-orange-300 shadow-sm' : 'bg-white border-zinc-200 hover:border-orange-200'}`}
                                             >
                                                 <div className="min-w-0 flex-1 flex flex-col justify-center">
                                                     <div className="text-sm font-bold text-zinc-800 truncate">{t.title}</div>
-                                                    <div className="text-[10px] text-zinc-500 flex gap-2">
+                                                    <div className="text-[10px] text-zinc-500 flex gap-2 flex-wrap items-center mt-0.5">
                                                         <span>{t.duration} mins</span>
-                                                        {t.location && <span className="bg-zinc-100 px-1 rounded">{t.location}</span>}
+                                                        {(t.locations || (t.location ? [t.location] : [])).map(loc => (
+                                                            <span key={loc} className="bg-zinc-100 border border-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded flex items-center gap-1 group/loc transition-colors hover:bg-zinc-200">
+                                                                {loc}
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); handleRemoveLocationFromTask(t.id, loc); }}
+                                                                    className="opacity-0 group-hover/loc:opacity-100 hover:text-red-500 transition-opacity"
+                                                                >
+                                                                    &times;
+                                                                </button>
+                                                            </span>
+                                                        ))}
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleAddLocationToTask(t.id); }}
+                                                            className="text-zinc-400 hover:text-zinc-600 px-1 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold"
+                                                            title="Add Location Tag"
+                                                        >
+                                                            + Add
+                                                        </button>
                                                     </div>
                                                 </div>
                                                 <button 
