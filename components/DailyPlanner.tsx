@@ -90,7 +90,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     // Quick Tasks State
     const [showQuickTasks, setShowQuickTasks] = useState(false);
-    const [quickTasks, setQuickTasks] = useState<{ id: string; title: string; duration: number }[]>(() => {
+    const [quickTasks, setQuickTasks] = useState<{ id: string; title: string; duration: number; location?: string }[]>(() => {
         try {
             const saved = localStorage.getItem('quickTasks');
             return saved ? JSON.parse(saved) : [];
@@ -105,14 +105,19 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     const [qtNewTitle, setQtNewTitle] = useState('');
     const [qtNewDuration, setQtNewDuration] = useState('60');
+    const [qtNewLocation, setQtNewLocation] = useState('');
+    const [qtLocationFilter, setQtLocationFilter] = useState<string | null>(null);
     const [qtSelectedTask, setQtSelectedTask] = useState<string | null>(null);
     const [qtSelectedUsers, setQtSelectedUsers] = useState<string[]>([]);
     const [qtStartTime, setQtStartTime] = useState('09:00');
     const [qtSearchQuery, setQtSearchQuery] = useState('');
 
+    const uniqueLocations = Array.from(new Set(quickTasks.map(t => t.location).filter(Boolean))) as string[];
+    const filteredQuickTasks = qtLocationFilter ? quickTasks.filter(t => t.location === qtLocationFilter) : quickTasks;
+
     const handleAddQuickTaskDef = () => {
         if (!qtNewTitle.trim()) return;
-        setQuickTasks([...quickTasks, { id: Date.now().toString(), title: qtNewTitle, duration: parseInt(qtNewDuration) || 60 }]);
+        setQuickTasks([...quickTasks, { id: Date.now().toString(), title: qtNewTitle, duration: parseInt(qtNewDuration) || 60, location: qtNewLocation.trim() || undefined }]);
         setQtNewTitle('');
     };
 
@@ -137,7 +142,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 await firebaseSaveShiftBlock({
                     id: `task-${Date.now()}-${userId}-${Math.random()}`,
                     title: taskDef.title,
-                    description: 'Quick Task',
+                    description: taskDef.location ? `Location: ${taskDef.location}\nQuick Task` : 'Quick Task',
                     startTime: startDateTime.toISOString(),
                     endTime: endDateTime.toISOString(),
                     assignedTo: userId,
@@ -1356,7 +1361,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             {/* Quick Tasks Dialog */}
             {showQuickTasks && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl border border-zinc-200 w-full max-w-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
+                    <div className="bg-white rounded-xl shadow-xl border border-zinc-200 w-[95vw] max-w-[1600px] h-[90vh] overflow-hidden animate-fade-in flex flex-col">
                         <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex justify-between items-center shrink-0">
                             <h3 className="font-bold text-zinc-800 flex items-center gap-2">
                                 <Zap className="w-5 h-5 text-orange-500" />
@@ -1380,6 +1385,17 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             onChange={e => setQtNewTitle(e.target.value)}
                                             className="flex-1 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
                                         />
+                                        <input
+                                            type="text"
+                                            list="qt-locations"
+                                            placeholder="Location..."
+                                            value={qtNewLocation}
+                                            onChange={e => setQtNewLocation(e.target.value)}
+                                            className="w-32 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                        <datalist id="qt-locations">
+                                            {uniqueLocations.map(loc => <option key={loc} value={loc} />)}
+                                        </datalist>
                                         <input 
                                             type="number" 
                                             placeholder="Mins" 
@@ -1390,25 +1406,47 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         <button 
                                             onClick={handleAddQuickTaskDef}
                                             disabled={!qtNewTitle.trim()}
-                                            className="p-1.5 bg-zinc-800 text-white rounded hover:bg-zinc-700 disabled:opacity-50"
+                                            className="p-1.5 bg-zinc-800 text-white rounded hover:bg-zinc-700 disabled:opacity-50 shrink-0"
                                         >
                                             <Plus className="w-4 h-4" />
                                         </button>
                                     </div>
+                                    {uniqueLocations.length > 0 && (
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            <button 
+                                                onClick={() => setQtLocationFilter(null)}
+                                                className={`text-[10px] px-2 py-1 rounded-full font-bold transition-colors ${!qtLocationFilter ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}
+                                            >
+                                                All
+                                            </button>
+                                            {uniqueLocations.map(loc => (
+                                                <button 
+                                                    key={loc}
+                                                    onClick={() => setQtLocationFilter(loc)}
+                                                    className={`text-[10px] px-2 py-1 rounded-full font-bold transition-colors ${qtLocationFilter === loc ? 'bg-orange-600 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}
+                                                >
+                                                    {loc}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                                    {quickTasks.length === 0 ? (
-                                        <div className="text-xs text-zinc-400 text-center mt-4">No quick tasks defined. Create one above.</div>
+                                    {filteredQuickTasks.length === 0 ? (
+                                        <div className="text-xs text-zinc-400 text-center mt-4">No quick tasks found. Create one above.</div>
                                     ) : (
-                                        quickTasks.map(t => (
+                                        filteredQuickTasks.map(t => (
                                             <div 
                                                 key={t.id} 
                                                 onClick={() => setQtSelectedTask(t.id)}
                                                 className={`flex items-center justify-between p-2 rounded cursor-pointer border ${qtSelectedTask === t.id ? 'bg-orange-50 border-orange-300 shadow-sm' : 'bg-white border-zinc-200 hover:border-orange-200'}`}
                                             >
-                                                <div className="min-w-0 flex-1">
+                                                <div className="min-w-0 flex-1 flex flex-col justify-center">
                                                     <div className="text-sm font-bold text-zinc-800 truncate">{t.title}</div>
-                                                    <div className="text-[10px] text-zinc-500">{t.duration} mins</div>
+                                                    <div className="text-[10px] text-zinc-500 flex gap-2">
+                                                        <span>{t.duration} mins</span>
+                                                        {t.location && <span className="bg-zinc-100 px-1 rounded">{t.location}</span>}
+                                                    </div>
                                                 </div>
                                                 <button 
                                                     onClick={(e) => { e.stopPropagation(); handleDeleteQuickTaskDef(t.id); }}
