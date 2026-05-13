@@ -322,11 +322,21 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 const tStart = new Date(currentDate);
                 const tEnd = new Date(currentDate);
                 
-                if (task.startTime && task.endTime) {
-                    const [sh, sm] = task.startTime.split(':').map(Number);
-                    tStart.setHours(sh, sm || 0, 0, 0);
-                    const [eh, em] = task.endTime.split(':').map(Number);
-                    tEnd.setHours(eh, em || 0, 0, 0);
+                if (task.startTime || task.endTime) {
+                    if (task.startTime) {
+                        const [sh, sm] = task.startTime.split(':').map(Number);
+                        tStart.setHours(sh, sm || 0, 0, 0);
+                    } else if (task.endTime) {
+                        const [eh, em] = task.endTime.split(':').map(Number);
+                        tStart.setHours(eh - 1, em || 0, 0, 0);
+                    }
+                    
+                    if (task.endTime) {
+                        const [eh, em] = task.endTime.split(':').map(Number);
+                        tEnd.setHours(eh, em || 0, 0, 0);
+                    } else {
+                        tEnd.setTime(tStart.getTime() + 60 * 60 * 1000);
+                    }
                 } else {
                     // Default to right now, rounded to the nearest half hour
                     const now = new Date();
