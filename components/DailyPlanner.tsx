@@ -1568,14 +1568,14 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
                             {/* Right Panel: Assign */}
                             <div className="w-1/2 flex flex-col bg-white">
-                                <div className="p-4 flex-1 overflow-y-auto">
+                                <div className="p-4 flex-1 flex flex-col overflow-hidden">
                                     {!qtSelectedTask ? (
                                         <div className="h-full flex items-center justify-center text-sm text-zinc-400 text-center px-4">
                                             Select a task from the left to assign it to team members.
                                         </div>
                                     ) : (
-                                        <div className="flex flex-col gap-4">
-                                            <div>
+                                        <div className="flex flex-col gap-4 flex-1 min-h-0">
+                                            <div className="shrink-0">
                                                 <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">1. Select Time</div>
                                                 <input 
                                                     type="time" 
@@ -1585,16 +1585,16 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                 />
                                             </div>
 
-                                            <div>
-                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">2. Select Team Members</div>
+                                            <div className="flex flex-col flex-1 min-h-0">
+                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider shrink-0">2. Select Team Members</div>
                                                 <input
                                                     type="text"
                                                     placeholder="Search team members..."
                                                     value={qtSearchQuery}
                                                     onChange={e => setQtSearchQuery(e.target.value)}
-                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500 mb-2"
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500 mb-2 shrink-0"
                                                 />
-                                                <div className="space-y-1 max-h-48 overflow-y-auto border border-zinc-200 rounded p-1">
+                                                <div className="space-y-1 flex-1 overflow-y-auto border border-zinc-200 rounded p-1 min-h-0">
                                                     {teamMembers.filter(u => u.name.toLowerCase().includes(qtSearchQuery.toLowerCase())).map(u => (
                                                         <label key={u.id} className="flex items-center gap-2 p-1.5 hover:bg-zinc-50 rounded cursor-pointer">
                                                             <input 
