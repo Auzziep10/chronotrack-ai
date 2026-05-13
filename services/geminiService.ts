@@ -56,6 +56,10 @@ The current date and time is: ${now.toLocaleDateString()} ${now.toLocaleTimeStri
 If the user says "right now", use the current time rounded to the nearest half hour.
 If the user DOES NOT specify any time or duration, DO NOT include the "startTime" or "endTime" fields in the JSON.
 
+CRITICAL RULES FOR MULTIPLE TASKS:
+If a single sentence mentions multiple tasks (e.g., "Kurtis is doing printer maintenance 10-12 and then inventory check at 2"), you MUST split them into multiple separate task objects in the JSON array.
+Carefully apply the specified or implied times to each distinct task.
+
 Each task object in the array should conform to this schema:
 {
   "assignedToName": "The name of the staff member",
