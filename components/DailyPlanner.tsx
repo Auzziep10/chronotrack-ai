@@ -108,6 +108,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [qtSelectedTask, setQtSelectedTask] = useState<string | null>(null);
     const [qtSelectedUsers, setQtSelectedUsers] = useState<string[]>([]);
     const [qtStartTime, setQtStartTime] = useState('09:00');
+    const [qtSearchQuery, setQtSearchQuery] = useState('');
 
     const handleAddQuickTaskDef = () => {
         if (!qtNewTitle.trim()) return;
@@ -147,6 +148,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             setShowQuickTasks(false);
             setQtSelectedTask(null);
             setQtSelectedUsers([]);
+            setQtSearchQuery('');
         } catch (err) {
             alert("Failed to assign quick tasks");
         } finally {
@@ -1441,8 +1443,15 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
                                             <div>
                                                 <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">2. Select Team Members</div>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search team members..."
+                                                    value={qtSearchQuery}
+                                                    onChange={e => setQtSearchQuery(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500 mb-2"
+                                                />
                                                 <div className="space-y-1 max-h-48 overflow-y-auto border border-zinc-200 rounded p-1">
-                                                    {teamMembers.map(u => (
+                                                    {teamMembers.filter(u => u.name.toLowerCase().includes(qtSearchQuery.toLowerCase())).map(u => (
                                                         <label key={u.id} className="flex items-center gap-2 p-1.5 hover:bg-zinc-50 rounded cursor-pointer">
                                                             <input 
                                                                 type="checkbox" 
