@@ -83,7 +83,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     // Close context menu on any click
     useEffect(() => {
-        const handleClick = () => setContextMenu(null);
+        const handleClick = () => {
+            setContextMenu(null);
+            setQtActiveDropdown(null);
+        };
         window.addEventListener('click', handleClick);
         return () => window.removeEventListener('click', handleClick);
     }, []);
@@ -111,6 +114,8 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [qtSelectedUsers, setQtSelectedUsers] = useState<string[]>([]);
     const [qtStartTime, setQtStartTime] = useState('09:00');
     const [qtSearchQuery, setQtSearchQuery] = useState('');
+    const [qtActiveDropdown, setQtActiveDropdown] = useState<string | null>(null);
+    const [qtDropdownInput, setQtDropdownInput] = useState('');
 
     const uniqueLocations = Array.from(new Set(quickTasks.flatMap(t => t.locations || (t.location ? [t.location] : [])).filter(Boolean))) as string[];
     const filteredQuickTasks = qtLocationFilter ? quickTasks.filter(t => {
@@ -125,8 +130,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         setQtNewTitle('');
     };
 
-    const handleAddLocationToTask = (taskId: string) => {
-        const newLoc = window.prompt("Enter new location tag:");
+    const handleAddSpecificLocationToTask = (taskId: string, newLoc: string) => {
         if (!newLoc || !newLoc.trim()) return;
         setQuickTasks(quickTasks.map(t => {
             if (t.id === taskId) {
@@ -1487,13 +1491,67 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                                 </button>
                                                             </span>
                                                         ))}
-                                                        <button 
-                                                            onClick={(e) => { e.stopPropagation(); handleAddLocationToTask(t.id); }}
-                                                            className="text-zinc-400 hover:text-zinc-600 px-1 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold"
-                                                            title="Add Location Tag"
-                                                        >
-                                                            + Add
-                                                        </button>
+                                                        <div className="relative">
+                                                            <button 
+                                                                onClick={(e) => { 
+                                                                    e.stopPropagation(); 
+                                                                    setQtActiveDropdown(qtActiveDropdown === t.id ? null : t.id);
+                                                                    setQtDropdownInput('');
+                                                                }}
+                                                                className="text-zinc-400 hover:text-zinc-600 px-1 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold"
+                                                                title="Add Location Tag"
+                                                            >
+                                                                + Add
+                                                            </button>
+                                                            {qtActiveDropdown === t.id && (
+                                                                <div className="absolute top-full left-0 mt-1 bg-white border border-zinc-200 rounded shadow-xl z-[200] w-48 p-2 text-zinc-800" onClick={e => e.stopPropagation()}>
+                                                                    <div className="text-[10px] font-bold text-zinc-500 uppercase mb-2">Add Location</div>
+                                                                    <div className="max-h-32 overflow-y-auto mb-2 space-y-1">
+                                                                        {uniqueLocations.filter(loc => !(t.locations || (t.location ? [t.location] : [])).includes(loc)).map(loc => (
+                                                                            <button 
+                                                                                key={loc}
+                                                                                onClick={() => {
+                                                                                    handleAddSpecificLocationToTask(t.id, loc);
+                                                                                    setQtActiveDropdown(null);
+                                                                                }}
+                                                                                className="block w-full text-left text-xs p-1.5 hover:bg-zinc-100 rounded"
+                                                                            >
+                                                                                {loc}
+                                                                            </button>
+                                                                        ))}
+                                                                        {uniqueLocations.filter(loc => !(t.locations || (t.location ? [t.location] : [])).includes(loc)).length === 0 && (
+                                                                            <div className="text-xs text-zinc-400 italic px-1">No other locations...</div>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex gap-1 border-t border-zinc-100 pt-2">
+                                                                        <input 
+                                                                            type="text" 
+                                                                            value={qtDropdownInput}
+                                                                            onChange={e => setQtDropdownInput(e.target.value)}
+                                                                            placeholder="New..."
+                                                                            className="flex-1 text-xs border border-zinc-300 rounded px-1.5 py-1 outline-none focus:border-orange-500 min-w-0"
+                                                                            onKeyDown={(e) => {
+                                                                                if (e.key === 'Enter' && qtDropdownInput.trim()) {
+                                                                                    handleAddSpecificLocationToTask(t.id, qtDropdownInput);
+                                                                                    setQtActiveDropdown(null);
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                        <button 
+                                                                            onClick={() => {
+                                                                                if (qtDropdownInput.trim()) {
+                                                                                    handleAddSpecificLocationToTask(t.id, qtDropdownInput);
+                                                                                    setQtActiveDropdown(null);
+                                                                                }
+                                                                            }}
+                                                                            className="px-2 py-0.5 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-bold transition-colors"
+                                                                        >
+                                                                            +
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <button 
