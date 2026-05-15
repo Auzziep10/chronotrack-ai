@@ -1595,7 +1595,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                     className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500 mb-2 shrink-0"
                                                 />
                                                 <div className="space-y-1 flex-1 overflow-y-auto border border-zinc-200 rounded p-1 min-h-0">
-                                                    {teamMembers.filter(u => u.name.toLowerCase().includes(qtSearchQuery.toLowerCase())).map(u => (
+                                                    {teamMembers
+                                                        .filter(u => u.name.toLowerCase().includes(qtSearchQuery.toLowerCase()))
+                                                        .sort((a, b) => a.name.localeCompare(b.name))
+                                                        .map(u => (
                                                         <label key={u.id} className="flex items-center gap-2 p-1.5 hover:bg-zinc-50 rounded cursor-pointer">
                                                             <input 
                                                                 type="checkbox" 
