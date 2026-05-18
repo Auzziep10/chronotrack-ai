@@ -1146,7 +1146,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             {/* Current Time Indicator */}
                             {isToday(currentDate) && currentTimePercentage !== null && (
                                 <div
-                                    className="absolute top-0 bottom-0 w-px bg-red-500 z-10 pointer-events-none"
+                                    className="absolute top-0 bottom-0 w-px bg-red-500 z-40 pointer-events-none"
                                     style={{ left: `calc(12rem + ${currentTimePercentage}% - (12rem * ${currentTimePercentage / 100}))` }}
                                 // Math explanation: 
                                 // The container is flex-row. The left 12rem is the sidebar. The right is grid.
