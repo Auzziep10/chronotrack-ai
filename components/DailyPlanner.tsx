@@ -1185,7 +1185,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                 const rowHeight = Math.max(64, (maxLane + 1) * 32 + 8);
 
                                 return (
-                                <div key={user.id} className="flex border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors relative" style={{ minHeight: `${rowHeight}px` }}>
+                                <div key={user.id} className="flex border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors relative" style={{ height: `${rowHeight}px` }}>
                                     {/* User Info (Sticky Left) */}
                                     <div className="w-48 border-r border-zinc-200 p-3 bg-white sticky left-0 z-10 flex items-center gap-3">
                                         <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-600 flex items-center justify-center font-bold text-xs ring-2 ring-white shadow-sm">
