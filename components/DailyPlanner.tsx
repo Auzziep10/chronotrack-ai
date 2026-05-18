@@ -704,7 +704,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             date.getFullYear() === today.getFullYear();
     };
 
-    const getBlockStyles = (block: ScheduleBlock) => {
+    const getBlockStyles = (block: ScheduleBlock, overlapIndex: number = 0) => {
         // Calculate position
         const start = new Date(block.startTime);
         const end = new Date(block.endTime);
@@ -741,7 +741,9 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         return {
             left: `${left}%`,
             width: `${width}%`,
-            className: `absolute top-1 bottom-1 rounded-md text-xs font-medium px-2 py-1 truncate shadow-sm border-l-4 ${colorClass} hover:opacity-90 transition-opacity cursor-pointer`
+            top: `${4 + overlapIndex * 32}px`,
+            height: '28px',
+            className: `absolute rounded-md text-xs font-medium px-2 py-1 truncate shadow-sm border-l-4 ${colorClass} hover:opacity-90 transition-opacity cursor-pointer z-10`
         };
     };
 
@@ -1160,8 +1162,30 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             )}
 
                             {/* Rows */}
-                            {sortedUsers.map(user => (
-                                <div key={user.id} className="flex border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors h-16 relative">
+                            {sortedUsers.map(user => {
+                                const blocks = userBlocks[user.id] || [];
+                                
+                                // Calculate overlaps to stack blocks
+                                const sortedBlocks = [...blocks].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+                                const overlaps = new Map<string, number>();
+                                const lanes: number[] = [];
+                                
+                                sortedBlocks.forEach(block => {
+                                    const start = new Date(block.startTime).getTime();
+                                    const end = new Date(block.endTime).getTime();
+                                    let laneIndex = lanes.findIndex(laneEnd => laneEnd <= start);
+                                    if (laneIndex === -1) {
+                                        laneIndex = lanes.length;
+                                    }
+                                    lanes[laneIndex] = end;
+                                    overlaps.set(block.id, laneIndex);
+                                });
+
+                                const maxLane = Math.max(0, lanes.length - 1);
+                                const rowHeight = Math.max(64, (maxLane + 1) * 32 + 8);
+
+                                return (
+                                <div key={user.id} className="flex border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors relative" style={{ minHeight: `${rowHeight}px` }}>
                                     {/* User Info (Sticky Left) */}
                                     <div className="w-48 border-r border-zinc-200 p-3 bg-white sticky left-0 z-10 flex items-center gap-3">
                                         <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-600 flex items-center justify-center font-bold text-xs ring-2 ring-white shadow-sm">
@@ -1179,7 +1203,8 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         {(userBlocks[user.id] || []).map(originalBlock => {
                                             const isDragged = previewBlock?.id === originalBlock.id;
                                             const block = isDragged ? previewBlock : originalBlock;
-                                            const styles = getBlockStyles(block);
+                                            const overlapIndex = overlaps.get(originalBlock.id) || 0;
+                                            const styles = getBlockStyles(block, overlapIndex);
                                             return (
                                                 <div
                                                     key={block.id}
@@ -1204,7 +1229,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                         });
                                                         setPreviewBlock(originalBlock);
                                                     }}
-                                                    style={{ left: styles.left, width: styles.width }}
+                                                    style={{ left: styles.left, width: styles.width, top: styles.top, height: styles.height }}
                                                     className={styles.className + " group " + (isAdminOrManager ? "cursor-pointer" : "") + (isDragged ? " opacity-70 scale-105 z-50 shadow-xl" : "")}
                                                     title={`${block.title} (${new Date(block.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${new Date(block.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`}
                                                 >
@@ -1238,7 +1263,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         })}
                                     </div>
                                 </div>
-                            ))}
+                            )})}
 
                             {/* Empty State if no users */}
                             {sortedUsers.length === 0 && (
