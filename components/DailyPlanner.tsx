@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy, Zap, MapPin } from 'lucide-react';
 import { User, DailySchedule, ScheduleBlock, Department } from '../types';
 import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock } from '../services/firebaseService';
 import { processExternalPlan } from '../services/geminiService';
@@ -1240,23 +1240,69 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                         </div>
                                                     )}
                                                     {/* Tooltip-ish Details */}
-                                                    <div className="hidden group-hover:block absolute top-full left-0 bg-zinc-800 text-white text-xs p-2 rounded shadow-lg z-50 w-48 mt-1 whitespace-normal">
-                                                        <div className="flex justify-between items-start mb-1">
-                                                            <div className="font-bold">{activeView === 'shifts' ? 'Shift Schedule' : block.title}</div>
+                                                    <div className="hidden group-hover:block absolute top-full left-0 bg-zinc-800 text-white text-xs p-3 rounded shadow-xl z-[100] w-64 mt-1 whitespace-normal">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <div className="font-bold text-sm leading-tight pr-2">{activeView === 'shifts' ? 'Shift Schedule' : block.title}</div>
                                                             {(isAdminOrManager) && (
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         handleDeleteBlock(block.id, activeView === 'shifts');
                                                                     }}
-                                                                    className="p-1 hover:bg-red-500 rounded transition-colors"
+                                                                    className="p-1 hover:bg-red-500 rounded transition-colors shrink-0"
                                                                 >
                                                                     <X className="w-3 h-3" />
                                                                 </button>
                                                             )}
                                                         </div>
-                                                        <div className="opacity-80 mb-1">{block.description}</div>
-                                                        <div className="text-[10px] opacity-60">Status: {block.status}</div>
+                                                        
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <div className="flex items-center gap-1.5 text-zinc-300">
+                                                                <Clock className="w-3 h-3 shrink-0" />
+                                                                <span>{new Date(block.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - {new Date(block.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                                                            </div>
+
+                                                            {block.department && (
+                                                                <div className="flex items-center gap-1.5 text-zinc-300">
+                                                                    <LayoutGrid className="w-3 h-3 shrink-0" />
+                                                                    <span>{block.department}</span>
+                                                                </div>
+                                                            )}
+
+                                                            {block.location && (
+                                                                <div className="flex items-center gap-1.5 text-zinc-300">
+                                                                    <MapPin className="w-3 h-3 shrink-0" />
+                                                                    <span>{block.location}</span>
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {block.priority && (
+                                                                <div className="flex items-center gap-1.5 text-zinc-300 capitalize">
+                                                                    <AlertCircle className="w-3 h-3 shrink-0" />
+                                                                    <span>{block.priority} Priority</span>
+                                                                </div>
+                                                            )}
+
+                                                            {block.description && (
+                                                                <div className="mt-1 pt-1.5 border-t border-zinc-700 text-zinc-300">
+                                                                    {block.description.split('\n').map((line, i) => (
+                                                                        <div key={i}>{line}</div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+
+                                                            <div className="mt-1 pt-1.5 border-t border-zinc-700 flex items-center justify-between">
+                                                                <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-bold">Status</span>
+                                                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold capitalize ${
+                                                                    block.status === 'completed' ? 'bg-green-500/20 text-green-300' :
+                                                                    block.status === 'in_progress' ? 'bg-blue-500/20 text-blue-300' :
+                                                                    block.status === 'delayed' ? 'bg-red-500/20 text-red-300' :
+                                                                    'bg-orange-500/20 text-orange-300'
+                                                                }`}>
+                                                                    {block.status.replace('_', ' ')}
+                                                                </span>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );
