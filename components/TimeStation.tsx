@@ -4,6 +4,7 @@ import { Timer } from './Timer';
 import { PinPad } from './PinPad';
 import { Play, Pause, ShieldCheck, User as UserIcon, LogOut, CheckCircle2, QrCode as QrCodeIcon, X, Bell } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { LogAbsenceModal } from './LogAbsenceModal';
 
 
 interface Props {
@@ -17,14 +18,16 @@ interface Props {
   appSettings?: AppSettings;
   onUpdateSettings?: (settings: AppSettings) => void;
   shiftBlocks?: ScheduleBlock[];
+  onLogAbsence?: (user: User, type: 'No-Call No-Show' | 'Sick' | 'Emergency', notes?: string) => Promise<any>;
 }
 
-export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession, isAdmin, appSettings, onUpdateSettings, shiftBlocks }) => {
+export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession, isAdmin, appSettings, onUpdateSettings, shiftBlocks, onLogAbsence }) => {
   const [showPinPad, setShowPinPad] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [pinMessage, setPinMessage] = useState<string>('');
   const [actionMenuUser, setActionMenuUser] = useState<User | null>(null);
   const [unscheduledUser, setUnscheduledUser] = useState<User | null>(null);
+  const [absenceUser, setAbsenceUser] = useState<User | null>(null);
 
   const handlePinAction = () => {
     setPinMessage('');
@@ -288,6 +291,22 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
+                  <select
+                    className="text-xs border border-zinc-300 rounded-lg px-3 py-1.5 bg-white cursor-pointer font-bold text-zinc-900 shadow-sm"
+                    onChange={(e) => {
+                      const u = users.find(u => u.id === e.target.value);
+                      if (u) {
+                        setAbsenceUser(u);
+                        e.target.value = '';
+                      }
+                    }}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>+ Log Absence</option>
+                    {users.filter(u => !activeSessions[u.id]).map(u => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
                 </>
               )}
               <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium bg-white border border-zinc-200 px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap">
@@ -466,6 +485,19 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
           </div>
         )
       }
+      {absenceUser && (
+        <LogAbsenceModal
+          user={absenceUser}
+          isOpen={!!absenceUser}
+          onClose={() => setAbsenceUser(null)}
+          onSave={async (type, notes) => {
+            if (onLogAbsence) {
+              await onLogAbsence(absenceUser, type, notes);
+              alert(`Absence (${type}) logged successfully for ${absenceUser.name}.`);
+            }
+          }}
+        />
+      )}
     </div >
   );
 };

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { processExternalPlan } from '../services/geminiService';
 import { UserProfileDialog } from './UserProfileDialog';
+import { LogAbsenceModal } from './LogAbsenceModal';
 
 // Generate more data (60 days) to allow testing different pay periods
 const generateMockData = (users: User[]) => {
@@ -108,9 +109,10 @@ interface Props {
   onClockIn?: (user: User) => void;
   onClockOut?: (user: User) => void;
   onUpdateUser?: (updatedUser: User) => void;
+  onLogAbsence?: (user: User, type: 'No-Call No-Show' | 'Sick' | 'Emergency', notes?: string) => Promise<any>;
 }
 
-export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessions = {}, onClockIn, onClockOut, onUpdateUser }) => {
+export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessions = {}, onClockIn, onClockOut, onUpdateUser, onLogAbsence }) => {
   const [activeView, setActiveView] = useState<'departments' | 'users' | 'timecards' | 'planning'>('departments');
   const [selectedDept, setSelectedDept] = useState<Department | 'All'>('All');
   const [selectedUser, setSelectedUser] = useState<string | 'All'>('All');
@@ -118,6 +120,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [selectedPeriodIdx, setSelectedPeriodIdx] = useState(0);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [absenceUser, setAbsenceUser] = useState<User | null>(null);
 
   const toggleUserExpanded = (userId: string) => {
     setExpandedUsers(prev => {
@@ -945,6 +948,12 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                       className="text-[10px] font-bold bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50 px-2 py-1 rounded shadow-sm transition-colors"
                                     >Clock In</button>
                                   )}
+                                  {group.status !== 'Active' && user && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setAbsenceUser(user); }}
+                                      className="text-[10px] font-bold bg-white text-red-600 border border-red-200 hover:bg-red-50 px-2 py-1 rounded shadow-sm transition-colors"
+                                    >Log Absence</button>
+                                  )}
                                   {group.status === 'Active' && onClockOut && user && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); onClockOut(user); }}
@@ -1072,7 +1081,10 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                         <td className="px-6 py-3 text-right" onClick={e => e.stopPropagation()}>
                                           <div className="flex flex-col items-end gap-1.5">
                                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
-                                              ${card.status === 'Complete' ? 'bg-zinc-50 text-zinc-800 border-zinc-200' : 'bg-zinc-50 text-zinc-800 border-zinc-200'}`}>
+                                              ${card.status === 'No-Call No-Show' ? 'bg-red-50 text-red-700 border-red-200 shadow-sm' :
+                                                card.status === 'Sick' ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm' :
+                                                card.status === 'Emergency' ? 'bg-purple-50 text-purple-700 border-purple-200 shadow-sm' :
+                                                'bg-zinc-50 text-zinc-800 border-zinc-200'}`}>
                                               {card.status}
                                             </span>
                                             <button
@@ -1146,6 +1158,22 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             setSelectedUserForProfile(null); 
           }}
           isViewerAdmin={true}
+        />
+      )}
+
+      {absenceUser && (
+        <LogAbsenceModal
+          user={absenceUser}
+          isOpen={!!absenceUser}
+          onClose={() => setAbsenceUser(null)}
+          onSave={async (type, notes) => {
+            if (onLogAbsence) {
+              const newCard = await onLogAbsence(absenceUser, type, notes);
+              if (newCard) {
+                setTimeCards(prev => [newCard, ...prev]);
+              }
+            }
+          }}
         />
       )}
     </div>

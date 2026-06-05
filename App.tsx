@@ -26,7 +26,8 @@ import {
   firebaseResumeSession,
   firebaseSilentAuth,
   subscribeToSettings,
-  firebaseSaveSettings
+  firebaseSaveSettings,
+  firebaseSaveTimeCard
 } from './services/firebaseService';
 
 type Tab = 'station' | 'activity' | 'manager' | 'planner' | 'documents';
@@ -495,6 +496,37 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLogAbsence = async (user: User, type: 'No-Call No-Show' | 'Sick' | 'Emergency', notes?: string) => {
+    const now = Date.now();
+    const tzOffset = now - new Date(now).getTimezoneOffset() * 60000;
+    const todayStr = new Date(tzOffset).toISOString().split('T')[0];
+
+    const timeCard: DailyTimeCard = {
+      id: `tc-abs-${user.id}-${now}`,
+      userId: user.id,
+      date: todayStr,
+      clockIn: now,
+      clockOut: now,
+      totalHours: 0,
+      totalIdleHours: 0,
+      status: type,
+      managerNotes: notes || `Logged by manager`
+    };
+
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseSaveTimeCard(timeCard);
+      } catch (err) {
+        console.error('Failed to save absence to Firebase:', err);
+      }
+    }
+
+    const { storageService } = await import('./services/storageService');
+    storageService.saveTimeCard(timeCard);
+
+    return timeCard;
+  };
+
   const handlePauseSession = async (user: User) => {
     // Optimistic Update
     setActiveSessions(prev => ({
@@ -838,6 +870,7 @@ const App: React.FC = () => {
               appSettings={appSettings}
               onUpdateSettings={handleUpdateSettings}
               shiftBlocks={shiftBlocks}
+              onLogAbsence={handleLogAbsence}
             />
           ) : activeTab === 'activity' ? (
             <ActivityTracker
@@ -862,7 +895,7 @@ const App: React.FC = () => {
           ) : activeTab === 'documents' ? (
             <PrintableForms currentUser={currentUser} />
           ) : (
-            <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} onClockIn={handleClockIn} onClockOut={handleClockOut} onUpdateUser={handleUpdateUser} />
+            <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} onClockIn={handleClockIn} onClockOut={handleClockOut} onUpdateUser={handleUpdateUser} onLogAbsence={handleLogAbsence} />
           )}
         </div>
       </main>
