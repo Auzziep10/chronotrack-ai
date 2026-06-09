@@ -9,6 +9,7 @@ import {
 import { processExternalPlan } from '../services/geminiService';
 import { UserProfileDialog } from './UserProfileDialog';
 import { LogAbsenceModal } from './LogAbsenceModal';
+import { AddRetroactiveCardModal } from './AddRetroactiveCardModal';
 
 // Generate more data (60 days) to allow testing different pay periods
 const generateMockData = (users: User[]) => {
@@ -150,6 +151,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [absenceUser, setAbsenceUser] = useState<User | null>(null);
+  const [retroactiveUser, setRetroactiveUser] = useState<User | null>(null);
 
   const toggleUserExpanded = (userId: string) => {
     setExpandedUsers(prev => {
@@ -598,6 +600,34 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     }
   };
 
+  const handleSaveRetroactiveCard = async (user: User, clockInMs: number, clockOutMs: number, idleHours: number, date: string, notes: string) => {
+    const newCard: DailyTimeCard = {
+      id: `tc-retro-${user.id}-${Date.now()}`,
+      userId: user.id,
+      date,
+      clockIn: clockInMs,
+      clockOut: clockOutMs,
+      totalHours: Math.max(0, ((clockOutMs - clockInMs) / 3600000) - idleHours),
+      totalIdleHours: idleHours,
+      status: 'Complete',
+      managerNotes: notes || 'Retroactive entry'
+    };
+
+    setTimeCards(prev => [newCard, ...prev]);
+
+    const { storageService } = await import('../services/storageService');
+    storageService.saveTimeCard(newCard);
+
+    const { firebaseSaveTimeCard, isFirebaseConfigured } = await import('../services/firebaseService');
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseSaveTimeCard(newCard);
+      } catch (err) {
+        console.error('Failed to save retroactive timecard to remote:', err);
+      }
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden min-h-[700px] flex flex-col animate-fade-in">
       {/* Enhanced Manager Header */}
@@ -989,6 +1019,12 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                       className="text-[10px] font-bold bg-white text-amber-600 border border-amber-200 hover:bg-amber-50 px-2 py-1 rounded shadow-sm transition-colors"
                                     >Clock Out</button>
                                   )}
+                                  {user && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setRetroactiveUser(user); }}
+                                      className="text-[10px] font-bold bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded shadow-sm transition-colors"
+                                    >+ Add Record</button>
+                                  )}
                                 </td>
                               </tr>
 
@@ -1202,6 +1238,17 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 setTimeCards(prev => [newCard, ...prev]);
               }
             }
+          }}
+        />
+      )}
+
+      {retroactiveUser && (
+        <AddRetroactiveCardModal
+          user={retroactiveUser}
+          isOpen={!!retroactiveUser}
+          onClose={() => setRetroactiveUser(null)}
+          onSave={async (clockInMs, clockOutMs, idleHours, date, notes) => {
+            await handleSaveRetroactiveCard(retroactiveUser, clockInMs, clockOutMs, idleHours, date, notes);
           }}
         />
       )}
