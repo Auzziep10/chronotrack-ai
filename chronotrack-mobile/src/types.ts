@@ -106,6 +106,9 @@ export interface AppSettings {
   payPeriodStartDay: DayOfWeek;
   checkInIntervalHours?: number;
   autoPauseEnabled?: boolean;
+  useCustomPayPeriods?: boolean;
+  customCycleStart?: string; // YYYY-MM-DD
+  customCycleEnd?: string;   // YYYY-MM-DD
 }
 
 export interface ScheduleBlock {

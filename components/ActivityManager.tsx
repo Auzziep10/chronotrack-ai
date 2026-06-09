@@ -71,6 +71,35 @@ const getPayPeriods = (settings: AppSettings) => {
   const periods = [];
   const today = new Date();
 
+  if (settings.useCustomPayPeriods && settings.customCycleStart && settings.customCycleEnd) {
+    const anchorStart = new Date(settings.customCycleStart + 'T00:00:00');
+    const anchorEnd = new Date(settings.customCycleEnd + 'T23:59:59.999');
+    
+    // Duration in milliseconds
+    const D_ms = anchorEnd.getTime() - anchorStart.getTime() + 1;
+    const D_days = Math.round(D_ms / (24 * 60 * 60 * 1000));
+    
+    if (D_days > 0) {
+      const todayMs = today.getTime();
+      const elapsedMs = todayMs - anchorStart.getTime();
+      const elapsedCycles = Math.floor(elapsedMs / D_ms);
+      
+      // Generate 8 periods: 1 future, the current one, and 6 past ones
+      for (let i = 1; i >= -6; i--) {
+        const cycleIndex = elapsedCycles + i;
+        const start = new Date(anchorStart.getTime() + cycleIndex * D_ms);
+        const end = new Date(start.getTime() + D_ms - 1);
+        
+        periods.push({
+          start,
+          end,
+          label: `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+        });
+      }
+      return periods;
+    }
+  }
+
   if (settings.payFrequency === 'Monthly') {
     for (let i = 0; i < 6; i++) {
       const d = new Date(today.getFullYear(), today.getMonth() - i, 1);

@@ -109,6 +109,9 @@ export interface AppSettings {
   checkInIntervalHours?: number;
   autoPauseEnabled?: boolean;
   discordNotificationsEnabled?: boolean;
+  useCustomPayPeriods?: boolean;
+  customCycleStart?: string; // YYYY-MM-DD
+  customCycleEnd?: string;   // YYYY-MM-DD
 }
 
 export interface ScheduleBlock {
