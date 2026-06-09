@@ -1016,7 +1016,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                                 </div>
                                                 <div>
                                                   <h4 className="text-sm font-bold text-zinc-900">Edit Time Record</h4>
-                                                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
                                                 </div>
                                               </div>
                                               <button onClick={() => setEditingCardId(null)} className="p-2 hover:bg-zinc-100 rounded-lg transition-colors text-zinc-400 hover:text-zinc-600">
@@ -1087,7 +1087,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                           </div>
                                         </td>
                                         <td className="px-6 py-3 text-zinc-600 font-medium">
-                                          {new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                          {new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                                         </td>
                                         <td className="px-6 py-3" onClick={e => e.stopPropagation()}>
                                           <div className="text-xs font-medium text-zinc-900">
