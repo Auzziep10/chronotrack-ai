@@ -10,7 +10,9 @@ import {
     updateDoc,
     serverTimestamp,
     Timestamp,
-    arrayUnion
+    arrayUnion,
+    query,
+    where
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
@@ -489,4 +491,43 @@ export const firebaseSaveQuickTask = async (task: QuickTask): Promise<void> => {
 
 export const firebaseDeleteQuickTask = async (taskId: string): Promise<void> => {
     await deleteDoc(doc(db, QUICK_TASKS_COL, taskId));
+};
+
+// ─── TEAM DASHBOARD DATABASE INTEGRATION ──────────────────────────────
+const teamDashboardConfig = {
+    apiKey: "AIzaSyAGiJrWnwbdY4PrI-YHMf7DWOS9wFlsY3c",
+    authDomain: "print-shop-os-f8092.firebaseapp.com",
+    projectId: "print-shop-os-f8092",
+    storageBucket: "print-shop-os-f8092.firebasestorage.app",
+    messagingSenderId: "637868552650",
+    appId: "1:637868552650:web:473f9f71ad41703ec7df33"
+};
+
+const teamApps = getApps().filter(app => app.name === 'teamDashboard');
+const teamApp = teamApps.length === 0 ? initializeApp(teamDashboardConfig, 'teamDashboard') : teamApps[0];
+export const teamDb = getFirestore(teamApp);
+
+export const subscribeToProductionOrders = (onUpdate: (orders: any[]) => void) => {
+    const q = query(collection(teamDb, 'orders'), where('statusIndex', '==', 6));
+    return onSnapshot(q, (snapshot) => {
+        const ordersData = snapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id
+        }));
+        onUpdate(ordersData);
+    }, (error) => {
+        console.error("Firebase ProductionOrders Sync Error:", error);
+    });
+};
+
+export const subscribeToCustomers = (onUpdate: (customers: Record<string, any>) => void) => {
+    return onSnapshot(collection(teamDb, 'customers'), (snapshot) => {
+        const dbCusts: Record<string, any> = {};
+        snapshot.docs.forEach(doc => {
+            dbCusts[doc.id] = doc.data();
+        });
+        onUpdate(dbCusts);
+    }, (error) => {
+        console.error("Firebase Customers Sync Error:", error);
+    });
 };

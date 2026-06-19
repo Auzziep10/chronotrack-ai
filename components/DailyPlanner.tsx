@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy, Zap, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy, Zap, MapPin, Search, ShoppingBag } from 'lucide-react';
 import { User, DailySchedule, ScheduleBlock, Department, QuickTask } from '../types';
-import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock, subscribeToQuickTasks, firebaseSaveQuickTask, firebaseDeleteQuickTask } from '../services/firebaseService';
+import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock, subscribeToQuickTasks, firebaseSaveQuickTask, firebaseDeleteQuickTask, subscribeToProductionOrders, subscribeToCustomers } from '../services/firebaseService';
 import { processExternalPlan } from '../services/geminiService';
 import { ShiftCalendarViews } from './ShiftCalendarViews';
 
@@ -119,6 +119,30 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         return () => unsubscribe();
     }, []);
 
+    // Orders Integration State
+    const [showOrdersDialog, setShowOrdersDialog] = useState(false);
+    const [productionOrders, setProductionOrders] = useState<any[]>([]);
+    const [customers, setCustomers] = useState<Record<string, any>>({});
+    const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+    const [orderStartTime, setOrderStartTime] = useState('09:00');
+    const [orderDuration, setOrderDuration] = useState('120');
+    const [orderSelectedUsers, setOrderSelectedUsers] = useState<string[]>([]);
+    const [orderSearchQuery, setOrderSearchQuery] = useState('');
+    const [orderListSearchQuery, setOrderListSearchQuery] = useState('');
+
+    useEffect(() => {
+        const unsubscribeOrders = subscribeToProductionOrders((orders) => {
+            setProductionOrders(orders);
+        });
+        const unsubscribeCustomers = subscribeToCustomers((custs) => {
+            setCustomers(custs);
+        });
+        return () => {
+            unsubscribeOrders();
+            unsubscribeCustomers();
+        };
+    }, []);
+
     const [qtNewTitle, setQtNewTitle] = useState('');
     const [qtNewDuration, setQtNewDuration] = useState('60');
     const [qtNewLocation, setQtNewLocation] = useState('');
@@ -209,6 +233,59 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             setQtSearchQuery('');
         } catch (err) {
             alert("Failed to assign quick tasks");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAssignOrderTask = async () => {
+        const order = productionOrders.find(o => o.id === selectedOrder);
+        if (!order || orderSelectedUsers.length === 0) return;
+
+        const customer = customers[order.customerId];
+        const customerName = customer ? (customer.company || customer.name) : (order.customerId || 'Unknown Customer');
+        
+        // Sum items
+        const totalItems = order.items?.reduce((acc: number, i: any) => acc + (i.qty || 0), 0) || 0;
+
+        // Build item descriptions
+        const itemDescriptions = order.items?.map((i: any) => {
+            let desc = `- ${i.qty || 0}x ${i.name || i.title || 'Item'}`;
+            if (i.sizes && Object.keys(i.sizes).length > 0) {
+                const sizesStr = Object.entries(i.sizes).map(([sz, q]) => `${sz}: ${q}`).join(', ');
+                desc += ` (${sizesStr})`;
+            }
+            return desc;
+        }).join('\n') || '';
+
+        try {
+            setLoading(true);
+            for (const userId of orderSelectedUsers) {
+                const startDateTime = new Date(currentDate);
+                const [sh, sm] = orderStartTime.split(':').map(Number);
+                startDateTime.setHours(sh, sm, 0, 0);
+
+                const endDateTime = new Date(startDateTime.getTime() + (parseInt(orderDuration) || 120) * 60000);
+
+                await firebaseSaveShiftBlock({
+                    id: `task-${Date.now()}-${userId}-${Math.random()}`,
+                    title: `Order #${order.portalId || order.id.slice(0, 6)}: ${order.title || 'Untitled Order'}`,
+                    description: `Customer: ${customerName}\nItems:\n${itemDescriptions}\nDue Date: ${order.date || 'N/A'}\nTotal Items: ${totalItems}\nQuick Order Task`,
+                    startTime: startDateTime.toISOString(),
+                    endTime: endDateTime.toISOString(),
+                    assignedTo: userId,
+                    status: 'pending',
+                    priority: 'medium',
+                    department: Department.Production
+                });
+            }
+            setShowOrdersDialog(false);
+            setSelectedOrder(null);
+            setOrderSelectedUsers([]);
+            setOrderSearchQuery('');
+            setOrderListSearchQuery('');
+        } catch (err) {
+            alert("Failed to assign order tasks");
         } finally {
             setLoading(false);
         }
@@ -859,6 +936,13 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             >
                                 <Zap className="w-4 h-4 text-orange-500" />
                                 Quick Tasks
+                            </button>
+                            <button
+                                onClick={() => setShowOrdersDialog(true)}
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                            >
+                                <ShoppingBag className="w-4 h-4 text-purple-500" />
+                                Orders
                             </button>
                             <button
                                 onClick={() => setIsPlanningMode(!isPlanningMode)}
@@ -1713,6 +1797,159 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
                                     >
                                         <Plus className="w-4 h-4" /> Add to Planners
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Orders Dialog */}
+            {showOrdersDialog && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl border border-zinc-200 w-[95vw] max-w-[1600px] h-[90vh] overflow-hidden animate-fade-in flex flex-col">
+                        <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex justify-between items-center shrink-0">
+                            <h3 className="font-bold text-zinc-800 flex items-center gap-2">
+                                <ShoppingBag className="w-5 h-5 text-purple-500" />
+                                Production Orders
+                            </h3>
+                            <button onClick={() => setShowOrdersDialog(false)} className="p-1 hover:bg-zinc-200 rounded text-zinc-500 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 flex overflow-hidden">
+                            {/* Left Panel: Orders List */}
+                            <div className="w-1/2 border-r border-zinc-200 flex flex-col bg-zinc-50/50">
+                                <div className="p-3 border-b border-zinc-200 bg-white">
+                                    <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">Select Live Production Order</div>
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search by order ID, customer or title..." 
+                                            value={orderListSearchQuery}
+                                            onChange={e => setOrderListSearchQuery(e.target.value)}
+                                            className="w-full text-sm pl-9 pr-3 py-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-purple-500"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                    {(() => {
+                                        const filteredOrders = productionOrders.filter(order => {
+                                            const query = orderListSearchQuery.toLowerCase().trim();
+                                            if (!query) return true;
+                                            
+                                            const customer = customers[order.customerId];
+                                            const customerName = (customer?.company || customer?.name || order.customerId || '').toLowerCase();
+                                            const title = (order.title || '').toLowerCase();
+                                            const portalId = (order.portalId || '').toLowerCase();
+                                            const id = (order.id || '').toLowerCase();
+
+                                            return customerName.includes(query) || title.includes(query) || portalId.includes(query) || id.includes(query);
+                                        });
+
+                                        if (filteredOrders.length === 0) {
+                                            return <div className="text-xs text-zinc-400 text-center mt-4">No active production orders found.</div>;
+                                        }
+
+                                        return filteredOrders.map(order => {
+                                            const customer = customers[order.customerId];
+                                            const customerName = customer ? (customer.company || customer.name) : (order.customerId || 'Unknown Customer');
+                                            const totalItems = order.items?.reduce((acc: number, i: any) => acc + (i.qty || 0), 0) || 0;
+
+                                            return (
+                                                <div 
+                                                    key={order.id} 
+                                                    onClick={() => setSelectedOrder(order.id)}
+                                                    className={`group flex flex-col p-3 rounded cursor-pointer border transition-all ${selectedOrder === order.id ? 'bg-purple-50 border-purple-300 shadow-sm' : 'bg-white border-zinc-200 hover:border-purple-200'}`}
+                                                >
+                                                    <div className="flex justify-between items-start">
+                                                        <span className="text-xs font-bold text-zinc-500">Order #{order.portalId || order.id.slice(0, 6)}</span>
+                                                        {order.date && <span className="text-[10px] bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded font-medium">Due: {order.date}</span>}
+                                                    </div>
+                                                    <div className="text-sm font-bold text-zinc-800 mt-1">{customerName}</div>
+                                                    <div className="text-xs text-zinc-600 truncate mt-0.5">{order.title || 'Untitled Order'}</div>
+                                                    <div className="text-[10px] text-purple-600 font-semibold mt-1">
+                                                        {totalItems} item{totalItems !== 1 ? 's' : ''} in production
+                                                    </div>
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            </div>
+
+                            {/* Right Panel: Assign Order */}
+                            <div className="w-1/2 flex flex-col bg-white">
+                                <div className="p-4 flex-1 flex flex-col overflow-hidden">
+                                    {!selectedOrder ? (
+                                        <div className="h-full flex items-center justify-center text-sm text-zinc-400 text-center px-4">
+                                            Select an order from the left to assign it to team members.
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-4 flex-1 min-h-0">
+                                            <div className="shrink-0">
+                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">1. Select Start Time</div>
+                                                <input 
+                                                    type="time" 
+                                                    value={orderStartTime}
+                                                    onChange={e => setOrderStartTime(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-purple-500"
+                                                />
+                                            </div>
+
+                                            <div className="shrink-0">
+                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">2. Estimated Duration (Minutes)</div>
+                                                <input 
+                                                    type="number" 
+                                                    value={orderDuration}
+                                                    onChange={e => setOrderDuration(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-purple-500"
+                                                    placeholder="120"
+                                                />
+                                            </div>
+
+                                            <div className="flex flex-col flex-1 min-h-0">
+                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider shrink-0">3. Select Team Members</div>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search team members..."
+                                                    value={orderSearchQuery}
+                                                    onChange={e => setOrderSearchQuery(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-purple-500 mb-2 shrink-0"
+                                                />
+                                                <div className="space-y-1 flex-1 overflow-y-auto border border-zinc-200 rounded p-1 min-h-0">
+                                                    {teamMembers
+                                                        .filter(u => u.name.toLowerCase().includes(orderSearchQuery.toLowerCase()))
+                                                        .sort((a, b) => a.name.localeCompare(b.name))
+                                                        .map(u => (
+                                                        <label key={u.id} className="flex items-center gap-2 p-1.5 hover:bg-zinc-50 rounded cursor-pointer">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={orderSelectedUsers.includes(u.id)}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) setOrderSelectedUsers([...orderSelectedUsers, u.id]);
+                                                                    else setOrderSelectedUsers(orderSelectedUsers.filter(id => id !== u.id));
+                                                                }}
+                                                                className="rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
+                                                            />
+                                                            <span className="text-sm font-medium text-zinc-700">{u.name}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-4 border-t border-zinc-100 bg-zinc-50 shrink-0">
+                                    <button
+                                        onClick={handleAssignOrderTask}
+                                        disabled={!selectedOrder || orderSelectedUsers.length === 0}
+                                        className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                        <Plus className="w-4 h-4" /> Add Order to Planners
                                     </button>
                                 </div>
                             </div>
