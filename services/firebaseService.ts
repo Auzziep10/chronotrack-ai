@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { User, UserSession, WorkLog, DailyTimeCard } from '../types';
+import { User, UserSession, WorkLog, DailyTimeCard, AppSettings, QuickTask } from '../types';
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
@@ -456,4 +456,37 @@ export const subscribeToSettings = (onUpdate: (settings: AppSettings | null) => 
             onUpdate(null);
         }
     });
+};
+
+// ─── QUICK TASKS ─────────────────────────────────────────────────────
+const QUICK_TASKS_COL = 'quickTasks';
+
+export const subscribeToQuickTasks = (onUpdate: (tasks: QuickTask[]) => void) => {
+    return onSnapshot(collection(db, QUICK_TASKS_COL), (snapshot) => {
+        if (snapshot.empty) {
+            onUpdate([]);
+            return;
+        }
+        const tasks = snapshot.docs.map(d => {
+            const data = d.data();
+            const { updatedAt, ...task } = data;
+            return task as QuickTask;
+        });
+        onUpdate(tasks);
+    });
+};
+
+export const firebaseSaveQuickTask = async (task: QuickTask): Promise<void> => {
+    const clean: any = {};
+    Object.entries(task).forEach(([k, v]) => {
+        if (v !== undefined) clean[k] = v;
+    });
+    await setDoc(doc(db, QUICK_TASKS_COL, task.id), {
+        ...clean,
+        updatedAt: serverTimestamp()
+    }, { merge: true });
+};
+
+export const firebaseDeleteQuickTask = async (taskId: string): Promise<void> => {
+    await deleteDoc(doc(db, QUICK_TASKS_COL, taskId));
 };

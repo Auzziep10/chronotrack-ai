@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy, Zap, MapPin } from 'lucide-react';
-import { User, DailySchedule, ScheduleBlock, Department } from '../types';
-import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock } from '../services/firebaseService';
+import { User, DailySchedule, ScheduleBlock, Department, QuickTask } from '../types';
+import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock, subscribeToQuickTasks, firebaseSaveQuickTask, firebaseDeleteQuickTask } from '../services/firebaseService';
 import { processExternalPlan } from '../services/geminiService';
 import { ShiftCalendarViews } from './ShiftCalendarViews';
 
@@ -93,18 +93,31 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     // Quick Tasks State
     const [showQuickTasks, setShowQuickTasks] = useState(false);
-    const [quickTasks, setQuickTasks] = useState<{ id: string; title: string; duration: number; location?: string; locations?: string[] }[]>(() => {
-        try {
-            const saved = localStorage.getItem('quickTasks');
-            return saved ? JSON.parse(saved) : [];
-        } catch {
-            return [];
-        }
-    });
+    const [quickTasks, setQuickTasks] = useState<QuickTask[]>([]);
 
     useEffect(() => {
-        localStorage.setItem('quickTasks', JSON.stringify(quickTasks));
-    }, [quickTasks]);
+        const unsubscribe = subscribeToQuickTasks(async (tasks) => {
+            if (tasks.length === 0) {
+                // Migrate tasks from local storage if any
+                try {
+                    const saved = localStorage.getItem('quickTasks');
+                    if (saved) {
+                        const localTasks = JSON.parse(saved) as QuickTask[];
+                        if (localTasks.length > 0) {
+                            for (const t of localTasks) {
+                                await firebaseSaveQuickTask(t);
+                            }
+                            localStorage.removeItem('quickTasks');
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to migrate local quick tasks:", e);
+                }
+            }
+            setQuickTasks(tasks);
+        });
+        return () => unsubscribe();
+    }, []);
 
     const [qtNewTitle, setQtNewTitle] = useState('');
     const [qtNewDuration, setQtNewDuration] = useState('60');
@@ -123,38 +136,43 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         return locs.includes(qtLocationFilter);
     }) : quickTasks;
 
-    const handleAddQuickTaskDef = () => {
+    const handleAddQuickTaskDef = async () => {
         if (!qtNewTitle.trim()) return;
         const newLocs = qtNewLocation.trim() ? qtNewLocation.split(',').map(s => s.trim()).filter(Boolean) : [];
-        setQuickTasks([...quickTasks, { id: Date.now().toString(), title: qtNewTitle, duration: parseInt(qtNewDuration) || 60, locations: newLocs }]);
+        await firebaseSaveQuickTask({
+            id: Date.now().toString(),
+            title: qtNewTitle,
+            duration: parseInt(qtNewDuration) || 60,
+            locations: newLocs
+        });
         setQtNewTitle('');
     };
 
-    const handleAddSpecificLocationToTask = (taskId: string, newLoc: string) => {
+    const handleAddSpecificLocationToTask = async (taskId: string, newLoc: string) => {
         if (!newLoc || !newLoc.trim()) return;
-        setQuickTasks(quickTasks.map(t => {
-            if (t.id === taskId) {
-                const locs = t.locations || (t.location ? [t.location] : []);
-                if (!locs.includes(newLoc.trim())) {
-                    return { ...t, locations: [...locs, newLoc.trim()] };
-                }
-            }
-            return t;
-        }));
+        const task = quickTasks.find(t => t.id === taskId);
+        if (!task) return;
+        const locs = task.locations || (task.location ? [task.location] : []);
+        if (!locs.includes(newLoc.trim())) {
+            await firebaseSaveQuickTask({
+                ...task,
+                locations: [...locs, newLoc.trim()]
+            });
+        }
     };
 
-    const handleRemoveLocationFromTask = (taskId: string, locToRemove: string) => {
-        setQuickTasks(quickTasks.map(t => {
-            if (t.id === taskId) {
-                const locs = t.locations || (t.location ? [t.location] : []);
-                return { ...t, locations: locs.filter(l => l !== locToRemove) };
-            }
-            return t;
-        }));
+    const handleRemoveLocationFromTask = async (taskId: string, locToRemove: string) => {
+        const task = quickTasks.find(t => t.id === taskId);
+        if (!task) return;
+        const locs = task.locations || (task.location ? [task.location] : []);
+        await firebaseSaveQuickTask({
+            ...task,
+            locations: locs.filter(l => l !== locToRemove)
+        });
     };
 
-    const handleDeleteQuickTaskDef = (id: string) => {
-        setQuickTasks(quickTasks.filter(t => t.id !== id));
+    const handleDeleteQuickTaskDef = async (id: string) => {
+        await firebaseDeleteQuickTask(id);
         if (qtSelectedTask === id) setQtSelectedTask(null);
     };
 

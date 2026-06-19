@@ -144,3 +144,11 @@ export interface DailySchedule {
   summary?: string;
   blocks: ScheduleBlock[];
 }
+
+export interface QuickTask {
+  id: string;
+  title: string;
+  duration: number;
+  location?: string;
+  locations?: string[];
+}
