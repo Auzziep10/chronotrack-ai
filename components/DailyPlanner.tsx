@@ -927,26 +927,26 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     {isAdminOrManager && activeView === 'tasks' && (
                         <>
                             <button
                                 onClick={() => setShowQuickTasks(true)}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
                             >
                                 <Zap className="w-4 h-4 text-orange-500" />
                                 Quick Tasks
                             </button>
                             <button
                                 onClick={() => setShowOrdersDialog(true)}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
                             >
                                 <ShoppingBag className="w-4 h-4 text-purple-500" />
                                 Orders
                             </button>
                             <button
                                 onClick={() => setIsPlanningMode(!isPlanningMode)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border ${isPlanningMode
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap shrink-0 ${isPlanningMode
                                     ? 'bg-orange-600 border-orange-700 text-white animate-pulse'
                                     : 'bg-zinc-900 border-zinc-700 text-white hover:bg-zinc-800'
                                     }`}
