@@ -519,7 +519,7 @@ const teamApp = teamApps.length === 0 ? initializeApp(teamDashboardConfig, 'team
 export const teamDb = getFirestore(teamApp);
 
 export const subscribeToProductionOrders = (onUpdate: (orders: any[]) => void) => {
-    const q = query(collection(teamDb, 'orders'), where('statusIndex', '==', 6));
+    const q = query(collection(teamDb, 'orders'), where('statusIndex', 'in', [6, 7]));
     return onSnapshot(q, (snapshot) => {
         const ordersData = snapshot.docs.map(doc => ({
             ...doc.data(),
