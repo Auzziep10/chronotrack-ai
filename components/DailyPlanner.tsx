@@ -20,6 +20,7 @@ const STATUS_COLORS = {
     pending: 'bg-orange-500 text-white border-orange-600', // "Not Started" / "Print 1..."
     completed: 'bg-green-500 text-white border-green-600',
     delayed: 'bg-red-500 text-white border-red-600',
+    order: 'bg-purple-600 text-white border-purple-700',
     default: 'bg-orange-400 text-white border-orange-500'
 };
 
@@ -27,7 +28,8 @@ const STATUS_LABELS = {
     active: 'Active',
     pending: 'Not Started',
     completed: 'Complete',
-    delayed: 'Delayed'
+    delayed: 'Delayed',
+    order: 'Orders'
 };
 
 export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
@@ -841,7 +843,9 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         // Our API has 'status': pending, in_progress, completed, delayed
         let colorClass = STATUS_COLORS.default;
 
-        if (block.status === 'in_progress') colorClass = STATUS_COLORS.active;
+        if (block.title?.startsWith('Order #') || block.description?.includes('Quick Order Task')) {
+            colorClass = STATUS_COLORS.order;
+        } else if (block.status === 'in_progress') colorClass = STATUS_COLORS.active;
         else if (block.status === 'completed') colorClass = STATUS_COLORS.completed;
         else if (block.status === 'delayed') colorClass = STATUS_COLORS.delayed;
         else if (block.status === 'pending') colorClass = STATUS_COLORS.pending;
@@ -954,10 +958,15 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                     </button>
                                     <button
                                         onClick={() => setShowOrdersDialog(true)}
-                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
+                                        className="relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
                                     >
                                         <ShoppingBag className="w-4 h-4 text-purple-500" />
                                         Orders
+                                        {productionOrders.length > 0 && (
+                                            <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-purple-600 px-1 text-[10px] font-bold text-white shadow-sm ring-1 ring-white">
+                                                {productionOrders.length}
+                                            </span>
+                                        )}
                                     </button>
                                 </>
                             )}
