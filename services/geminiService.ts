@@ -14,8 +14,8 @@ export const generateDailySummary = async (logs: WorkLog[]): Promise<string> => 
 
     const prompt = `You are an HR assistant. Please summarize the following work logs into a concise, professional paragraph highlighting the key achievements and total effort across departments. Make it readable for a manager.\n\nLogs:\n${logsContext}`;
 
-    const apiKey = "AIzaSyDomyUqxHFPOroRAmoeOZC-oFuLuSIcj_E";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyDomyUqxHFPOroRAmoeOZC-oFuLuSIcj_E";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
     
     const response = await fetch(url, {
       method: "POST",
@@ -79,8 +79,8 @@ ${rawPlanText}
 """
 `;
 
-    const apiKey = "AIzaSyDomyUqxHFPOroRAmoeOZC-oFuLuSIcj_E";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyDomyUqxHFPOroRAmoeOZC-oFuLuSIcj_E";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
     
     const response = await fetch(url, {
       method: "POST",

@@ -9,6 +9,7 @@ interface Props {
   onClose: () => void;
   onSave: (updatedUser: User) => void;
   isViewerAdmin?: boolean;
+  viewerUser?: User | null;
 }
 
 const ORDERED_DAYS: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -32,8 +33,25 @@ const generateTimeOptions = () => {
 
 const TIME_OPTIONS = generateTimeOptions();
 
-export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSave, isViewerAdmin = false }) => {
+export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSave, isViewerAdmin = false, viewerUser = null }) => {
   const [formData, setFormData] = useState<User | null>(null);
+
+  const viewerPerms = React.useMemo(() => {
+    if (!viewerUser) {
+      return isViewerAdmin ? ['admin'] : [];
+    }
+    if (Array.isArray(viewerUser.permissions)) return viewerUser.permissions;
+    if (typeof viewerUser.permissions === 'string') return (viewerUser.permissions as string).split(',').map(s => s.trim());
+    return [];
+  }, [viewerUser, isViewerAdmin]);
+
+  const viewerHasPermission = (permId: string) => {
+    const isViewerAdminUser = viewerUser?.role?.toLowerCase() === 'admin' || viewerPerms.includes('admin') || isViewerAdmin;
+    if (isViewerAdminUser) return true;
+    return viewerPerms.includes(permId);
+  };
+
+  const canEditPermissions = viewerHasPermission('manage_permissions');
 
   useEffect(() => {
     if (user) {
@@ -93,7 +111,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
       // If revoking admin/manager via checkbox, actively strip it from their role
       if (permId === 'admin' && newRole.toLowerCase() === 'admin') {
         newRole = 'Staff';
-      } else if (permId === 'manage_team' && newRole.toLowerCase() === 'manager') {
+      } else if (permId === 'manage_users' && newRole.toLowerCase() === 'manager') {
         newRole = 'Staff';
       }
     } else {
@@ -102,7 +120,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
       // If granting admin/manager via checkbox, force their active role text
       if (permId === 'admin') {
         newRole = 'admin';
-      } else if (permId === 'manage_team' && newRole.toLowerCase() !== 'admin') {
+      } else if (permId === 'manage_users' && newRole.toLowerCase() !== 'admin') {
         newRole = 'manager';
       }
     }
@@ -131,7 +149,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-8">
 
           {/* Work Information - Only visible to admins */}
-          {isViewerAdmin && (
+          {viewerHasPermission('manage_users') && (
             <section className="space-y-4">
               <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
                 <Briefcase className="w-4 h-4 text-zinc-500" /> Work Information
@@ -173,16 +191,13 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                       let perms = [...currentPerms];
 
                       // Auto-sync permissions array based on what they type in the role field
-                      if (val.toLowerCase() === 'admin' && !perms.includes('admin')) {
-                        perms.push('admin');
-                      } else if (val.toLowerCase() !== 'admin' && perms.includes('admin')) {
-                        perms = perms.filter(p => p !== 'admin');
-                      }
-
-                      if (val.toLowerCase() === 'manager' && !perms.includes('manage_team')) {
-                        perms.push('manage_team');
-                      } else if (val.toLowerCase() !== 'manager' && val.toLowerCase() !== 'admin' && perms.includes('manage_team')) {
-                        perms = perms.filter(p => p !== 'manage_team');
+                      if (val.toLowerCase() === 'admin') {
+                        perms = AVAILABLE_PERMISSIONS.map(p => p.id);
+                      } else if (val.toLowerCase() === 'manager') {
+                        const managerPerms = ['manage_users', 'edit_timecards', 'approve_timecards', 'manage_schedule', 'create_tasks', 'view_reports', 'view_payroll'];
+                        perms = Array.from(new Set([...perms.filter(p => p !== 'admin'), ...managerPerms]));
+                      } else if (val.toLowerCase() === 'staff' || val.toLowerCase() === 'terminal') {
+                        perms = perms.filter(p => p === 'mobile_clock_in');
                       }
 
                       setFormData({ ...formData, role: val, permissions: perms });
@@ -263,21 +278,23 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 </div>
 
                 {/* Row 5: Compensation */}
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">Hourly Pay Rate</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-zinc-400 font-medium">$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.payRate || ''}
-                      onChange={e => setFormData({ ...formData, payRate: parseFloat(e.target.value) || undefined })}
-                      placeholder="e.g. 15.50"
-                      className="w-full pl-7 text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-zinc-50"
-                    />
+                {viewerHasPermission('view_payroll') && (
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">Hourly Pay Rate</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-zinc-400 font-medium">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.payRate || ''}
+                        onChange={e => setFormData({ ...formData, payRate: parseFloat(e.target.value) || undefined })}
+                        placeholder="e.g. 15.50"
+                        className="w-full pl-7 text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-zinc-50"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Availability Grid */}
@@ -385,48 +402,72 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
           )}
 
           {/* Permissions Section - Only visible to admins */}
-          {isViewerAdmin && (
+          {viewerHasPermission('manage_users') && (
             <section className="space-y-4">
               <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
                 <Lock className="w-4 h-4 text-red-500" /> Bio-Lock Permissions
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {AVAILABLE_PERMISSIONS.map(perm => {
-                  let isSelected = false;
-                  if (Array.isArray(formData.permissions)) {
-                    isSelected = formData.permissions.includes(perm.id);
-                  } else if (typeof formData.permissions === 'string') {
-                    isSelected = formData.permissions.includes(perm.id);
-                  }
+              <div className="space-y-6">
+                {['Administration', 'Team Management', 'Time & Attendance', 'Operations', 'Reporting'].map(category => {
+                  const catPerms = AVAILABLE_PERMISSIONS.filter(p => p.category === category);
+                  if (catPerms.length === 0) return null;
 
                   return (
-                    <div
-                      key={perm.id}
-                      onClick={() => togglePermission(perm.id)}
-                      className={`
-                                      cursor-pointer p-3 rounded-lg border text-left transition-all
-                                      ${isSelected
-                          ? 'bg-red-50 border-red-200 shadow-sm'
-                          : 'bg-zinc-50 border-transparent hover:bg-zinc-100'}
-                                  `}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`
-                                          w-5 h-5 rounded flex items-center justify-center border transition-colors
-                                          ${isSelected
-                            ? 'bg-red-500 border-red-500 text-white'
-                            : 'bg-white border-zinc-300'}
-                                      `}>
-                          {isSelected && <Check className="w-3 h-3" />}
-                        </div>
-                        <div>
-                          <h5 className={`text-sm font-semibold ${isSelected ? 'text-red-700' : 'text-zinc-700'}`}>
-                            {perm.label}
-                          </h5>
-                          <p className="text-xs text-zinc-500 leading-tight mt-0.5">
-                            {perm.description}
-                          </p>
-                        </div>
+                    <div key={category} className="space-y-2">
+                      <h5 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-4 first:mt-0">
+                        {category}
+                      </h5>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {catPerms.map(perm => {
+                          let isSelected = false;
+                          if (Array.isArray(formData.permissions)) {
+                            isSelected = formData.permissions.includes(perm.id);
+                          } else if (typeof formData.permissions === 'string') {
+                            isSelected = formData.permissions.includes(perm.id);
+                          }
+
+                          return (
+                            <div
+                              key={perm.id}
+                              onClick={() => {
+                                if (canEditPermissions) {
+                                  togglePermission(perm.id);
+                                }
+                              }}
+                              className={`
+                                p-3 rounded-lg border text-left transition-all relative group/item
+                                ${canEditPermissions ? 'cursor-pointer hover:bg-zinc-100' : 'opacity-70 cursor-not-allowed'}
+                                ${isSelected
+                                  ? 'bg-red-50/70 border-red-200 shadow-sm'
+                                  : 'bg-zinc-50 border-transparent'}
+                              `}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className={`
+                                  w-5 h-5 rounded flex items-center justify-center border mt-0.5 transition-colors shrink-0
+                                  ${isSelected
+                                    ? 'bg-red-500 border-red-500 text-white'
+                                    : 'bg-white border-zinc-300'}
+                                `}>
+                                  {isSelected && <Check className="w-3 h-3" />}
+                                </div>
+                                <div className="flex-1">
+                                  <h5 className={`text-sm font-semibold ${isSelected ? 'text-red-700' : 'text-zinc-700'}`}>
+                                    {perm.label}
+                                  </h5>
+                                  <p className="text-xs text-zinc-500 leading-tight mt-0.5">
+                                    {perm.description}
+                                  </p>
+                                  {perm.detailedExplanation && (
+                                    <div className="mt-1.5 text-[10px] text-zinc-400 border-t border-zinc-200/40 pt-1 leading-normal">
+                                      {perm.detailedExplanation}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );

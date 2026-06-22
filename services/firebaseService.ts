@@ -43,6 +43,17 @@ export const firebaseSilentAuth = async (): Promise<void> => {
     } catch (e) {
         console.error("Firebase Anonymous Auth failed:", e);
     }
+
+    try {
+        const teamApps = getApps().filter(ap => ap.name === 'teamDashboard');
+        if (teamApps.length > 0) {
+            const teamAuth = getAuth(teamApps[0]);
+            await signInAnonymously(teamAuth);
+            console.log("Firebase Team Dashboard Anonymous Auth successful.");
+        }
+    } catch (e) {
+        console.warn("Firebase Team Dashboard Anonymous Auth failed (ensure Anonymous provider is enabled in Firebase Console for print-shop-os-f8092):", e);
+    }
 };
 
 const SESSIONS_COL = 'activeSessions';

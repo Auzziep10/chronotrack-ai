@@ -13,9 +13,10 @@ interface Props {
   onDeleteUser: (userId: string) => void;
   settings: AppSettings;
   onUpdateSettings: (settings: AppSettings) => void;
+  currentUser?: User | null;
 }
 
-export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddUser, onUpdateUser, onDeleteUser, settings, onUpdateSettings }) => {
+export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddUser, onUpdateUser, onDeleteUser, settings, onUpdateSettings, currentUser = null }) => {
   const [newUser, setNewUser] = useState({ name: '', role: '', pin: '', username: '', password: '' });
   const [userError, setUserError] = useState('');
 
@@ -499,6 +500,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
         onClose={() => setEditingUser(null)}
         onSave={onUpdateUser}
         isViewerAdmin={true}
+        viewerUser={currentUser}
       />
     </>
   );

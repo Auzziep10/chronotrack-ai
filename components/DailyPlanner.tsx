@@ -291,16 +291,20 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         }
     };
 
-    const isAdminOrManager = (() => {
-        let currentPerms: string[] = [];
+    const currentPerms = (() => {
+        let perms: string[] = [];
         if (currentUser) {
-            if (Array.isArray(currentUser.permissions)) currentPerms = currentUser.permissions;
-            else if (typeof currentUser.permissions === 'string') currentPerms = currentUser.permissions.split(',').map((s: string) => s.trim());
+            if (Array.isArray(currentUser.permissions)) perms = currentUser.permissions;
+            else if (typeof currentUser.permissions === 'string') perms = currentUser.permissions.split(',').map((s: string) => s.trim());
         }
-        const hasAdmin = currentPerms.includes('admin') || (currentUser?.role?.toLowerCase() === 'admin' && currentPerms.length === 0);
-        const hasManager = currentPerms.includes('manage_team') || (currentUser?.role?.toLowerCase() === 'manager' && currentPerms.length === 0);
-        return (hasAdmin || hasManager) && currentUser?.username?.toLowerCase() !== 'warehouse';
+        return perms;
     })();
+
+    const hasAdmin = currentPerms.includes('admin') || currentUser?.role?.toLowerCase() === 'admin';
+    const canManageSchedule = (hasAdmin || currentPerms.includes('manage_schedule') || currentPerms.includes('manage_team') || (currentUser?.role?.toLowerCase() === 'manager' && currentPerms.length === 0)) && currentUser?.username?.toLowerCase() !== 'warehouse';
+    const canCreateTasks = (hasAdmin || currentPerms.includes('create_tasks') || currentPerms.includes('manage_schedule') || currentPerms.includes('manage_team') || (currentUser?.role?.toLowerCase() === 'manager' && currentPerms.length === 0)) && currentUser?.username?.toLowerCase() !== 'warehouse';
+
+    const isAdminOrManager = canManageSchedule;
 
     // Time marker for current time
     const [currentTimePercentage, setCurrentTimePercentage] = useState<number | null>(null);
@@ -435,6 +439,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 tasks = JSON.parse(cleaned);
             }
             
+            if (tasks && typeof tasks === 'object' && 'error' in tasks) {
+                throw new Error(tasks.error);
+            }
+
             if (!Array.isArray(tasks)) {
                 throw new Error("Parsed result is not an array");
             }
@@ -514,9 +522,14 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             setUnassignedBlocks(prev => [...prev, ...newUnassigned]);
             setTranscript('');
             alert(`AI Generation Complete! Auto-assigned ${autoAssigned} tasks. ${newUnassigned.length > 0 ? `${newUnassigned.length} tasks need manual assignment.` : ''}`);
-        } catch (err) {
+        } catch (err: any) {
             console.error("AI Generation failed:", err);
-            alert("Failed to parse schedule from text. Please ensure it contains recognizable names and times.");
+            const msg = err?.message || String(err);
+            if (msg.includes("leaked") || msg.includes("API key") || msg.includes("PLACEHOLDER") || msg.includes("API_KEY") || msg.includes("unauthorized")) {
+                alert("⚠️ AI Schedule Generator: The Gemini API key is missing or has been disabled. Please configure VITE_GEMINI_API_KEY in your environment variables (.env.local or Vercel dashboard).");
+            } else {
+                alert("Failed to parse schedule from text. Please ensure it contains recognizable names and times.");
+            }
         } finally {
             setIsGenerating(false);
         }
@@ -928,32 +941,38 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                    {isAdminOrManager && activeView === 'tasks' && (
+                    {activeView === 'tasks' && (
                         <>
-                            <button
-                                onClick={() => setShowQuickTasks(true)}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
-                            >
-                                <Zap className="w-4 h-4 text-orange-500" />
-                                Quick Tasks
-                            </button>
-                            <button
-                                onClick={() => setShowOrdersDialog(true)}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
-                            >
-                                <ShoppingBag className="w-4 h-4 text-purple-500" />
-                                Orders
-                            </button>
-                            <button
-                                onClick={() => setIsPlanningMode(!isPlanningMode)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap shrink-0 ${isPlanningMode
-                                    ? 'bg-orange-600 border-orange-700 text-white animate-pulse'
-                                    : 'bg-zinc-900 border-zinc-700 text-white hover:bg-zinc-800'
-                                    }`}
-                            >
-                                <Wand2 className="w-4 h-4" />
-                                {isPlanningMode ? 'Exit Planning Mode' : 'Build Schedule'}
-                            </button>
+                            {canCreateTasks && (
+                                <>
+                                    <button
+                                        onClick={() => setShowQuickTasks(true)}
+                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
+                                    >
+                                        <Zap className="w-4 h-4 text-orange-500" />
+                                        Quick Tasks
+                                    </button>
+                                    <button
+                                        onClick={() => setShowOrdersDialog(true)}
+                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
+                                    >
+                                        <ShoppingBag className="w-4 h-4 text-purple-500" />
+                                        Orders
+                                    </button>
+                                </>
+                            )}
+                            {canManageSchedule && (
+                                <button
+                                    onClick={() => setIsPlanningMode(!isPlanningMode)}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap shrink-0 ${isPlanningMode
+                                        ? 'bg-orange-600 border-orange-700 text-white animate-pulse'
+                                        : 'bg-zinc-900 border-zinc-700 text-white hover:bg-zinc-800'
+                                        }`}
+                                >
+                                    <Wand2 className="w-4 h-4" />
+                                    {isPlanningMode ? 'Exit Planning Mode' : 'Build Schedule'}
+                                </button>
+                            )}
                         </>
                     )}
 

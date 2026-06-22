@@ -136,10 +136,86 @@ export const DEFAULT_USERS: User[] = [
 ];
 
 export const AVAILABLE_PERMISSIONS = [
-  { id: 'admin', label: 'Administrator', description: 'Full system access' },
-  { id: 'manage_team', label: 'Manage Team', description: 'Add/Edit users & profiles' },
-  { id: 'manage_timecards', label: 'Manage Timecards', description: 'Edit time logs & approve cards' },
-  { id: 'view_reports', label: 'View Reports', description: 'Access to productivity & payroll reports' },
-  { id: 'manage_settings', label: 'System Settings', description: 'Configure pay periods & app settings' },
-  { id: 'mobile_clock_in', label: 'Remote / Mobile Clock-in', description: 'Can clock in/out directly from their personal device' }
+  // Administration
+  {
+    id: 'admin',
+    label: 'Full Administrator Access',
+    description: 'Bypass all checks & grant full system control.',
+    category: 'Administration',
+    detailedExplanation: 'Gives unrestricted access to the entire system, including editing admin profiles, deleting users, viewing all payroll costs, and changing any application settings.'
+  },
+  {
+    id: 'manage_settings',
+    label: 'Manage System Settings',
+    description: 'Configure pay periods, app intervals, and integrations.',
+    category: 'Administration',
+    detailedExplanation: 'Allows changing system settings, configuring pay frequencies, editing clock-in verification intervals, and toggling Discord or email notifications.'
+  },
+  {
+    id: 'mobile_clock_in',
+    label: 'Remote / Mobile Clock-in',
+    description: 'Clock in/out directly from a personal mobile device.',
+    category: 'Administration',
+    detailedExplanation: 'Enables the user to clock in/out of their shifts using the Clockwork mobile app on their personal phone, bypassing physical terminal station requirements.'
+  },
+  // Team Management
+  {
+    id: 'manage_users',
+    label: 'Manage Staff Profiles',
+    description: 'Create and update basic employee records.',
+    category: 'Team Management',
+    detailedExplanation: 'Allows adding new team members, editing employee names, usernames, phone numbers, email addresses, and setting login PINs.'
+  },
+  {
+    id: 'manage_permissions',
+    label: 'Assign Roles & Permissions',
+    description: 'Grant or revoke Bio-Lock permissions for staff.',
+    category: 'Team Management',
+    detailedExplanation: 'Allows security management by checking or unchecking permission boxes and editing system roles for other users (except admin privileges unless they are an admin).'
+  },
+  // Time & Attendance
+  {
+    id: 'edit_timecards',
+    label: 'Edit Timecards & Logs',
+    description: 'Modify clock times, log absences, and edit notes.',
+    category: 'Time & Attendance',
+    detailedExplanation: 'Allows manually correcting clock-in and clock-out timestamps, writing manager context notes, adding retroactive shifts, and logging sick/emergency leave.'
+  },
+  {
+    id: 'approve_timecards',
+    label: 'Approve Payroll Hours',
+    description: 'Approve timecards to finalize hours for payroll.',
+    category: 'Time & Attendance',
+    detailedExplanation: 'Allows managers to review work logs, sign off/approve completed timecards, and mark them as ready for payroll export.'
+  },
+  // Operations
+  {
+    id: 'manage_schedule',
+    label: 'Manage Shift Schedules',
+    description: 'Create shift schedules and assign employee shifts.',
+    category: 'Operations',
+    detailedExplanation: 'Enables access to the Daily Planner tab to create expected shift blocks, adjust shift hours, and manage shift calendar views.'
+  },
+  {
+    id: 'create_tasks',
+    label: 'Create & Assign Tasks',
+    description: 'Create Quick Tasks and assign them to staff.',
+    category: 'Operations',
+    detailedExplanation: 'Enables defining Quick Tasks templates, managing orders, and assigning specific tasks to employees on the Daily Planner.'
+  },
+  // Reporting
+  {
+    id: 'view_reports',
+    label: 'View Labor & Productivity Reports',
+    description: 'Access department activity and work hour metrics.',
+    category: 'Reporting',
+    detailedExplanation: 'Allows viewing performance graphs, department labor hour totals, efficiency metrics, and general activity summaries on the dashboard.'
+  },
+  {
+    id: 'view_payroll',
+    label: 'View Pay Rates & Financial Cost',
+    description: 'Access pay rates and estimated payroll labor cost.',
+    category: 'Reporting',
+    detailedExplanation: 'Gives visibility into hourly pay rates on staff profiles and shows total estimated wage costs on department and payroll reports.'
+  }
 ];

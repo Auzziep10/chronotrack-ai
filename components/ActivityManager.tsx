@@ -140,10 +140,42 @@ interface Props {
   onClockOut?: (user: User) => void;
   onUpdateUser?: (updatedUser: User) => void;
   onLogAbsence?: (user: User, type: 'No-Call No-Show' | 'Sick' | 'Emergency', notes?: string) => Promise<any>;
+  currentUser?: User | null;
 }
 
-export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessions = {}, onClockIn, onClockOut, onUpdateUser, onLogAbsence }) => {
+export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessions = {}, onClockIn, onClockOut, onUpdateUser, onLogAbsence, currentUser = null }) => {
+  const viewerPerms = React.useMemo(() => {
+    if (!currentUser) return [];
+    if (Array.isArray(currentUser.permissions)) return currentUser.permissions;
+    if (typeof currentUser.permissions === 'string') return (currentUser.permissions as string).split(',').map(s => s.trim());
+    return [];
+  }, [currentUser]);
+
+  const viewerHasPermission = React.useCallback((permId: string) => {
+    if (!currentUser) return false;
+    const isUserAdmin = currentUser.role?.toLowerCase() === 'admin' || viewerPerms.includes('admin');
+    if (isUserAdmin) return true;
+    return viewerPerms.includes(permId);
+  }, [currentUser, viewerPerms]);
+
+  // Allowed views based on permissions
+  const allowedViews = React.useMemo(() => {
+    const views: string[] = [];
+    if (viewerHasPermission('view_reports')) views.push('departments');
+    if (viewerHasPermission('manage_users')) views.push('users');
+    if (viewerHasPermission('edit_timecards')) views.push('timecards');
+    if (viewerHasPermission('manage_schedule')) views.push('planning');
+    return views;
+  }, [viewerHasPermission]);
+
   const [activeView, setActiveView] = useState<'departments' | 'users' | 'timecards' | 'planning'>('departments');
+
+  React.useEffect(() => {
+    if (allowedViews.length > 0 && !allowedViews.includes(activeView)) {
+      setActiveView(allowedViews[0] as any);
+    }
+  }, [allowedViews, activeView]);
+
   const [selectedDept, setSelectedDept] = useState<Department | 'All'>('All');
   const [selectedUser, setSelectedUser] = useState<string | 'All'>('All');
   const [selectedUserForProfile, setSelectedUserForProfile] = useState<User | null>(null);
@@ -516,9 +548,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         const grossPresses = '';
         const shirtsDowned = '';
         const netPresses = '';
-        const shiftHrlyPay = user?.payRate ? (card.totalHours * user.payRate).toFixed(2) : '';
+        const shiftHrlyPay = (viewerHasPermission('view_payroll') && user?.payRate) ? user.payRate.toFixed(2) : '';
         const shiftInctvPay = '';
-        const shiftTotalPay = user?.payRate ? (card.totalHours * user.payRate).toFixed(2) : '';
+        const shiftTotalPay = (viewerHasPermission('view_payroll') && user?.payRate) ? (card.totalHours * user.payRate).toFixed(2) : '';
         const timePaused = (card.totalIdleHours || 0).toFixed(2);
 
         return [
@@ -645,7 +677,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             { id: 'users', icon: Users, label: 'Users' },
             { id: 'timecards', icon: Clock, label: 'Time' },
             { id: 'planning', icon: Target, label: 'Planning' }
-          ].map((tab) => (
+          ].filter(tab => allowedViews.includes(tab.id)).map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveView(tab.id as any)}
@@ -1223,6 +1255,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             setSelectedUserForProfile(null); 
           }}
           isViewerAdmin={true}
+          viewerUser={currentUser}
         />
       )}
 

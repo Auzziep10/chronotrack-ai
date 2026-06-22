@@ -341,8 +341,8 @@ const App: React.FC = () => {
     if (Array.isArray(currentUser.permissions)) currentPerms = currentUser.permissions;
     else if (typeof currentUser.permissions === 'string') currentPerms = currentUser.permissions.split(',').map((s: string) => s.trim());
   }
-  const isAdmin = currentPerms.includes('admin') || (currentUser?.role?.toLowerCase() === 'admin' && currentPerms.length === 0);
-  const isManager = currentPerms.includes('manage_team') || (currentUser?.role?.toLowerCase() === 'manager' && currentPerms.length === 0);
+  const isAdmin = currentPerms.includes('admin') || (currentUser?.role?.toLowerCase() === 'admin');
+  const isManager = currentPerms.includes('manage_team') || currentPerms.includes('manage_users') || currentPerms.includes('edit_timecards') || currentPerms.includes('manage_schedule') || currentPerms.includes('view_reports') || (currentUser?.role?.toLowerCase() === 'manager');
   const isAdminOrManager = isAdmin || isManager;
 
   // Handle Role-based Tab Restrictions
@@ -895,7 +895,7 @@ const App: React.FC = () => {
           ) : activeTab === 'documents' ? (
             <PrintableForms currentUser={currentUser} />
           ) : (
-            <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} onClockIn={handleClockIn} onClockOut={handleClockOut} onUpdateUser={handleUpdateUser} onLogAbsence={handleLogAbsence} />
+            <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} onClockIn={handleClockIn} onClockOut={handleClockOut} onUpdateUser={handleUpdateUser} onLogAbsence={handleLogAbsence} currentUser={currentUser} />
           )}
         </div>
       </main>
@@ -930,6 +930,7 @@ const App: React.FC = () => {
         }}
         settings={appSettings}
         onUpdateSettings={handleUpdateSettings}
+        currentUser={currentUser}
       />
     </div>
   );
