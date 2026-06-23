@@ -815,9 +815,16 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     };
 
     const getBlockStyles = (block: ScheduleBlock, overlapIndex: number = 0) => {
+        if (!block || !block.startTime || !block.endTime) {
+            return { display: 'none' };
+        }
         // Calculate position
         const start = new Date(block.startTime);
         const end = new Date(block.endTime);
+
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            return { display: 'none' };
+        }
 
         // Normalize to current day's hours if timezone issues, 
         // but assuming ISO strings are correct in local or UTC

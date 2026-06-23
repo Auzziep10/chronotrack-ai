@@ -397,7 +397,7 @@ export const subscribeToShiftBlocks = (onUpdate: (blocks: any[]) => void) => {
         const blocks = snapshot.docs.map(d => {
             const data = d.data();
             const { updatedAt, ...block } = data; // Strip Firestore-specific fields for clean state
-            return block;
+            return { id: d.id, ...block };
         });
         onUpdate(blocks);
     });
@@ -408,7 +408,7 @@ export const firebaseGetShiftBlocks = async (): Promise<any[]> => {
     const snapshot = await getDocs(collection(db, SHIFTS_COL));
     return snapshot.docs.map(d => {
         const { updatedAt, ...block } = d.data();
-        return block;
+        return { id: d.id, ...block };
     });
 };
 
