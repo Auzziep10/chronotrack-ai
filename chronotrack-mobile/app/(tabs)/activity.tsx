@@ -28,8 +28,13 @@ export default function ActivityScreen() {
       setShifts(myShifts);
       
       // Auto-select task if none selected and there are shifts today
-      const today = new Date().toDateString();
-      const todayTasks = myShifts.filter(s => !s.title.startsWith('[SHIFT]') && new Date(s.startTime).toDateString() === today);
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const isShiftToday = (s: any) => {
+        if (s.date) return s.date === todayStr;
+        return new Date(s.startTime).toDateString() === today.toDateString();
+      };
+      const todayTasks = myShifts.filter(s => !s.title.startsWith('[SHIFT]') && isShiftToday(s));
       if (todayTasks.length > 0 && !taskNameRef.current) {
         setIsCustomTask(false);
         const active = todayTasks.find(s => s.status === 'in_progress') || todayTasks[0];
@@ -207,8 +212,13 @@ export default function ActivityScreen() {
         </View>
 
         {(() => {
-          const today = new Date().toDateString();
-          const currentShiftBlock = shifts.find(s => s.title.startsWith('[SHIFT]') && new Date(s.startTime).toDateString() === today);
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          const isShiftToday = (s: any) => {
+            if (s.date) return s.date === todayStr;
+            return new Date(s.startTime).toDateString() === today.toDateString();
+          };
+          const currentShiftBlock = shifts.find(s => s.title.startsWith('[SHIFT]') && isShiftToday(s));
           
           if (!currentShiftBlock) return null;
           
@@ -265,8 +275,13 @@ export default function ActivityScreen() {
         <Text style={styles.label}>Task Name</Text>
         
         {(() => {
-          const today = new Date().toDateString();
-          const taskBlocks = shifts.filter(s => !s.title.startsWith('[SHIFT]') && new Date(s.startTime).toDateString() === today);
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          const isShiftToday = (s: any) => {
+            if (s.date) return s.date === todayStr;
+            return new Date(s.startTime).toDateString() === today.toDateString();
+          };
+          const taskBlocks = shifts.filter(s => !s.title.startsWith('[SHIFT]') && isShiftToday(s));
           
           return taskBlocks.length > 0 ? (
             <View style={{ gap: theme.spacing.md, marginBottom: theme.spacing.md, marginTop: theme.spacing.sm }}>
@@ -437,8 +452,13 @@ export default function ActivityScreen() {
         })()}
 
         {(() => {
-          const today = new Date().toDateString();
-          const todayShifts = shifts.filter(s => new Date(s.startTime).toDateString() === today);
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          const isShiftToday = (s: any) => {
+            if (s.date) return s.date === todayStr;
+            return new Date(s.startTime).toDateString() === today.toDateString();
+          };
+          const todayShifts = shifts.filter(s => isShiftToday(s));
           if (!todayShifts.length || isCustomTask) {
             return (
               <TextInput

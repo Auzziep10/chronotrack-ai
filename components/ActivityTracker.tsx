@@ -116,11 +116,21 @@ export const ActivityTracker: React.FC<Props> = ({
       if (task.title && task.title.startsWith('[SHIFT]')) return false;
 
       // Only show tasks scheduled for today
-      const taskDate = new Date(task.startTime);
       const today = new Date();
-      const isToday = taskDate.getDate() === today.getDate() &&
-                      taskDate.getMonth() === today.getMonth() &&
-                      taskDate.getFullYear() === today.getFullYear();
+      const isToday = (() => {
+        if (task.date) {
+          const yyyy = today.getFullYear();
+          const mm = String(today.getMonth() + 1).padStart(2, '0');
+          const dd = String(today.getDate()).padStart(2, '0');
+          const todayStr = `${yyyy}-${mm}-${dd}`;
+          return task.date === todayStr;
+        }
+        if (!task.startTime) return false;
+        const taskDate = new Date(task.startTime);
+        return taskDate.getDate() === today.getDate() &&
+               taskDate.getMonth() === today.getMonth() &&
+               taskDate.getFullYear() === today.getFullYear();
+      })();
       
       if (!isToday) return false;
 

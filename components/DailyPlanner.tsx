@@ -887,8 +887,17 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         };
 
         const dayBlocks = shiftBlocks.filter(b => {
+             if (!isMatch(b.assignedTo)) return false;
+             if (b.date) {
+                 const yyyy = currentDate.getFullYear();
+                 const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
+                 const dd = String(currentDate.getDate()).padStart(2, '0');
+                 const currentStr = `${yyyy}-${mm}-${dd}`;
+                 return b.date === currentStr;
+             }
+             if (!b.startTime) return false;
              const bDate = new Date(b.startTime);
-             return isMatch(b.assignedTo) && bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
+             return bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
         });
 
         if (activeView === 'shifts') {

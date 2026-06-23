@@ -35,9 +35,14 @@ export default function PlannerScreen() {
     );
   }
 
-  const today = new Date().toDateString();
-  const todayShifts = shifts.filter(s => new Date(s.startTime).toDateString() === today);
-  const upcomingShifts = shifts.filter(s => new Date(s.startTime).toDateString() !== today && new Date(s.startTime).getTime() > Date.now());
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const isShiftToday = (s: any) => {
+    if (s.date) return s.date === todayStr;
+    return new Date(s.startTime).toDateString() === today.toDateString();
+  };
+  const todayShifts = shifts.filter(s => isShiftToday(s));
+  const upcomingShifts = shifts.filter(s => !isShiftToday(s) && new Date(s.startTime).getTime() > Date.now());
 
   const renderShift = (shift: any) => {
     const start = new Date(shift.startTime);
