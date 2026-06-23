@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Settings, Database, Cloud, Info, UserPlus, Users, Calendar, Check, UserCog, Trash2 } from 'lucide-react';
+import { X, Settings, Cloud, Info, UserPlus, Users, Calendar, Check, UserCog, Trash2 } from 'lucide-react';
 import { User, AppSettings, PayFrequency, DayOfWeek, DailyAvailability, Department } from '../types';
 import { DAYS_OF_WEEK } from '../constants';
 import { UserProfileDialog } from './UserProfileDialog';
@@ -441,27 +441,6 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h4 className="text-sm font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
-                <Database className="w-4 h-4 text-red-600" /> Data Management
-              </h4>
-              <div className="bg-white p-4 rounded-lg border border-red-100">
-                <p className="text-sm text-zinc-600 mb-3">
-                  Clear all local data including active sessions, user accounts, and settings. This cannot be undone.
-                </p>
-                <button
-                  onClick={() => {
-                    if (confirm('Are you sure you want to reset the application? All data will be lost.')) {
-                      localStorage.clear();
-                      window.location.reload();
-                    }
-                  }}
-                  className="text-sm bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-50 hover:border-red-300 transition-colors font-medium"
-                >
-                  Reset Application Data
-                </button>
-              </div>
-            </div>
 
             <div className="space-y-4">
               <h4 className="text-sm font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
