@@ -85,6 +85,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formRestricted, setFormRestricted] = useState(false);
+  const [formNotificationsEnabled, setFormNotificationsEnabled] = useState(true);
   const [formError, setFormError] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -345,7 +346,8 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
       id: sanitizedName,
       name: sanitizedName,
       desc: formDesc.trim() || 'No description provided',
-      restricted: formRestricted
+      restricted: formRestricted,
+      notificationsEnabled: formNotificationsEnabled
     };
 
     if (isFirebaseConfigured()) {
@@ -379,7 +381,8 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
     const updatedChannel: ChatChannel = {
       ...editingChannel,
       desc: formDesc.trim() || 'No description provided',
-      restricted: formRestricted
+      restricted: formRestricted,
+      notificationsEnabled: formNotificationsEnabled
     };
 
     if (isFirebaseConfigured()) {
@@ -497,6 +500,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                     setFormName('');
                     setFormDesc('');
                     setFormRestricted(false);
+                    setFormNotificationsEnabled(true);
                     setFormError('');
                     setShowAddModal(true);
                   }}
@@ -539,6 +543,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                           setFormName(ch.name);
                           setFormDesc(ch.desc);
                           setFormRestricted(!!ch.restricted);
+                          setFormNotificationsEnabled(ch.notificationsEnabled !== false);
                           setFormError('');
                           setShowEditModal(true);
                         }}
@@ -845,6 +850,19 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                   </label>
                 </div>
 
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="notificationsEnabled"
+                    checked={formNotificationsEnabled}
+                    onChange={(e) => setFormNotificationsEnabled(e.target.checked)}
+                    className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                  />
+                  <label htmlFor="notificationsEnabled" className="text-xs font-bold text-zinc-700 select-none">
+                    Enable Push Notifications (Globally enabled for mobile alerts)
+                  </label>
+                </div>
+
                 <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
@@ -906,6 +924,19 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                   />
                   <label htmlFor="edit-restricted" className="text-xs font-bold text-zinc-700 select-none">
                     Restricted (Read-Only for Staff, writable by Admins/Managers)
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="edit-notificationsEnabled"
+                    checked={formNotificationsEnabled}
+                    onChange={(e) => setFormNotificationsEnabled(e.target.checked)}
+                    className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                  />
+                  <label htmlFor="edit-notificationsEnabled" className="text-xs font-bold text-zinc-700 select-none">
+                    Enable Push Notifications (Globally enabled for mobile alerts)
                   </label>
                 </div>
 

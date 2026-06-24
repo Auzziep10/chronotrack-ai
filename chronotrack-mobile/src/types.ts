@@ -70,6 +70,7 @@ export interface User {
   correctionNotes?: string;
   timeOffRequests?: TimeOffRequest[];
   onboardingDocuments?: Array<{ id: string, formType: string, url: string, uploadedAt: string, fileName: string }>;
+  mutedChannels?: string[];
 }
 
 export interface UserSession {
@@ -141,4 +142,32 @@ export interface DailySchedule {
   date: string; // ISO date string
   summary?: string;
   blocks: ScheduleBlock[];
+}
+
+export interface QuickTask {
+  id: string;
+  title: string;
+  duration: number;
+  location?: string;
+  locations?: string[];
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  senderRole: string;
+  content: string;
+  timestamp: number;
+  channel: string;
+  imageUrl?: string;
+}
+
+export interface ChatChannel {
+  id: string;
+  name: string;
+  desc: string;
+  restricted?: boolean;
+  notificationsEnabled?: boolean;
 }

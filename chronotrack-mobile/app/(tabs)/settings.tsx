@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, Alert } from 'react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import { theme } from '../../src/theme';
-import { Settings as SettingsIcon, Bell, Save, User as UserIcon } from 'lucide-react-native';
-import { firebaseUpdateUser } from '../../src/services/firebaseService';
+import { Settings as SettingsIcon, Bell, Save, User as UserIcon, MessageSquare } from 'lucide-react-native';
+import { firebaseUpdateUser, subscribeToChatChannels } from '../../src/services/firebaseService';
+import { ChatChannel } from '../../src/types';
 
 export default function SettingsScreen() {
   const { currentUser } = useAuth();
@@ -14,6 +15,30 @@ export default function SettingsScreen() {
     currentUser?.pushAlertPrefs || []
   );
 
+  // Local state for channel notification settings
+  const [channels, setChannels] = useState<ChatChannel[]>([]);
+  const [mutedChannels, setMutedChannels] = useState<string[]>(
+    currentUser?.mutedChannels || []
+  );
+
+  // Sync state when currentUser is loaded or changes
+  useEffect(() => {
+    if (currentUser) {
+      setMutedChannels(currentUser.mutedChannels || []);
+      setPushAlertPrefs(currentUser.pushAlertPrefs || []);
+    }
+  }, [currentUser]);
+
+  // Subscribe to chat channels
+  useEffect(() => {
+    const unsubscribe = subscribeToChatChannels((loadedChannels) => {
+      // Filter to only show channels that have notifications enabled globally by admins
+      const activeChannels = loadedChannels.filter(c => c.notificationsEnabled !== false);
+      setChannels(activeChannels);
+    });
+    return unsubscribe;
+  }, []);
+
   const togglePushAlert = (minutes: number) => {
     setPushAlertPrefs(prev => 
       prev.includes(minutes)
@@ -22,12 +47,21 @@ export default function SettingsScreen() {
     );
   };
 
+  const toggleChannelMute = (channelId: string) => {
+    setMutedChannels(prev =>
+      prev.includes(channelId)
+        ? prev.filter(id => id !== channelId)
+        : [...prev, channelId]
+    );
+  };
+
   const handleSave = async () => {
     if (!currentUser) return;
     setIsSaving(true);
     try {
       await firebaseUpdateUser(currentUser.id, {
-        pushAlertPrefs: pushAlertPrefs
+        pushAlertPrefs: pushAlertPrefs,
+        mutedChannels: mutedChannels
       });
       Alert.alert('Success', 'Settings saved successfully');
     } catch (e) {
@@ -90,6 +124,43 @@ export default function SettingsScreen() {
           ))}
         </View>
       </View>
+
+      {channels.length > 0 && (
+        <View style={[styles.card, { marginTop: theme.spacing.lg }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: theme.spacing.md }}>
+            <MessageSquare size={24} color={theme.colors.primary} />
+            <Text style={styles.sectionTitle}>Chat Notifications</Text>
+          </View>
+          
+          <Text style={[styles.label, { marginBottom: 16 }]}>
+            Toggle notifications for specific channels. Only channels with global alerts enabled by administrators are shown here.
+          </Text>
+          
+          <View style={{ gap: 12 }}>
+            {channels.map(channel => {
+              const isEnabled = !mutedChannels.includes(channel.id);
+              return (
+                <View key={channel.id} style={styles.channelRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={styles.channelName}>#{channel.name}</Text>
+                    {channel.desc ? (
+                      <Text style={styles.channelDesc} numberOfLines={1}>
+                        {channel.desc}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Switch
+                    value={isEnabled}
+                    onValueChange={() => toggleChannelMute(channel.id)}
+                    trackColor={{ false: theme.colors.cardBorder, true: theme.colors.primary + '80' }}
+                    thumbColor={isEnabled ? theme.colors.primary : '#ccc'}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
 
       <TouchableOpacity 
         style={[styles.button, { marginTop: theme.spacing.xl }]} 
@@ -170,5 +241,23 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  channelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.cardBorder,
+  },
+  channelName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  channelDesc: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
   },
 });

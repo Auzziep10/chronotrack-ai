@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { ClipboardList, Calendar, Settings as SettingsIcon } from 'lucide-react-native';
+import { ClipboardList, Calendar, Settings as SettingsIcon, MessageSquare } from 'lucide-react-native';
 import { theme } from '../../src/theme';
 
 export default function TabsLayout() {
@@ -38,6 +38,13 @@ export default function TabsLayout() {
         options={{
           title: 'Planner',
           tabBarIcon: ({ color }) => <Calendar color={color} size={24} />,
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: 'Chat',
+          tabBarIcon: ({ color }) => <MessageSquare color={color} size={24} />,
         }}
       />
       <Tabs.Screen

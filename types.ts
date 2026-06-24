@@ -70,6 +70,7 @@ export interface User {
   correctionNotes?: string;
   timeOffRequests?: TimeOffRequest[];
   onboardingDocuments?: Array<{ id: string, formType: string, url: string, uploadedAt: string, fileName: string }>;
+  mutedChannels?: string[];
 }
 
 export interface UserSession {
@@ -170,5 +171,6 @@ export interface ChatChannel {
   name: string;
   desc: string;
   restricted?: boolean;
+  notificationsEnabled?: boolean;
 }
 

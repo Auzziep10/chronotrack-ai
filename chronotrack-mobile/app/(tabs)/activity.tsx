@@ -212,7 +212,7 @@ export default function ActivityScreen() {
   const minutes = Math.floor((sessionDuration % (1000 * 60 * 60)) / (1000 * 60));
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: theme.spacing.lg }}>
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: theme.spacing.lg }} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
       
       {/* Status Card */}
       <View style={styles.card}>
