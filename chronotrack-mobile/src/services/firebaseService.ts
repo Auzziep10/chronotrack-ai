@@ -226,6 +226,13 @@ export const firebaseGetUsers = async (): Promise<User[]> => {
     });
 };
 
+export const firebaseUpdateUser = async (userId: string, updates: Partial<User>): Promise<void> => {
+    await updateDoc(doc(db, USERS_COL, userId), {
+        ...updates,
+        updatedAt: serverTimestamp()
+    });
+};
+
 // ─── SHIFT SCHEDULES ────────────────────────────────────────────────────────
 
 export const subscribeToShiftBlocks = (onUpdate: (blocks: any[]) => void) => {

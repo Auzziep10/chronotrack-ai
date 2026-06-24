@@ -15,6 +15,13 @@ export default function ActivityScreen() {
   const [shifts, setShifts] = useState<any[]>([]);
   const [isCustomTask, setIsCustomTask] = useState(true);
   const [progress, setProgress] = useState<number>(0);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 10000);
+    return () => clearInterval(timer);
+  }, []);
   
   const taskNameRef = React.useRef(taskName);
   useEffect(() => {
@@ -110,6 +117,11 @@ export default function ActivityScreen() {
       return;
     }
 
+    if (!notes.trim()) {
+      Alert.alert('Error', 'Please enter additional details / notes');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const now = Date.now();
@@ -154,7 +166,7 @@ export default function ActivityScreen() {
       if (!isCustomTask && progress > 0) {
         const matchingShift = shifts.find(s => s.title === taskName);
         if (matchingShift) {
-           await firebaseUpdateTaskProgress(matchingShift.id, progress, notes, currentUser.name);
+           await firebaseUpdateTaskProgress(matchingShift.id, progress, notes, currentUser?.name || '');
         }
       }
       
@@ -235,6 +247,41 @@ export default function ActivityScreen() {
              </View>
           );
         })()}
+
+        {/* Next Check-In Progress */}
+        {(() => {
+          const intervalHours = appSettings?.checkInIntervalHours || 1;
+          const intervalMs = intervalHours * 60 * 60 * 1000;
+          const lastLog = activeSession.lastLogTime;
+          const nextCheckIn = lastLog + intervalMs;
+          const elapsed = currentTime - lastLog;
+          
+          const isOverdue = currentTime >= nextCheckIn;
+          const timeLeftMs = Math.max(0, nextCheckIn - currentTime);
+          
+          let checkInPct = (elapsed / intervalMs) * 100;
+          if (checkInPct > 100) checkInPct = 100;
+          
+          const minsLeft = Math.ceil(timeLeftMs / 60000);
+          
+          return (
+             <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                 <Text style={{ fontSize: 12, fontWeight: 'bold', color: theme.colors.textSecondary }}>TIME UNTIL NEXT CHECK-IN</Text>
+                 <Text style={{ fontSize: 12, fontWeight: 'bold', color: isOverdue ? '#EF4444' : theme.colors.text }}>
+                   {isOverdue ? 'Overdue!' : `${minsLeft} min left`}
+                 </Text>
+               </View>
+               <View style={{ height: 8, backgroundColor: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
+                 <View style={{ width: `${checkInPct}%`, height: '100%', backgroundColor: isOverdue ? '#EF4444' : theme.colors.primary, borderRadius: 4 }} />
+               </View>
+               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+                 <Text style={{ fontSize: 11, color: theme.colors.textSecondary, fontWeight: 'bold' }}>{new Date(lastLog).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
+                 <Text style={{ fontSize: 11, color: theme.colors.textSecondary, fontWeight: 'bold' }}>{new Date(nextCheckIn).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
+               </View>
+             </View>
+          );
+        })()}
       </View>
 
       {/* Add Log Form */}
@@ -268,14 +315,27 @@ export default function ActivityScreen() {
           const today = new Date().toDateString();
           const taskBlocks = shifts.filter(s => !s.title.startsWith('[SHIFT]') && new Date(s.startTime).toDateString() === today);
           
-          return taskBlocks.length > 0 ? (
-            <View style={{ gap: theme.spacing.md, marginBottom: theme.spacing.md, marginTop: theme.spacing.sm }}>
-              {taskBlocks.map(shift => {
-                const isSelected = taskName === shift.title && !isCustomTask;
+          if (taskBlocks.length === 0) return null;
+          
+          // Sort chronologically
+          taskBlocks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+          
+          return (
+            <View style={{ marginBottom: theme.spacing.md, marginTop: theme.spacing.sm }}>
+              {taskBlocks.map((task, index) => {
+                const isSelected = taskName === task.title && !isCustomTask;
+                const isFirst = index === 0;
+                const isLast = index === taskBlocks.length - 1;
+                
+                // Active status check
+                const nowTime = currentTime;
+                const start = new Date(task.startTime).getTime();
+                const end = new Date(task.endTime).getTime();
+                const isActive = nowTime >= start && nowTime <= end;
                 
                 // Determine latest progress
-                const latestCheckIn = shift.checkIns && shift.checkIns.length > 0
-                  ? [...shift.checkIns].sort((a, b) => {
+                const latestCheckIn = task.checkIns && task.checkIns.length > 0
+                  ? [...task.checkIns].sort((a, b) => {
                       const ta = typeof a.timestamp === 'number' ? a.timestamp : new Date(a.timestamp).getTime();
                       const tb = typeof b.timestamp === 'number' ? b.timestamp : new Date(b.timestamp).getTime();
                       return tb - ta;
@@ -283,198 +343,338 @@ export default function ActivityScreen() {
                   : null;
                 const currentProgress = latestCheckIn?.progress ?? (latestCheckIn as any)?.progressPercent ?? 0;
                 
-                // Determine styles based on status
-                let statusStyles = {
-                  border: isSelected ? theme.colors.primary : 'transparent',
-                  bg: isSelected ? '#F8FAFC' : theme.colors.surface,
-                  text: isSelected ? theme.colors.primary : theme.colors.text,
-                  icon: isSelected ? theme.colors.primary : theme.colors.textSecondary,
-                  badgeBg: '#F1F5F9',
-                  badgeText: '#64748B'
-                };
-
-                switch (shift.status) {
+                // Styling based on status
+                let statusColor = '#CBD5E1';
+                let bgColor = '#F8FAFC';
+                let textColor = theme.colors.text;
+                let progressBadgeBg = '#F1F5F9';
+                let progressBadgeText = '#64748B';
+                
+                switch (task.status) {
                   case 'in_progress':
-                    statusStyles = {
-                      border: isSelected ? theme.colors.primary : '#CBD5E1',
-                      bg: isSelected ? '#F8FAFC' : theme.colors.surface,
-                      text: isSelected ? theme.colors.primary : theme.colors.text,
-                      icon: isSelected ? theme.colors.primary : '#64748B',
-                      badgeBg: '#DBEAFE',
-                      badgeText: '#1D4ED8'
-                    };
+                    statusColor = '#2563eb';
+                    bgColor = '#eff6ff';
+                    textColor = '#1d4ed8';
+                    progressBadgeBg = '#dbeafe';
+                    progressBadgeText = '#1d4ed8';
                     break;
                   case 'completed':
-                    statusStyles = {
-                      border: isSelected ? '#10B981' : '#A7F3D0',
-                      bg: isSelected ? '#ECFDF5' : '#F0FDF4',
-                      text: isSelected ? '#047857' : '#059669',
-                      icon: isSelected ? '#10B981' : '#34D399',
-                      badgeBg: '#D1FAE5',
-                      badgeText: '#065F46'
-                    };
+                    statusColor = '#10b981';
+                    bgColor = '#ecfdf5';
+                    textColor = '#047857';
+                    progressBadgeBg = '#d1fae5';
+                    progressBadgeText = '#065f46';
                     break;
                   case 'delayed':
-                    statusStyles = {
-                      border: isSelected ? '#EF4444' : '#FECACA',
-                      bg: isSelected ? '#FEF2F2' : '#FEF2F2',
-                      text: isSelected ? '#B91C1C' : '#DC2626',
-                      icon: isSelected ? '#EF4444' : '#F87171',
-                      badgeBg: '#FEE2E2',
-                      badgeText: '#991B1B'
-                    };
+                    statusColor = '#ef4444';
+                    bgColor = '#fef2f2';
+                    textColor = '#b91c1c';
+                    progressBadgeBg = '#fee2e2';
+                    progressBadgeText = '#991b1b';
                     break;
                   case 'pending':
-                    statusStyles = {
-                      border: isSelected ? '#F97316' : '#FED7AA',
-                      bg: isSelected ? '#FFF7ED' : 'white',
-                      text: isSelected ? '#C2410C' : '#EA580C',
-                      icon: isSelected ? '#F97316' : '#FB923C',
-                      badgeBg: '#FFEDD5',
-                      badgeText: '#C2410C'
-                    };
+                    statusColor = '#f97316';
+                    bgColor = '#fff7ed';
+                    textColor = '#c2410c';
+                    progressBadgeBg = '#ffedd5';
+                    progressBadgeText = '#c2410c';
                     break;
                 }
-
+                
+                // Indicator Dot Styles
+                let dotColor = '#CBD5E1';
+                let showGlow = false;
+                
+                if (task.status === 'completed') {
+                  dotColor = '#10B981';
+                } else if (task.status === 'delayed') {
+                  dotColor = '#EF4444';
+                } else if (isActive) {
+                  dotColor = '#EF4444';
+                  showGlow = true;
+                } else if (task.status === 'pending') {
+                  dotColor = '#F97316';
+                } else if (task.status === 'in_progress') {
+                  dotColor = '#2563eb';
+                }
+                
+                const formattedStart = new Date(task.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                const formattedEnd = new Date(task.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                
                 return (
-                  <TouchableOpacity 
-                    key={shift.id} 
-                    style={[
-                      styles.card, 
-                      { 
-                        borderWidth: 2, 
-                        borderColor: statusStyles.border,
-                        padding: theme.spacing.md,
-                        backgroundColor: statusStyles.bg,
-                        shadowOpacity: isSelected ? 0.1 : 0.05,
-                      }
-                    ]}
-                    onPress={() => {
-                      setTaskName(shift.title || 'Scheduled Task');
-                      if (shift.department) {
-                        setDepartment(shift.department as Department);
-                      }
-                      setIsCustomTask(false);
-                      setProgress(currentProgress);
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: isSelected ? 12 : 0 }}>
-                      <CheckCircle2 size={24} color={statusStyles.icon} />
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Text style={{ fontWeight: 'bold', fontSize: 16, color: statusStyles.text, flex: 1 }} numberOfLines={1}>
-                            {shift.title || 'Scheduled Task'}
-                          </Text>
-                          {currentProgress > 0 && (
-                            <View style={{ backgroundColor: statusStyles.badgeBg, paddingHorizontal: 6, paddingVertical: 2, rounded: 4, borderRadius: 4, marginLeft: 8 }}>
-                              <Text style={{ fontSize: 10, fontWeight: 'bold', color: statusStyles.badgeText }}>{currentProgress}%</Text>
-                            </View>
-                          )}
+                  <View key={task.id || `task-${index}`} style={{ flexDirection: 'row', minHeight: 90 }}>
+                    
+                    {/* Timeline Node Axis */}
+                    <View style={{ width: 40, alignItems: 'center', position: 'relative' }}>
+                      {/* Top line segment */}
+                      {!isFirst && (
+                        <View 
+                          style={{ 
+                            position: 'absolute', 
+                            top: 0, 
+                            bottom: '50%', 
+                            left: '50%', 
+                            marginLeft: -1, 
+                            width: 2, 
+                            backgroundColor: '#E2E8F0' 
+                          }} 
+                        />
+                      )}
+                      {/* Bottom line segment */}
+                      {!isLast && (
+                        <View 
+                          style={{ 
+                            position: 'absolute', 
+                            top: '50%', 
+                            bottom: 0, 
+                            left: '50%', 
+                            marginLeft: -1, 
+                            width: 2, 
+                            backgroundColor: '#E2E8F0' 
+                          }} 
+                        />
+                      )}
+                      
+                      {/* Dot */}
+                      <View style={{ position: 'absolute', top: '50%', marginTop: -8, alignItems: 'center', justifyContent: 'center' }}>
+                        {showGlow && (
+                          <View 
+                            style={{ 
+                              position: 'absolute', 
+                              width: 24, 
+                              height: 24, 
+                              borderRadius: 12, 
+                              backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                            }} 
+                          />
+                        )}
+                        <View 
+                          style={{ 
+                            width: 12, 
+                            height: 12, 
+                            borderRadius: 6, 
+                            backgroundColor: dotColor, 
+                            borderWidth: 2, 
+                            borderColor: '#ffffff',
+                          }} 
+                        />
+                      </View>
+                      
+                      {/* Live Badge above dot */}
+                      {isActive && (
+                        <View 
+                          style={{ 
+                            position: 'absolute', 
+                            top: '50%', 
+                            marginTop: -28, 
+                            backgroundColor: '#EF4444', 
+                            paddingHorizontal: 4, 
+                            paddingVertical: 1, 
+                            borderRadius: 3,
+                          }}
+                        >
+                          <Text style={{ color: '#fff', fontSize: 7, fontWeight: 'bold' }}>LIVE</Text>
                         </View>
-                        {shift.description && <Text style={{ color: theme.colors.textSecondary, marginTop: 4, fontSize: 13 }}>{shift.description}</Text>}
+                      )}
+                    </View>
+                    
+                    {/* Card Content (Full Width) */}
+                    <View style={{ flex: 1, paddingVertical: 6 }}>
+                      <View
+                        style={{
+                          backgroundColor: isSelected ? '#ffffff' : bgColor,
+                          borderRadius: theme.borderRadius.md,
+                          borderWidth: isSelected ? 2.5 : 1.5,
+                          borderColor: isSelected ? theme.colors.accent : statusColor,
+                          padding: theme.spacing.md,
+                          justifyContent: 'center',
+                          shadowColor: isSelected ? theme.colors.accent : '#000',
+                          shadowOffset: { width: 0, height: isSelected ? 2 : 1 },
+                          shadowOpacity: isSelected ? 0.15 : 0.05,
+                          shadowRadius: isSelected ? 4 : 2,
+                          elevation: isSelected ? 3 : 1,
+                        }}
+                      >
+                        {/* Header Clickable Area to Expand/Collapse */}
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            if (isSelected) {
+                              setTaskName('');
+                              setIsCustomTask(false);
+                            } else {
+                              setTaskName(task.title || 'Scheduled Task');
+                              if (task.department) {
+                                setDepartment(task.department as Department);
+                              }
+                              setIsCustomTask(false);
+                              setProgress(currentProgress);
+                            }
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                                <Text 
+                                  style={{ 
+                                    fontWeight: 'bold', 
+                                    fontSize: 15, 
+                                    color: textColor, 
+                                    flex: 1 
+                                  }} 
+                                  numberOfLines={1}
+                                >
+                                  {task.title}
+                                </Text>
+                                {currentProgress > 0 && (
+                                  <View style={{ backgroundColor: progressBadgeBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: progressBadgeText }}>{currentProgress}%</Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={{ fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600', marginTop: 2 }}>
+                                {formattedStart} - {formattedEnd}
+                              </Text>
+                              {task.description ? (
+                                <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }} numberOfLines={2}>
+                                  {task.description}
+                                </Text>
+                              ) : null}
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+
+                        {/* Inline progress, notes and submit form for selected scheduled task */}
+                        {isSelected && (
+                          <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E2E8F0', width: '100%' }}>
+                            <Text style={{ fontSize: 10, color: theme.colors.textSecondary, marginBottom: 8, fontWeight: 'bold', letterSpacing: 0.5 }}>UPDATE PROGRESS</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 6, marginBottom: 12 }}>
+                              {[0, 25, 50, 75, 100].map(pct => (
+                                <TouchableOpacity
+                                  key={pct}
+                                  onPress={() => setProgress(pct)}
+                                  style={{
+                                    flex: 1,
+                                    paddingVertical: 10,
+                                    borderRadius: 8,
+                                    backgroundColor: progress === pct ? theme.colors.accent : 'white',
+                                    borderWidth: 1,
+                                    borderColor: progress === pct ? theme.colors.accent : '#E2E8F0',
+                                    alignItems: 'center'
+                                  }}
+                                >
+                                  <Text style={{ 
+                                    fontWeight: 'bold', 
+                                    fontSize: 14,
+                                    color: progress === pct ? 'white' : theme.colors.text 
+                                  }}>
+                                    {pct}%
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                            
+                            <Text style={{ fontSize: 10, color: theme.colors.textSecondary, marginBottom: 6, fontWeight: 'bold', letterSpacing: 0.5 }}>NOTES (REQUIRED)</Text>
+                            <TextInput
+                              style={styles.inlineInput}
+                              placeholder="Additional details (Required)..."
+                              placeholderTextColor={theme.colors.textSecondary}
+                              multiline
+                              value={notes}
+                              onChangeText={setNotes}
+                            />
+                            
+                            <TouchableOpacity 
+                              style={[styles.button, styles.submitBtn, { height: 48, marginTop: 8 }]} 
+                              onPress={handleLogSubmit}
+                              disabled={isSubmitting}
+                            >
+                              {isSubmitting ? <ActivityIndicator color="#fff" /> : (
+                                <>
+                                  <CheckCircle2 color="#fff" size={18} style={{ marginRight: 6 }} />
+                                  <Text style={[styles.buttonText, { fontSize: 16 }]}>Submit Log</Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                        )}
                       </View>
                     </View>
-
-                    {isSelected && (
-                      <View style={{ marginTop: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
-                        <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginBottom: 12, fontWeight: 'bold', letterSpacing: 0.5 }}>UPDATE PROGRESS</Text>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 6 }}>
-                          {[0, 25, 50, 75, 100].map(pct => (
-                            <TouchableOpacity
-                              key={pct}
-                              onPress={() => setProgress(pct)}
-                              style={{
-                                flex: 1,
-                                paddingVertical: 10,
-                                borderRadius: 8,
-                                backgroundColor: progress === pct ? theme.colors.primary : 'white',
-                                borderWidth: 1,
-                                borderColor: progress === pct ? theme.colors.primary : '#E2E8F0',
-                                alignItems: 'center'
-                              }}
-                            >
-                              <Text style={{ 
-                                fontWeight: 'bold', 
-                                fontSize: 14,
-                                color: progress === pct ? 'white' : theme.colors.text 
-                              }}>
-                                {pct}%
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
-                    )}
-                  </TouchableOpacity>
+                  </View>
                 );
               })}
               
-              <TouchableOpacity 
+              {/* Other/Unscheduled Task selection */}
+              <View 
                 style={[
                   styles.card, 
                   { 
                     borderWidth: 2, 
-                    borderColor: isCustomTask ? theme.colors.primary : 'transparent',
+                    borderColor: isCustomTask ? theme.colors.accent : 'transparent',
                     padding: theme.spacing.md,
-                    backgroundColor: isCustomTask ? '#F8FAFC' : theme.colors.surface,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 12,
+                    backgroundColor: isCustomTask ? '#ffffff' : theme.colors.card,
                     shadowOpacity: isCustomTask ? 0.1 : 0.05,
+                    marginTop: theme.spacing.sm
                   }
                 ]}
-                onPress={() => {
-                  setTaskName('');
-                  setIsCustomTask(true);
-                  setProgress(0);
-                }}
               >
-                <PlusCircle size={24} color={isCustomTask ? theme.colors.primary : theme.colors.textSecondary} />
-                <Text style={{ fontWeight: 'bold', fontSize: 16, color: isCustomTask ? theme.colors.primary : theme.colors.text }}>Other (Unscheduled Task)...</Text>
-              </TouchableOpacity>
+                <TouchableOpacity 
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (isCustomTask) {
+                      setIsCustomTask(false);
+                      setTaskName('');
+                    } else {
+                      setTaskName('');
+                      setIsCustomTask(true);
+                      setProgress(0);
+                    }
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
+                >
+                  <PlusCircle size={24} color={isCustomTask ? theme.colors.accent : theme.colors.textSecondary} />
+                  <Text style={{ fontWeight: 'bold', fontSize: 15, color: isCustomTask ? theme.colors.accent : theme.colors.text }}>Other (Unscheduled Task)...</Text>
+                </TouchableOpacity>
+                
+                {isCustomTask && (
+                  <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E2E8F0', width: '100%' }}>
+                    <Text style={{ fontSize: 10, color: theme.colors.textSecondary, marginBottom: 6, fontWeight: 'bold', letterSpacing: 0.5 }}>TASK NAME</Text>
+                    <TextInput
+                      style={styles.inlineInput}
+                      placeholder="What are you working on?"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={taskName}
+                      onChangeText={setTaskName}
+                    />
+                    
+                    <Text style={{ fontSize: 10, color: theme.colors.textSecondary, marginBottom: 6, fontWeight: 'bold', letterSpacing: 0.5 }}>NOTES (REQUIRED)</Text>
+                    <TextInput
+                      style={[styles.inlineInput, { height: 80, textAlignVertical: 'top' }]}
+                      placeholder="Additional details (Required)..."
+                      placeholderTextColor={theme.colors.textSecondary}
+                      multiline
+                      value={notes}
+                      onChangeText={setNotes}
+                    />
+                    
+                    <TouchableOpacity 
+                      style={[styles.button, styles.submitBtn, { height: 48, marginTop: 8 }]} 
+                      onPress={handleLogSubmit}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? <ActivityIndicator color="#fff" /> : (
+                        <>
+                          <CheckCircle2 color="#fff" size={18} style={{ marginRight: 6 }} />
+                          <Text style={[styles.buttonText, { fontSize: 16 }]}>Submit Log</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             </View>
-          ) : null;
+          );
         })()}
-
-        {(() => {
-          const today = new Date().toDateString();
-          const todayShifts = shifts.filter(s => new Date(s.startTime).toDateString() === today);
-          if (!todayShifts.length || isCustomTask) {
-            return (
-              <TextInput
-                style={styles.input}
-                placeholder="What are you working on?"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={taskName}
-                onChangeText={setTaskName}
-              />
-            );
-          }
-          return null;
-        })()}
-
-        <Text style={styles.label}>Notes (Optional)</Text>
-        <TextInput
-          style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
-          placeholder="Additional details..."
-          placeholderTextColor={theme.colors.textSecondary}
-          multiline
-          value={notes}
-          onChangeText={setNotes}
-        />
-
-        <TouchableOpacity 
-          style={[styles.button, styles.submitBtn]} 
-          onPress={handleLogSubmit}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? <ActivityIndicator color="#fff" /> : (
-            <>
-              <CheckCircle2 color="#fff" size={20} style={{ marginRight: 8 }} />
-              <Text style={styles.buttonText}>Submit Log</Text>
-            </>
-          )}
-        </TouchableOpacity>
       </View>
 
       {/* Recent Logs List */}
@@ -608,6 +808,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     padding: theme.spacing.md,
     marginBottom: theme.spacing.md,
+  },
+  inlineInput: {
+    backgroundColor: '#ffffff',
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    color: theme.colors.text,
+    fontSize: 15,
+    padding: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
   },
   chipContainer: {
     marginBottom: theme.spacing.md,

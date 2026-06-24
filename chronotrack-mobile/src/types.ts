@@ -61,6 +61,7 @@ export interface User {
   address?: string;
   discordId?: string;
   discordAlertPrefs?: number[]; // [30, 45, 60]
+  pushAlertPrefs?: number[]; // [5, 10, 15] for mobile notifications before check-ins
   expoPushToken?: string;
   mobileClockInEnabled?: boolean;
   // Work Info
