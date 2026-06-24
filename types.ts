@@ -152,3 +152,15 @@ export interface QuickTask {
   location?: string;
   locations?: string[];
 }
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  senderRole: string;
+  content: string;
+  timestamp: number;
+  channel: string;
+  imageUrl?: string;
+}

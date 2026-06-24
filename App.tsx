@@ -9,7 +9,8 @@ import { PrintableForms } from './components/PrintableForms';
 import { SettingsDialog } from './components/SettingsDialog';
 import { LoginScreen } from './components/LoginScreen';
 import { DailyPlanner } from './components/DailyPlanner';
-import { Radio, ClipboardList, BarChart4, Settings, LogOut, Calendar, Users, FileText } from 'lucide-react';
+import { TeamChat } from './components/TeamChat';
+import { Radio, ClipboardList, BarChart4, Settings, LogOut, Calendar, Users, FileText, MessageSquare } from 'lucide-react';
 import {
   subscribeToActiveSessions,
   subscribeToUsers,
@@ -30,7 +31,7 @@ import {
   firebaseSaveTimeCard
 } from './services/firebaseService';
 
-type Tab = 'station' | 'activity' | 'manager' | 'planner' | 'documents';
+type Tab = 'station' | 'activity' | 'manager' | 'planner' | 'documents' | 'chat';
 
 const App: React.FC = () => {
   // Global State: Auth Token (Session Persistence)
@@ -852,6 +853,19 @@ const App: React.FC = () => {
                 Forms & Docs
               </button>
             )}
+
+            {!isTerminal && (
+              <button
+                onClick={() => setActiveTab('chat')}
+                className={`${activeTab === 'chat'
+                  ? 'border-zinc-300 text-zinc-900'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors print:hidden`}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Team Chat
+              </button>
+            )}
           </nav>
         </div>
       </div>
@@ -894,6 +908,8 @@ const App: React.FC = () => {
             <DailyPlanner users={users} currentUser={currentUser} />
           ) : activeTab === 'documents' ? (
             <PrintableForms currentUser={currentUser} />
+          ) : activeTab === 'chat' ? (
+            <TeamChat currentUser={currentUser} activeSessions={activeSessions} users={users} />
           ) : (
             <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} onClockIn={handleClockIn} onClockOut={handleClockOut} onUpdateUser={handleUpdateUser} onLogAbsence={handleLogAbsence} currentUser={currentUser} />
           )}

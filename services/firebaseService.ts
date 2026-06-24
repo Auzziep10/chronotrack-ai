@@ -12,11 +12,13 @@ import {
     Timestamp,
     arrayUnion,
     query,
-    where
+    where,
+    orderBy,
+    limit
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { User, UserSession, WorkLog, DailyTimeCard, AppSettings, QuickTask } from '../types';
+import { User, UserSession, WorkLog, DailyTimeCard, AppSettings, QuickTask, ChatMessage } from '../types';
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
@@ -541,4 +543,66 @@ export const subscribeToCustomers = (onUpdate: (customers: Record<string, any>) 
     }, (error) => {
         console.error("Firebase Customers Sync Error:", error);
     });
+};
+
+// ─── TEAM CHAT ROOM ──────────────────────────────────────────────────
+const CHAT_COL = 'chatMessages';
+
+/** Subscribe to chat messages for a specific channel, ordered by timestamp */
+export const subscribeToChatMessages = (
+    channel: string,
+    onUpdate: (messages: ChatMessage[]) => void
+) => {
+    const q = query(
+        collection(db, CHAT_COL),
+        where('channel', '==', channel),
+        orderBy('timestamp', 'asc')
+    );
+    return onSnapshot(q, (snapshot) => {
+        if (snapshot.empty) {
+            onUpdate([]);
+            return;
+        }
+        const messages = snapshot.docs.map(d => {
+            const data = d.data();
+            return {
+                ...data,
+                id: d.id,
+                timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toMillis() : data.timestamp
+            } as ChatMessage;
+        });
+        onUpdate(messages);
+    }, (error) => {
+        console.error("Firebase ChatMessages Sync Error:", error);
+    });
+};
+
+/** Send a chat message to Firestore */
+export const firebaseSendMessage = async (message: ChatMessage): Promise<void> => {
+    const clean: any = {};
+    Object.entries(message).forEach(([k, v]) => {
+        if (v !== undefined) clean[k] = v;
+    });
+
+    await setDoc(doc(db, CHAT_COL, message.id), {
+        ...clean,
+        timestamp: serverTimestamp()
+    });
+};
+
+/** Upload chat shared image to Firebase storage */
+export const firebaseUploadChatImage = async (imageName: string, base64Data: string): Promise<string> => {
+    try {
+        const timestamp = Date.now();
+        const fileRef = ref(storage, `chat-images/${timestamp}_${imageName}`);
+        
+        // Upload base64 image
+        await uploadString(fileRef, base64Data, 'data_url');
+        
+        // Get download URL
+        return await getDownloadURL(fileRef);
+    } catch (err) {
+        console.error("Error uploading chat image:", err);
+        throw err;
+    }
 };
