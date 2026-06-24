@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, UserSession } from '../types';
 import { 
@@ -46,13 +46,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const markChannelAsRead = async (channelId: string) => {
+  const markChannelAsRead = useCallback(async (channelId: string) => {
     const now = Date.now();
-    setLastViewedTimes(prev => ({
-      ...prev,
-      [channelId]: now
-    }));
+    setLastViewedTimes(prev => {
+      if (prev[channelId] === now) return prev;
+      return {
+        ...prev,
+        [channelId]: now
+      };
+    });
     setUnreadCounts(prev => {
+      if (!prev[channelId]) return prev;
       const updated = { ...prev };
       delete updated[channelId];
       const total = Object.values(updated).reduce((sum, val) => sum + val, 0);
@@ -64,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.error("Failed to save last viewed time:", e);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const loadLastViewed = async () => {
@@ -136,16 +140,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const init = async () => {
+      console.log("[AuthContext] init starting...");
       if (isFirebaseConfigured()) {
+        console.log("[AuthContext] Configuring firebase silent auth...");
         await firebaseSilentAuth();
+        console.log("[AuthContext] Silent auth complete. Fetching users...");
         try {
           const fetchedUsers = await firebaseGetUsers();
+          console.log("[AuthContext] Fetched users count:", fetchedUsers.length);
           setUsers(fetchedUsers);
         } catch (e) {
           console.error("Failed to fetch users:", e);
         }
       }
       setIsLoading(false);
+      console.log("[AuthContext] init complete. isLoading set to false.");
     };
     init();
 
