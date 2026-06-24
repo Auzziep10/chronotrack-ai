@@ -16,7 +16,8 @@ import {
   Plus,
   X,
   Settings as SettingsIcon,
-  Edit2
+  Edit2,
+  ThumbsUp
 } from 'lucide-react';
 import { ChatMessage, ChatChannel, User, UserSession } from '../types';
 import { 
@@ -30,7 +31,8 @@ import {
   firebaseDeleteChannelMessages,
   firebaseGetUsers,
   subscribeToRecentMessages,
-  firebaseDeleteChatMessage
+  firebaseDeleteChatMessage,
+  firebaseToggleReaction
 } from '../services/firebaseService';
 
 interface Props {
@@ -353,6 +355,45 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
       // LocalStorage Fallback Delete
       const key = `chrono_local_chat_${activeChannel}`;
       const localMsgs = messages.filter(msg => msg.id !== messageId);
+      localStorage.setItem(key, JSON.stringify(localMsgs));
+      setMessages(localMsgs);
+
+      // Trigger standard storage event manually for the current tab
+      window.dispatchEvent(new StorageEvent('storage', {
+        key,
+        newValue: JSON.stringify(localMsgs)
+      }));
+    }
+  };
+
+  // Toggle reaction on a message
+  const handleToggleReaction = async (messageId: string) => {
+    if (!currentUser) return;
+
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseToggleReaction(messageId, currentUser.id);
+      } catch (err: any) {
+        console.error("Failed to toggle reaction via Firebase:", err);
+      }
+    } else {
+      // LocalStorage Fallback Toggle
+      const key = `chrono_local_chat_${activeChannel}`;
+      const localMsgs = messages.map(msg => {
+        if (msg.id !== messageId) return msg;
+        const reactions = msg.reactions || {};
+        const thumbsUp = reactions.thumbsUp || [];
+        const updatedThumbsUp = thumbsUp.includes(currentUser.id)
+          ? thumbsUp.filter(id => id !== currentUser.id)
+          : [...thumbsUp, currentUser.id];
+        return {
+          ...msg,
+          reactions: {
+            ...reactions,
+            thumbsUp: updatedThumbsUp
+          }
+        };
+      });
       localStorage.setItem(key, JSON.stringify(localMsgs));
       setMessages(localMsgs);
 
@@ -840,17 +881,33 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                         </span>
                       </div>
 
-                      <div className="relative group w-full flex items-center gap-2">
-                        {isOwnMessage && (
+                      <div className={`relative group w-full flex items-center gap-2 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+                        {/* Action buttons (only show on hover) */}
+                        <div className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0 focus-within:opacity-100 ${isOwnMessage ? 'flex-row' : 'flex-row-reverse'}`}>
                           <button
-                            onClick={() => handleDeleteMessage(msg.id)}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all shrink-0 focus:opacity-100"
-                            title="Delete message"
+                            onClick={() => handleToggleReaction(msg.id)}
+                            className={`p-1.5 rounded-xl border transition-all ${
+                              msg.reactions?.thumbsUp?.includes(currentUser?.id || '')
+                                ? 'text-zinc-950 bg-zinc-100 border-zinc-300 hover:bg-zinc-200'
+                                : 'text-zinc-400 border-transparent hover:text-zinc-600 hover:bg-zinc-50'
+                            }`}
+                            title={msg.reactions?.thumbsUp?.includes(currentUser?.id || '') ? "Unlike message" : "Like message"}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <ThumbsUp className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                        <div className={`p-4 rounded-3xl text-sm border leading-relaxed shadow-sm transition-all break-words w-full ${
+                          {isOwnMessage && (
+                            <button
+                              onClick={() => handleDeleteMessage(msg.id)}
+                              className="p-1.5 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                              title="Delete message"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Message bubble */}
+                        <div className={`p-4 rounded-3xl text-sm border leading-relaxed shadow-sm transition-all break-words w-full relative ${
                           isOwnMessage
                             ? 'bg-zinc-900 text-white border-zinc-900 rounded-tr-none'
                             : 'bg-zinc-50 text-zinc-800 border-zinc-200 rounded-tl-none'
@@ -868,6 +925,27 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                             </div>
                           )}
                           {msg.content && <p>{msg.content}</p>}
+
+                          {/* Reaction badge overlapping bottom border */}
+                          {msg.reactions?.thumbsUp && msg.reactions.thumbsUp.length > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleReaction(msg.id);
+                              }}
+                              className={`absolute -bottom-2.5 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border shadow-sm transition-all ${
+                                isOwnMessage ? 'right-4' : 'left-4'
+                              } ${
+                                msg.reactions.thumbsUp.includes(currentUser?.id || '')
+                                  ? 'bg-zinc-100 text-zinc-950 border-zinc-300 hover:bg-zinc-200'
+                                  : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
+                              }`}
+                              title={`${msg.reactions.thumbsUp.length} likes`}
+                            >
+                              <span>👍</span>
+                              <span className="text-[10px]">{msg.reactions.thumbsUp.length}</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

@@ -2,6 +2,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import {
     getFirestore,
     doc,
+    getDoc,
     setDoc,
     deleteDoc,
     onSnapshot,
@@ -680,5 +681,28 @@ export const subscribeToRecentMessages = (onUpdate: (messages: any[]) => void) =
     }, (error) => {
         console.error("Firebase RecentMessages Sync Error:", error);
     });
+};
+
+/** Toggle a message thumbs-up reaction in Firestore */
+export const firebaseToggleReaction = async (messageId: string, userId: string, reactionType: string = 'thumbsUp'): Promise<void> => {
+    const msgRef = doc(db, CHAT_COL, messageId);
+    try {
+        const docSnap = await getDoc(msgRef);
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            const reactions = data.reactions || {};
+            const userList = reactions[reactionType] || [];
+            
+            const updatedList = userList.includes(userId)
+                ? userList.filter((id: string) => id !== userId)
+                : [...userList, userId];
+            
+            await updateDoc(msgRef, {
+                [`reactions.${reactionType}`]: updatedList
+            });
+        }
+    } catch (e) {
+        console.error("Failed to toggle reaction:", e);
+    }
 };
 
