@@ -548,15 +548,14 @@ export const subscribeToCustomers = (onUpdate: (customers: Record<string, any>) 
 // ─── TEAM CHAT ROOM ──────────────────────────────────────────────────
 const CHAT_COL = 'chatMessages';
 
-/** Subscribe to chat messages for a specific channel, ordered by timestamp */
+/** Subscribe to chat messages for a specific channel, sorted client-side to avoid index requirements */
 export const subscribeToChatMessages = (
     channel: string,
     onUpdate: (messages: ChatMessage[]) => void
 ) => {
     const q = query(
         collection(db, CHAT_COL),
-        where('channel', '==', channel),
-        orderBy('timestamp', 'asc')
+        where('channel', '==', channel)
     );
     return onSnapshot(q, (snapshot) => {
         if (snapshot.empty) {
@@ -568,9 +567,10 @@ export const subscribeToChatMessages = (
             return {
                 ...data,
                 id: d.id,
-                timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toMillis() : data.timestamp
+                timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toMillis() : (data.timestamp || Date.now())
             } as ChatMessage;
         });
+        messages.sort((a, b) => a.timestamp - b.timestamp);
         onUpdate(messages);
     }, (error) => {
         console.error("Firebase ChatMessages Sync Error:", error);
