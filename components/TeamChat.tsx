@@ -91,7 +91,8 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevMessagesLengthRef = useRef(0);
 
-  const isAdminOrManager = currentUser?.role?.toLowerCase() === 'admin' || currentUser?.role?.toLowerCase() === 'manager';
+  const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
+  const isAdminOrManager = isAdmin || currentUser?.role?.toLowerCase() === 'manager';
   const currentChannelObj = channels.find(c => c.id === activeChannel);
   const isRestrictedChannel = currentChannelObj?.restricted;
   const canSendMessages = !isRestrictedChannel || isAdminOrManager;
@@ -326,6 +327,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
   // Create Channel
   const handleCreateChannel = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
     setFormError('');
 
     const sanitizedName = formName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
@@ -370,6 +372,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
   // Save Channel Edit
   const handleSaveChannelEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
     if (!editingChannel) return;
     setFormError('');
 
@@ -401,6 +404,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
 
   // Delete Channel
   const handleDeleteChannel = async (channelId: string) => {
+    if (!isAdmin) return;
     if (!confirm(`Are you sure you want to delete #${channelId}? All messages in this channel will be permanently lost.`)) {
       return;
     }
@@ -487,7 +491,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
           <div className="p-3 flex-1 overflow-y-auto">
             <div className="flex items-center justify-between px-3 mb-2">
               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Channels</p>
-              {isAdminOrManager && (
+              {isAdmin && (
                 <button 
                   onClick={() => {
                     setFormName('');
@@ -528,7 +532,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                         <span className="w-2 h-2 bg-red-500 rounded-full" />
                       )}
                     </button>
-                    {isAdminOrManager && (
+                    {isAdmin && (
                       <button
                         onClick={() => {
                           setEditingChannel(ch);
