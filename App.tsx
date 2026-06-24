@@ -9,7 +9,8 @@ import { PrintableForms } from './components/PrintableForms';
 import { SettingsDialog } from './components/SettingsDialog';
 import { LoginScreen } from './components/LoginScreen';
 import { DailyPlanner } from './components/DailyPlanner';
-import { Radio, ClipboardList, BarChart4, Settings, LogOut, Calendar, Users, FileText } from 'lucide-react';
+import { TeamChat } from './components/TeamChat';
+import { Radio, ClipboardList, BarChart4, Settings, LogOut, Calendar, Users, FileText, MessageSquare } from 'lucide-react';
 import {
   subscribeToActiveSessions,
   subscribeToUsers,
@@ -26,7 +27,9 @@ import {
   firebaseResumeSession,
   firebaseSilentAuth,
   subscribeToSettings,
-  firebaseSaveSettings
+  firebaseSaveSettings,
+  firebaseSaveTimeCard,
+  subscribeToRecentMessages
 } from './services/firebaseService';
 
 type Tab = 'station' | 'activity' | 'manager' | 'planner' | 'documents';
@@ -74,6 +77,8 @@ const App: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<Tab>('station');
   const [showSettings, setShowSettings] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
 
   // Shift Blocks State (From Firebase)
   const [shiftBlocks, setShiftBlocks] = useState<any[]>([]);
@@ -199,7 +204,32 @@ const App: React.FC = () => {
       }
     });
 
-    // 3. Real-time settings listener
+    return () => {
+      unsubUsers();
+    };
+  }, [isFirebaseAuthed]); 
+
+  // 3. Real-time recent messages listener to track unreads
+  useEffect(() => {
+    if (!authToken || !isFirebaseConfigured() || !isFirebaseAuthed) return;
+
+    const unsub = subscribeToRecentMessages((recentMsgs) => {
+      let hasUnread = false;
+      recentMsgs.forEach(msg => {
+        const lastViewed = Number(localStorage.getItem(`chrono_last_viewed_${msg.channel}`) || '0');
+        if (msg.senderId !== currentUser?.id && msg.timestamp > lastViewed) {
+          hasUnread = true;
+        }
+      });
+      setHasUnreadChat(hasUnread);
+    });
+    return () => unsub();
+  }, [authToken, isFirebaseAuthed, showChat, currentUser?.id]);
+
+  // 4. Real-time settings listener
+  useEffect(() => {
+    if (!isFirebaseConfigured() || !isFirebaseAuthed) return;
+
     const unsubSettings = subscribeToSettings((firebaseSettings) => {
       if (firebaseSettings) {
         setAppSettings(prev => ({ ...prev, ...firebaseSettings }));
@@ -340,8 +370,8 @@ const App: React.FC = () => {
     if (Array.isArray(currentUser.permissions)) currentPerms = currentUser.permissions;
     else if (typeof currentUser.permissions === 'string') currentPerms = currentUser.permissions.split(',').map((s: string) => s.trim());
   }
-  const isAdmin = currentPerms.includes('admin') || (currentUser?.role?.toLowerCase() === 'admin' && currentPerms.length === 0);
-  const isManager = currentPerms.includes('manage_team') || (currentUser?.role?.toLowerCase() === 'manager' && currentPerms.length === 0);
+  const isAdmin = currentPerms.includes('admin') || (currentUser?.role?.toLowerCase() === 'admin');
+  const isManager = currentPerms.includes('manage_team') || currentPerms.includes('manage_users') || currentPerms.includes('edit_timecards') || currentPerms.includes('manage_schedule') || currentPerms.includes('view_reports') || (currentUser?.role?.toLowerCase() === 'manager');
   const isAdminOrManager = isAdmin || isManager;
 
   // Handle Role-based Tab Restrictions
@@ -493,6 +523,37 @@ const App: React.FC = () => {
         storageService.saveTimeCard(timeCard);
       });
     }
+  };
+
+  const handleLogAbsence = async (user: User, type: 'No-Call No-Show' | 'Sick' | 'Emergency', notes?: string) => {
+    const now = Date.now();
+    const tzOffset = now - new Date(now).getTimezoneOffset() * 60000;
+    const todayStr = new Date(tzOffset).toISOString().split('T')[0];
+
+    const timeCard: DailyTimeCard = {
+      id: `tc-abs-${user.id}-${now}`,
+      userId: user.id,
+      date: todayStr,
+      clockIn: now,
+      clockOut: now,
+      totalHours: 0,
+      totalIdleHours: 0,
+      status: type,
+      managerNotes: notes || `Logged by manager`
+    };
+
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseSaveTimeCard(timeCard);
+      } catch (err) {
+        console.error('Failed to save absence to Firebase:', err);
+      }
+    }
+
+    const { storageService } = await import('./services/storageService');
+    storageService.saveTimeCard(timeCard);
+
+    return timeCard;
   };
 
   const handlePauseSession = async (user: User) => {
@@ -734,6 +795,18 @@ const App: React.FC = () => {
               <span className="text-xs font-bold text-zinc-800">{Object.keys(activeSessions).length}</span>
             </div>
             <div className="hidden sm:block h-8 w-px bg-zinc-200 mx-2"></div>
+            {!isTerminal && (
+              <button
+                onClick={() => setShowChat(true)}
+                className="p-2 text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors relative"
+                title="Team Chat"
+              >
+                <MessageSquare className="w-5 h-5" />
+                {hasUnreadChat && (
+                  <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
+                )}
+              </button>
+            )}
             {isAdmin && !isTerminal && (
               <button
                 onClick={() => setShowSettings(true)}
@@ -838,6 +911,7 @@ const App: React.FC = () => {
               appSettings={appSettings}
               onUpdateSettings={handleUpdateSettings}
               shiftBlocks={shiftBlocks}
+              onLogAbsence={handleLogAbsence}
             />
           ) : activeTab === 'activity' ? (
             <ActivityTracker
@@ -862,7 +936,7 @@ const App: React.FC = () => {
           ) : activeTab === 'documents' ? (
             <PrintableForms currentUser={currentUser} />
           ) : (
-            <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} onClockIn={handleClockIn} onClockOut={handleClockOut} onUpdateUser={handleUpdateUser} />
+            <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} onClockIn={handleClockIn} onClockOut={handleClockOut} onUpdateUser={handleUpdateUser} onLogAbsence={handleLogAbsence} currentUser={currentUser} />
           )}
         </div>
       </main>
@@ -897,6 +971,15 @@ const App: React.FC = () => {
         }}
         settings={appSettings}
         onUpdateSettings={handleUpdateSettings}
+        currentUser={currentUser}
+      />
+
+      <TeamChat
+        isOpen={showChat}
+        onClose={() => setShowChat(false)}
+        currentUser={currentUser}
+        activeSessions={activeSessions}
+        users={users}
       />
     </div>
   );

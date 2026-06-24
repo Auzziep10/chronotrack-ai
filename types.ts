@@ -94,7 +94,7 @@ export interface DailyTimeCard {
   clockOut: number | null;
   totalHours: number;
   totalIdleHours?: number; // Subtracted from total due to missed check-ins
-  status: 'Complete' | 'Active' | 'Missing';
+  status: 'Complete' | 'Active' | 'Missing' | 'No-Call No-Show' | 'Sick' | 'Emergency';
   clockInDepartment?: string;
   isUnscheduled?: boolean;
   managerNotes?: string;
@@ -109,6 +109,9 @@ export interface AppSettings {
   checkInIntervalHours?: number;
   autoPauseEnabled?: boolean;
   discordNotificationsEnabled?: boolean;
+  useCustomPayPeriods?: boolean;
+  customCycleStart?: string; // YYYY-MM-DD
+  customCycleEnd?: string;   // YYYY-MM-DD
 }
 
 export interface ScheduleBlock {
@@ -141,3 +144,31 @@ export interface DailySchedule {
   summary?: string;
   blocks: ScheduleBlock[];
 }
+
+export interface QuickTask {
+  id: string;
+  title: string;
+  duration: number;
+  location?: string;
+  locations?: string[];
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  senderRole: string;
+  content: string;
+  timestamp: number;
+  channel: string;
+  imageUrl?: string;
+}
+
+export interface ChatChannel {
+  id: string;
+  name: string;
+  desc: string;
+  restricted?: boolean;
+}
+

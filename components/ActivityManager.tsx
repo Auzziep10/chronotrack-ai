@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { processExternalPlan } from '../services/geminiService';
 import { UserProfileDialog } from './UserProfileDialog';
+import { LogAbsenceModal } from './LogAbsenceModal';
+import { AddRetroactiveCardModal } from './AddRetroactiveCardModal';
 
 // Generate more data (60 days) to allow testing different pay periods
 const generateMockData = (users: User[]) => {
@@ -70,6 +72,35 @@ const getPayPeriods = (settings: AppSettings) => {
   const periods = [];
   const today = new Date();
 
+  if (settings.useCustomPayPeriods && settings.customCycleStart && settings.customCycleEnd) {
+    const anchorStart = new Date(settings.customCycleStart + 'T00:00:00');
+    const anchorEnd = new Date(settings.customCycleEnd + 'T23:59:59.999');
+    
+    // Duration in milliseconds
+    const D_ms = anchorEnd.getTime() - anchorStart.getTime() + 1;
+    const D_days = Math.round(D_ms / (24 * 60 * 60 * 1000));
+    
+    if (D_days > 0) {
+      const todayMs = today.getTime();
+      const elapsedMs = todayMs - anchorStart.getTime();
+      const elapsedCycles = Math.floor(elapsedMs / D_ms);
+      
+      // Generate 8 periods: 1 future, the current one, and 6 past ones
+      for (let i = 1; i >= -6; i--) {
+        const cycleIndex = elapsedCycles + i;
+        const start = new Date(anchorStart.getTime() + cycleIndex * D_ms);
+        const end = new Date(start.getTime() + D_ms - 1);
+        
+        periods.push({
+          start,
+          end,
+          label: `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+        });
+      }
+      return periods;
+    }
+  }
+
   if (settings.payFrequency === 'Monthly') {
     for (let i = 0; i < 6; i++) {
       const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
@@ -108,16 +139,51 @@ interface Props {
   onClockIn?: (user: User) => void;
   onClockOut?: (user: User) => void;
   onUpdateUser?: (updatedUser: User) => void;
+  onLogAbsence?: (user: User, type: 'No-Call No-Show' | 'Sick' | 'Emergency', notes?: string) => Promise<any>;
+  currentUser?: User | null;
 }
 
-export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessions = {}, onClockIn, onClockOut, onUpdateUser }) => {
+export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessions = {}, onClockIn, onClockOut, onUpdateUser, onLogAbsence, currentUser = null }) => {
+  const viewerPerms = React.useMemo(() => {
+    if (!currentUser) return [];
+    if (Array.isArray(currentUser.permissions)) return currentUser.permissions;
+    if (typeof currentUser.permissions === 'string') return (currentUser.permissions as string).split(',').map(s => s.trim());
+    return [];
+  }, [currentUser]);
+
+  const viewerHasPermission = React.useCallback((permId: string) => {
+    if (!currentUser) return false;
+    const isUserAdmin = currentUser.role?.toLowerCase() === 'admin' || viewerPerms.includes('admin');
+    if (isUserAdmin) return true;
+    return viewerPerms.includes(permId);
+  }, [currentUser, viewerPerms]);
+
+  // Allowed views based on permissions
+  const allowedViews = React.useMemo(() => {
+    const views: string[] = [];
+    if (viewerHasPermission('view_reports')) views.push('departments');
+    if (viewerHasPermission('manage_users')) views.push('users');
+    if (viewerHasPermission('edit_timecards')) views.push('timecards');
+    if (viewerHasPermission('manage_schedule')) views.push('planning');
+    return views;
+  }, [viewerHasPermission]);
+
   const [activeView, setActiveView] = useState<'departments' | 'users' | 'timecards' | 'planning'>('departments');
+
+  React.useEffect(() => {
+    if (allowedViews.length > 0 && !allowedViews.includes(activeView)) {
+      setActiveView(allowedViews[0] as any);
+    }
+  }, [allowedViews, activeView]);
+
   const [selectedDept, setSelectedDept] = useState<Department | 'All'>('All');
   const [selectedUser, setSelectedUser] = useState<string | 'All'>('All');
   const [selectedUserForProfile, setSelectedUserForProfile] = useState<User | null>(null);
   const [selectedPeriodIdx, setSelectedPeriodIdx] = useState(0);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [absenceUser, setAbsenceUser] = useState<User | null>(null);
+  const [retroactiveUser, setRetroactiveUser] = useState<User | null>(null);
 
   const toggleUserExpanded = (userId: string) => {
     setExpandedUsers(prev => {
@@ -482,9 +548,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         const grossPresses = '';
         const shirtsDowned = '';
         const netPresses = '';
-        const shiftHrlyPay = user?.payRate ? (card.totalHours * user.payRate).toFixed(2) : '';
+        const shiftHrlyPay = (viewerHasPermission('view_payroll') && user?.payRate) ? user.payRate.toFixed(2) : '';
         const shiftInctvPay = '';
-        const shiftTotalPay = user?.payRate ? (card.totalHours * user.payRate).toFixed(2) : '';
+        const shiftTotalPay = (viewerHasPermission('view_payroll') && user?.payRate) ? (card.totalHours * user.payRate).toFixed(2) : '';
         const timePaused = (card.totalIdleHours || 0).toFixed(2);
 
         return [
@@ -566,6 +632,34 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     }
   };
 
+  const handleSaveRetroactiveCard = async (user: User, clockInMs: number, clockOutMs: number, idleHours: number, date: string, notes: string) => {
+    const newCard: DailyTimeCard = {
+      id: `tc-retro-${user.id}-${Date.now()}`,
+      userId: user.id,
+      date,
+      clockIn: clockInMs,
+      clockOut: clockOutMs,
+      totalHours: Math.max(0, ((clockOutMs - clockInMs) / 3600000) - idleHours),
+      totalIdleHours: idleHours,
+      status: 'Complete',
+      managerNotes: notes || 'Retroactive entry'
+    };
+
+    setTimeCards(prev => [newCard, ...prev]);
+
+    const { storageService } = await import('../services/storageService');
+    storageService.saveTimeCard(newCard);
+
+    const { firebaseSaveTimeCard, isFirebaseConfigured } = await import('../services/firebaseService');
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseSaveTimeCard(newCard);
+      } catch (err) {
+        console.error('Failed to save retroactive timecard to remote:', err);
+      }
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden min-h-[700px] flex flex-col animate-fade-in">
       {/* Enhanced Manager Header */}
@@ -583,7 +677,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             { id: 'users', icon: Users, label: 'Users' },
             { id: 'timecards', icon: Clock, label: 'Time' },
             { id: 'planning', icon: Target, label: 'Planning' }
-          ].map((tab) => (
+          ].filter(tab => allowedViews.includes(tab.id)).map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveView(tab.id as any)}
@@ -945,11 +1039,23 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                       className="text-[10px] font-bold bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50 px-2 py-1 rounded shadow-sm transition-colors"
                                     >Clock In</button>
                                   )}
+                                  {group.status !== 'Active' && user && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setAbsenceUser(user); }}
+                                      className="text-[10px] font-bold bg-white text-red-600 border border-red-200 hover:bg-red-50 px-2 py-1 rounded shadow-sm transition-colors"
+                                    >Log Absence</button>
+                                  )}
                                   {group.status === 'Active' && onClockOut && user && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); onClockOut(user); }}
                                       className="text-[10px] font-bold bg-white text-amber-600 border border-amber-200 hover:bg-amber-50 px-2 py-1 rounded shadow-sm transition-colors"
                                     >Clock Out</button>
+                                  )}
+                                  {user && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setRetroactiveUser(user); }}
+                                      className="text-[10px] font-bold bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded shadow-sm transition-colors"
+                                    >+ Add Record</button>
                                   )}
                                 </td>
                               </tr>
@@ -978,7 +1084,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                                 </div>
                                                 <div>
                                                   <h4 className="text-sm font-bold text-zinc-900">Edit Time Record</h4>
-                                                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
                                                 </div>
                                               </div>
                                               <button onClick={() => setEditingCardId(null)} className="p-2 hover:bg-zinc-100 rounded-lg transition-colors text-zinc-400 hover:text-zinc-600">
@@ -1049,7 +1155,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                           </div>
                                         </td>
                                         <td className="px-6 py-3 text-zinc-600 font-medium">
-                                          {new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                          {new Date(card.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                                         </td>
                                         <td className="px-6 py-3" onClick={e => e.stopPropagation()}>
                                           <div className="text-xs font-medium text-zinc-900">
@@ -1072,7 +1178,10 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                         <td className="px-6 py-3 text-right" onClick={e => e.stopPropagation()}>
                                           <div className="flex flex-col items-end gap-1.5">
                                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border
-                                              ${card.status === 'Complete' ? 'bg-zinc-50 text-zinc-800 border-zinc-200' : 'bg-zinc-50 text-zinc-800 border-zinc-200'}`}>
+                                              ${card.status === 'No-Call No-Show' ? 'bg-red-50 text-red-700 border-red-200 shadow-sm' :
+                                                card.status === 'Sick' ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm' :
+                                                card.status === 'Emergency' ? 'bg-purple-50 text-purple-700 border-purple-200 shadow-sm' :
+                                                'bg-zinc-50 text-zinc-800 border-zinc-200'}`}>
                                               {card.status}
                                             </span>
                                             <button
@@ -1146,6 +1255,34 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             setSelectedUserForProfile(null); 
           }}
           isViewerAdmin={true}
+          viewerUser={currentUser}
+        />
+      )}
+
+      {absenceUser && (
+        <LogAbsenceModal
+          user={absenceUser}
+          isOpen={!!absenceUser}
+          onClose={() => setAbsenceUser(null)}
+          onSave={async (type, notes) => {
+            if (onLogAbsence) {
+              const newCard = await onLogAbsence(absenceUser, type, notes);
+              if (newCard) {
+                setTimeCards(prev => [newCard, ...prev]);
+              }
+            }
+          }}
+        />
+      )}
+
+      {retroactiveUser && (
+        <AddRetroactiveCardModal
+          user={retroactiveUser}
+          isOpen={!!retroactiveUser}
+          onClose={() => setRetroactiveUser(null)}
+          onSave={async (clockInMs, clockOutMs, idleHours, date, notes) => {
+            await handleSaveRetroactiveCard(retroactiveUser, clockInMs, clockOutMs, idleHours, date, notes);
+          }}
         />
       )}
     </div>

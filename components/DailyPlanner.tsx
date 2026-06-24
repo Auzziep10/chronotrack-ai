@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy } from 'lucide-react';
-import { User, DailySchedule, ScheduleBlock, Department } from '../types';
-import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock } from '../services/firebaseService';
+import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy, Zap, MapPin, Search, ShoppingBag } from 'lucide-react';
+import { User, DailySchedule, ScheduleBlock, Department, QuickTask } from '../types';
+import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock, subscribeToQuickTasks, firebaseSaveQuickTask, firebaseDeleteQuickTask, subscribeToProductionOrders, subscribeToCustomers } from '../services/firebaseService';
 import { processExternalPlan } from '../services/geminiService';
 import { ShiftCalendarViews } from './ShiftCalendarViews';
 
@@ -20,6 +20,7 @@ const STATUS_COLORS = {
     pending: 'bg-orange-500 text-white border-orange-600', // "Not Started" / "Print 1..."
     completed: 'bg-green-500 text-white border-green-600',
     delayed: 'bg-red-500 text-white border-red-600',
+    order: 'bg-purple-600 text-white border-purple-700',
     default: 'bg-orange-400 text-white border-orange-500'
 };
 
@@ -27,7 +28,8 @@ const STATUS_LABELS = {
     active: 'Active',
     pending: 'Not Started',
     completed: 'Complete',
-    delayed: 'Delayed'
+    delayed: 'Delayed',
+    order: 'Orders'
 };
 
 export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
@@ -83,21 +85,228 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     // Close context menu on any click
     useEffect(() => {
-        const handleClick = () => setContextMenu(null);
+        const handleClick = () => {
+            setContextMenu(null);
+            setQtActiveDropdown(null);
+        };
         window.addEventListener('click', handleClick);
         return () => window.removeEventListener('click', handleClick);
     }, []);
 
-    const isAdminOrManager = (() => {
-        let currentPerms: string[] = [];
-        if (currentUser) {
-            if (Array.isArray(currentUser.permissions)) currentPerms = currentUser.permissions;
-            else if (typeof currentUser.permissions === 'string') currentPerms = currentUser.permissions.split(',').map((s: string) => s.trim());
+    // Quick Tasks State
+    const [showQuickTasks, setShowQuickTasks] = useState(false);
+    const [quickTasks, setQuickTasks] = useState<QuickTask[]>([]);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToQuickTasks(async (tasks) => {
+            if (tasks.length === 0) {
+                // Migrate tasks from local storage if any
+                try {
+                    const saved = localStorage.getItem('quickTasks');
+                    if (saved) {
+                        const localTasks = JSON.parse(saved) as QuickTask[];
+                        if (localTasks.length > 0) {
+                            for (const t of localTasks) {
+                                await firebaseSaveQuickTask(t);
+                            }
+                            localStorage.removeItem('quickTasks');
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to migrate local quick tasks:", e);
+                }
+            }
+            setQuickTasks(tasks);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Orders Integration State
+    const [showOrdersDialog, setShowOrdersDialog] = useState(false);
+    const [productionOrders, setProductionOrders] = useState<any[]>([]);
+    const [customers, setCustomers] = useState<Record<string, any>>({});
+    const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+    const [orderStartTime, setOrderStartTime] = useState('09:00');
+    const [orderDuration, setOrderDuration] = useState('120');
+    const [orderSelectedUsers, setOrderSelectedUsers] = useState<string[]>([]);
+    const [orderSearchQuery, setOrderSearchQuery] = useState('');
+    const [orderListSearchQuery, setOrderListSearchQuery] = useState('');
+
+    useEffect(() => {
+        const unsubscribeOrders = subscribeToProductionOrders((orders) => {
+            setProductionOrders(orders);
+        });
+        const unsubscribeCustomers = subscribeToCustomers((custs) => {
+            setCustomers(custs);
+        });
+        return () => {
+            unsubscribeOrders();
+            unsubscribeCustomers();
+        };
+    }, []);
+
+    const [qtNewTitle, setQtNewTitle] = useState('');
+    const [qtNewDuration, setQtNewDuration] = useState('60');
+    const [qtNewLocation, setQtNewLocation] = useState('');
+    const [qtLocationFilter, setQtLocationFilter] = useState<string | null>(null);
+    const [qtSelectedTask, setQtSelectedTask] = useState<string | null>(null);
+    const [qtSelectedUsers, setQtSelectedUsers] = useState<string[]>([]);
+    const [qtStartTime, setQtStartTime] = useState('09:00');
+    const [qtSearchQuery, setQtSearchQuery] = useState('');
+    const [qtActiveDropdown, setQtActiveDropdown] = useState<string | null>(null);
+    const [qtDropdownInput, setQtDropdownInput] = useState('');
+
+    const uniqueLocations = Array.from(new Set(quickTasks.flatMap(t => t.locations || (t.location ? [t.location] : [])).filter(Boolean))) as string[];
+    const filteredQuickTasks = qtLocationFilter ? quickTasks.filter(t => {
+        const locs = t.locations || (t.location ? [t.location] : []);
+        return locs.includes(qtLocationFilter);
+    }) : quickTasks;
+
+    const handleAddQuickTaskDef = async () => {
+        if (!qtNewTitle.trim()) return;
+        const newLocs = qtNewLocation.trim() ? qtNewLocation.split(',').map(s => s.trim()).filter(Boolean) : [];
+        await firebaseSaveQuickTask({
+            id: Date.now().toString(),
+            title: qtNewTitle,
+            duration: parseInt(qtNewDuration) || 60,
+            locations: newLocs
+        });
+        setQtNewTitle('');
+    };
+
+    const handleAddSpecificLocationToTask = async (taskId: string, newLoc: string) => {
+        if (!newLoc || !newLoc.trim()) return;
+        const task = quickTasks.find(t => t.id === taskId);
+        if (!task) return;
+        const locs = task.locations || (task.location ? [task.location] : []);
+        if (!locs.includes(newLoc.trim())) {
+            await firebaseSaveQuickTask({
+                ...task,
+                locations: [...locs, newLoc.trim()]
+            });
         }
-        const hasAdmin = currentPerms.includes('admin') || (currentUser?.role?.toLowerCase() === 'admin' && currentPerms.length === 0);
-        const hasManager = currentPerms.includes('manage_team') || (currentUser?.role?.toLowerCase() === 'manager' && currentPerms.length === 0);
-        return (hasAdmin || hasManager) && currentUser?.username?.toLowerCase() !== 'warehouse';
+    };
+
+    const handleRemoveLocationFromTask = async (taskId: string, locToRemove: string) => {
+        const task = quickTasks.find(t => t.id === taskId);
+        if (!task) return;
+        const locs = task.locations || (task.location ? [task.location] : []);
+        await firebaseSaveQuickTask({
+            ...task,
+            locations: locs.filter(l => l !== locToRemove)
+        });
+    };
+
+    const handleDeleteQuickTaskDef = async (id: string) => {
+        await firebaseDeleteQuickTask(id);
+        if (qtSelectedTask === id) setQtSelectedTask(null);
+    };
+
+    const handleAssignQuickTask = async () => {
+        const taskDef = quickTasks.find(t => t.id === qtSelectedTask);
+        if (!taskDef || qtSelectedUsers.length === 0) return;
+
+        try {
+            setLoading(true);
+            for (const userId of qtSelectedUsers) {
+                const startDateTime = new Date(currentDate);
+                const [sh, sm] = qtStartTime.split(':').map(Number);
+                startDateTime.setHours(sh, sm, 0, 0);
+
+                const endDateTime = new Date(startDateTime.getTime() + taskDef.duration * 60000);
+
+                await firebaseSaveShiftBlock({
+                    id: `task-${Date.now()}-${userId}-${Math.random()}`,
+                    title: taskDef.title,
+                    description: (() => {
+                        const locs = taskDef.locations || (taskDef.location ? [taskDef.location] : []);
+                        return locs.length > 0 ? `Locations: ${locs.join(', ')}\nQuick Task` : 'Quick Task';
+                    })(),
+                    startTime: startDateTime.toISOString(),
+                    endTime: endDateTime.toISOString(),
+                    assignedTo: userId,
+                    status: 'pending',
+                    priority: 'medium'
+                });
+            }
+            setShowQuickTasks(false);
+            setQtSelectedTask(null);
+            setQtSelectedUsers([]);
+            setQtSearchQuery('');
+        } catch (err) {
+            alert("Failed to assign quick tasks");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAssignOrderTask = async () => {
+        const order = productionOrders.find(o => o.id === selectedOrder);
+        if (!order || orderSelectedUsers.length === 0) return;
+
+        const customer = customers[order.customerId];
+        const customerName = customer ? (customer.company || customer.name) : (order.customerId || 'Unknown Customer');
+        
+        // Sum items
+        const totalItems = order.items?.reduce((acc: number, i: any) => acc + (i.qty || 0), 0) || 0;
+
+        // Build item descriptions
+        const itemDescriptions = order.items?.map((i: any) => {
+            let desc = `- ${i.qty || 0}x ${i.name || i.title || 'Item'}`;
+            if (i.sizes && Object.keys(i.sizes).length > 0) {
+                const sizesStr = Object.entries(i.sizes).map(([sz, q]) => `${sz}: ${q}`).join(', ');
+                desc += ` (${sizesStr})`;
+            }
+            return desc;
+        }).join('\n') || '';
+
+        try {
+            setLoading(true);
+            for (const userId of orderSelectedUsers) {
+                const startDateTime = new Date(currentDate);
+                const [sh, sm] = orderStartTime.split(':').map(Number);
+                startDateTime.setHours(sh, sm, 0, 0);
+
+                const endDateTime = new Date(startDateTime.getTime() + (parseInt(orderDuration) || 120) * 60000);
+
+                await firebaseSaveShiftBlock({
+                    id: `task-${Date.now()}-${userId}-${Math.random()}`,
+                    title: `Order #${order.portalId || order.id.slice(0, 6)}: ${order.title || 'Untitled Order'}`,
+                    description: `Customer: ${customerName}\nItems:\n${itemDescriptions}\nDue Date: ${order.date || 'N/A'}\nTotal Items: ${totalItems}\nQuick Order Task`,
+                    startTime: startDateTime.toISOString(),
+                    endTime: endDateTime.toISOString(),
+                    assignedTo: userId,
+                    status: 'pending',
+                    priority: 'medium',
+                    department: Department.Production
+                });
+            }
+            setShowOrdersDialog(false);
+            setSelectedOrder(null);
+            setOrderSelectedUsers([]);
+            setOrderSearchQuery('');
+            setOrderListSearchQuery('');
+        } catch (err) {
+            alert("Failed to assign order tasks");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const currentPerms = (() => {
+        let perms: string[] = [];
+        if (currentUser) {
+            if (Array.isArray(currentUser.permissions)) perms = currentUser.permissions;
+            else if (typeof currentUser.permissions === 'string') perms = currentUser.permissions.split(',').map((s: string) => s.trim());
+        }
+        return perms;
     })();
+
+    const hasAdmin = currentPerms.includes('admin') || currentUser?.role?.toLowerCase() === 'admin';
+    const canManageSchedule = (hasAdmin || currentPerms.includes('manage_schedule') || currentPerms.includes('manage_team') || (currentUser?.role?.toLowerCase() === 'manager' && currentPerms.length === 0)) && currentUser?.username?.toLowerCase() !== 'warehouse';
+    const canCreateTasks = (hasAdmin || currentPerms.includes('create_tasks') || currentPerms.includes('manage_schedule') || currentPerms.includes('manage_team') || (currentUser?.role?.toLowerCase() === 'manager' && currentPerms.length === 0)) && currentUser?.username?.toLowerCase() !== 'warehouse';
+
+    const isAdminOrManager = canManageSchedule;
 
     // Time marker for current time
     const [currentTimePercentage, setCurrentTimePercentage] = useState<number | null>(null);
@@ -232,6 +441,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 tasks = JSON.parse(cleaned);
             }
             
+            if (tasks && typeof tasks === 'object' && 'error' in tasks) {
+                throw new Error(tasks.error);
+            }
+
             if (!Array.isArray(tasks)) {
                 throw new Error("Parsed result is not an array");
             }
@@ -256,11 +469,21 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 const tStart = new Date(currentDate);
                 const tEnd = new Date(currentDate);
                 
-                if (task.startTime && task.endTime) {
-                    const [sh, sm] = task.startTime.split(':').map(Number);
-                    tStart.setHours(sh, sm || 0, 0, 0);
-                    const [eh, em] = task.endTime.split(':').map(Number);
-                    tEnd.setHours(eh, em || 0, 0, 0);
+                if (task.startTime || task.endTime) {
+                    if (task.startTime) {
+                        const [sh, sm] = task.startTime.split(':').map(Number);
+                        tStart.setHours(sh, sm || 0, 0, 0);
+                    } else if (task.endTime) {
+                        const [eh, em] = task.endTime.split(':').map(Number);
+                        tStart.setHours(eh - 1, em || 0, 0, 0);
+                    }
+                    
+                    if (task.endTime) {
+                        const [eh, em] = task.endTime.split(':').map(Number);
+                        tEnd.setHours(eh, em || 0, 0, 0);
+                    } else {
+                        tEnd.setTime(tStart.getTime() + 60 * 60 * 1000);
+                    }
                 } else {
                     // Default to right now, rounded to the nearest half hour
                     const now = new Date();
@@ -301,9 +524,14 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             setUnassignedBlocks(prev => [...prev, ...newUnassigned]);
             setTranscript('');
             alert(`AI Generation Complete! Auto-assigned ${autoAssigned} tasks. ${newUnassigned.length > 0 ? `${newUnassigned.length} tasks need manual assignment.` : ''}`);
-        } catch (err) {
+        } catch (err: any) {
             console.error("AI Generation failed:", err);
-            alert("Failed to parse schedule from text. Please ensure it contains recognizable names and times.");
+            const msg = err?.message || String(err);
+            if (msg.includes("leaked") || msg.includes("API key") || msg.includes("PLACEHOLDER") || msg.includes("API_KEY") || msg.includes("unauthorized")) {
+                alert("⚠️ AI Schedule Generator: The Gemini API key is missing or has been disabled. Please configure VITE_GEMINI_API_KEY in your environment variables (.env.local or Vercel dashboard).");
+            } else {
+                alert("Failed to parse schedule from text. Please ensure it contains recognizable names and times.");
+            }
         } finally {
             setIsGenerating(false);
         }
@@ -586,10 +814,17 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             date.getFullYear() === today.getFullYear();
     };
 
-    const getBlockStyles = (block: ScheduleBlock) => {
+    const getBlockStyles = (block: ScheduleBlock, overlapIndex: number = 0) => {
+        if (!block || !block.startTime || !block.endTime) {
+            return { display: 'none' };
+        }
         // Calculate position
         const start = new Date(block.startTime);
         const end = new Date(block.endTime);
+
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            return { display: 'none' };
+        }
 
         // Normalize to current day's hours if timezone issues, 
         // but assuming ISO strings are correct in local or UTC
@@ -615,7 +850,9 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         // Our API has 'status': pending, in_progress, completed, delayed
         let colorClass = STATUS_COLORS.default;
 
-        if (block.status === 'in_progress') colorClass = STATUS_COLORS.active;
+        if (block.title?.startsWith('Order #') || block.description?.includes('Quick Order Task')) {
+            colorClass = STATUS_COLORS.order;
+        } else if (block.status === 'in_progress') colorClass = STATUS_COLORS.active;
         else if (block.status === 'completed') colorClass = STATUS_COLORS.completed;
         else if (block.status === 'delayed') colorClass = STATUS_COLORS.delayed;
         else if (block.status === 'pending') colorClass = STATUS_COLORS.pending;
@@ -623,7 +860,9 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         return {
             left: `${left}%`,
             width: `${width}%`,
-            className: `absolute top-1 bottom-1 rounded-md text-xs font-medium px-2 py-1 truncate shadow-sm border-l-4 ${colorClass} hover:opacity-90 transition-opacity cursor-pointer`
+            top: `${4 + overlapIndex * 32}px`,
+            height: '28px',
+            className: `absolute rounded-md text-xs font-medium px-2 py-1 truncate shadow-sm border-l-4 ${colorClass} hover:opacity-90 transition-opacity cursor-pointer z-10`
         };
     };
 
@@ -648,8 +887,17 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         };
 
         const dayBlocks = shiftBlocks.filter(b => {
+             if (!isMatch(b.assignedTo)) return false;
+             if (b.date) {
+                 const yyyy = currentDate.getFullYear();
+                 const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
+                 const dd = String(currentDate.getDate()).padStart(2, '0');
+                 const currentStr = `${yyyy}-${mm}-${dd}`;
+                 return b.date === currentStr;
+             }
+             if (!b.startTime) return false;
              const bDate = new Date(b.startTime);
-             return isMatch(b.assignedTo) && bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
+             return bDate.getDate() === currentDate.getDate() && bDate.getMonth() === currentDate.getMonth() && bDate.getFullYear() === currentDate.getFullYear();
         });
 
         if (activeView === 'shifts') {
@@ -712,18 +960,45 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    {isAdminOrManager && activeView === 'tasks' && (
-                        <button
-                            onClick={() => setIsPlanningMode(!isPlanningMode)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm border ${isPlanningMode
-                                ? 'bg-orange-600 border-orange-700 text-white animate-pulse'
-                                : 'bg-zinc-900 border-zinc-700 text-white hover:bg-zinc-800'
-                                }`}
-                        >
-                            <Wand2 className="w-4 h-4" />
-                            {isPlanningMode ? 'Exit Planning Mode' : 'Build Schedule'}
-                        </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                    {activeView === 'tasks' && (
+                        <>
+                            {canCreateTasks && (
+                                <>
+                                    <button
+                                        onClick={() => setShowQuickTasks(true)}
+                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
+                                    >
+                                        <Zap className="w-4 h-4 text-orange-500" />
+                                        Quick Tasks
+                                    </button>
+                                    <button
+                                        onClick={() => setShowOrdersDialog(true)}
+                                        className="relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
+                                    >
+                                        <ShoppingBag className="w-4 h-4 text-purple-500" />
+                                        Orders
+                                        {productionOrders.length > 0 && (
+                                            <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-purple-600 px-1 text-[10px] font-bold text-white shadow-sm ring-1 ring-white">
+                                                {productionOrders.length}
+                                            </span>
+                                        )}
+                                    </button>
+                                </>
+                            )}
+                            {canManageSchedule && (
+                                <button
+                                    onClick={() => setIsPlanningMode(!isPlanningMode)}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap shrink-0 ${isPlanningMode
+                                        ? 'bg-orange-600 border-orange-700 text-white animate-pulse'
+                                        : 'bg-zinc-900 border-zinc-700 text-white hover:bg-zinc-800'
+                                        }`}
+                                >
+                                    <Wand2 className="w-4 h-4" />
+                                    {isPlanningMode ? 'Exit Planning Mode' : 'Build Schedule'}
+                                </button>
+                            )}
+                        </>
                     )}
 
                     <div className="flex bg-white rounded-lg border border-zinc-300 shadow-sm p-1 items-center ml-2">
@@ -1017,7 +1292,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             {/* Current Time Indicator */}
                             {isToday(currentDate) && currentTimePercentage !== null && (
                                 <div
-                                    className="absolute top-0 bottom-0 w-px bg-red-500 z-10 pointer-events-none"
+                                    className="absolute top-0 bottom-0 w-px bg-red-500 z-40 pointer-events-none"
                                     style={{ left: `calc(12rem + ${currentTimePercentage}% - (12rem * ${currentTimePercentage / 100}))` }}
                                 // Math explanation: 
                                 // The container is flex-row. The left 12rem is the sidebar. The right is grid.
@@ -1033,8 +1308,30 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             )}
 
                             {/* Rows */}
-                            {sortedUsers.map(user => (
-                                <div key={user.id} className="flex border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors h-16 relative">
+                            {sortedUsers.map(user => {
+                                const blocks = userBlocks[user.id] || [];
+                                
+                                // Calculate overlaps to stack blocks
+                                const sortedBlocks = [...blocks].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+                                const overlaps = new Map<string, number>();
+                                const lanes: number[] = [];
+                                
+                                sortedBlocks.forEach(block => {
+                                    const start = new Date(block.startTime).getTime();
+                                    const end = new Date(block.endTime).getTime();
+                                    let laneIndex = lanes.findIndex(laneEnd => laneEnd <= start);
+                                    if (laneIndex === -1) {
+                                        laneIndex = lanes.length;
+                                    }
+                                    lanes[laneIndex] = end;
+                                    overlaps.set(block.id, laneIndex);
+                                });
+
+                                const maxLane = Math.max(0, lanes.length - 1);
+                                const rowHeight = Math.max(64, (maxLane + 1) * 32 + 8);
+
+                                return (
+                                <div key={user.id} className="flex border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors relative" style={{ height: `${rowHeight}px` }}>
                                     {/* User Info (Sticky Left) */}
                                     <div className="w-48 border-r border-zinc-200 p-3 bg-white sticky left-0 z-10 flex items-center gap-3">
                                         <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-600 flex items-center justify-center font-bold text-xs ring-2 ring-white shadow-sm">
@@ -1052,7 +1349,8 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         {(userBlocks[user.id] || []).map(originalBlock => {
                                             const isDragged = previewBlock?.id === originalBlock.id;
                                             const block = isDragged ? previewBlock : originalBlock;
-                                            const styles = getBlockStyles(block);
+                                            const overlapIndex = overlaps.get(originalBlock.id) || 0;
+                                            const styles = getBlockStyles(block, overlapIndex);
                                             return (
                                                 <div
                                                     key={block.id}
@@ -1077,7 +1375,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                         });
                                                         setPreviewBlock(originalBlock);
                                                     }}
-                                                    style={{ left: styles.left, width: styles.width }}
+                                                    style={{ left: styles.left, width: styles.width, top: styles.top, height: styles.height }}
                                                     className={styles.className + " group " + (isAdminOrManager ? "cursor-pointer" : "") + (isDragged ? " opacity-70 scale-105 z-50 shadow-xl" : "")}
                                                     title={`${block.title} (${new Date(block.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${new Date(block.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`}
                                                 >
@@ -1088,30 +1386,76 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                         </div>
                                                     )}
                                                     {/* Tooltip-ish Details */}
-                                                    <div className="hidden group-hover:block absolute top-full left-0 bg-zinc-800 text-white text-xs p-2 rounded shadow-lg z-50 w-48 mt-1 whitespace-normal">
-                                                        <div className="flex justify-between items-start mb-1">
-                                                            <div className="font-bold">{activeView === 'shifts' ? 'Shift Schedule' : block.title}</div>
+                                                    <div className="hidden group-hover:block absolute top-full left-0 bg-zinc-800 text-white text-xs p-3 rounded shadow-xl z-[100] w-64 mt-1 whitespace-normal">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <div className="font-bold text-sm leading-tight pr-2">{activeView === 'shifts' ? 'Shift Schedule' : block.title}</div>
                                                             {(isAdminOrManager) && (
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         handleDeleteBlock(block.id, activeView === 'shifts');
                                                                     }}
-                                                                    className="p-1 hover:bg-red-500 rounded transition-colors"
+                                                                    className="p-1 hover:bg-red-500 rounded transition-colors shrink-0"
                                                                 >
                                                                     <X className="w-3 h-3" />
                                                                 </button>
                                                             )}
                                                         </div>
-                                                        <div className="opacity-80 mb-1">{block.description}</div>
-                                                        <div className="text-[10px] opacity-60">Status: {block.status}</div>
+                                                        
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <div className="flex items-center gap-1.5 text-zinc-300">
+                                                                <Clock className="w-3 h-3 shrink-0" />
+                                                                <span>{new Date(block.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - {new Date(block.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                                                            </div>
+
+                                                            {block.department && (
+                                                                <div className="flex items-center gap-1.5 text-zinc-300">
+                                                                    <LayoutGrid className="w-3 h-3 shrink-0" />
+                                                                    <span>{block.department}</span>
+                                                                </div>
+                                                            )}
+
+                                                            {block.location && (
+                                                                <div className="flex items-center gap-1.5 text-zinc-300">
+                                                                    <MapPin className="w-3 h-3 shrink-0" />
+                                                                    <span>{block.location}</span>
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {block.priority && (
+                                                                <div className="flex items-center gap-1.5 text-zinc-300 capitalize">
+                                                                    <AlertCircle className="w-3 h-3 shrink-0" />
+                                                                    <span>{block.priority} Priority</span>
+                                                                </div>
+                                                            )}
+
+                                                            {block.description && (
+                                                                <div className="mt-1 pt-1.5 border-t border-zinc-700 text-zinc-300">
+                                                                    {block.description.split('\n').map((line, i) => (
+                                                                        <div key={i}>{line}</div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+
+                                                            <div className="mt-1 pt-1.5 border-t border-zinc-700 flex items-center justify-between">
+                                                                <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-bold">Status</span>
+                                                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold capitalize ${
+                                                                    block.status === 'completed' ? 'bg-green-500/20 text-green-300' :
+                                                                    block.status === 'in_progress' ? 'bg-blue-500/20 text-blue-300' :
+                                                                    block.status === 'delayed' ? 'bg-red-500/20 text-red-300' :
+                                                                    'bg-orange-500/20 text-orange-300'
+                                                                }`}>
+                                                                    {block.status.replace('_', ' ')}
+                                                                </span>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );
                                         })}
                                     </div>
                                 </div>
-                            ))}
+                            )})}
 
                             {/* Empty State if no users */}
                             {sortedUsers.length === 0 && (
@@ -1263,6 +1607,398 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             new Date(new Date().setHours(Math.floor(contextMenu.hour), contextMenu.hour % 1 === 0 ? 0 : 30)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
                         }
                     </button>
+                </div>
+            )}
+
+            {/* Quick Tasks Dialog */}
+            {showQuickTasks && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl border border-zinc-200 w-[95vw] max-w-[1600px] h-[90vh] overflow-hidden animate-fade-in flex flex-col">
+                        <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex justify-between items-center shrink-0">
+                            <h3 className="font-bold text-zinc-800 flex items-center gap-2">
+                                <Zap className="w-5 h-5 text-orange-500" />
+                                Quick Tasks
+                            </h3>
+                            <button onClick={() => setShowQuickTasks(false)} className="p-1 hover:bg-zinc-200 rounded text-zinc-500 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 flex overflow-hidden">
+                            {/* Left Panel: Manage Tasks */}
+                            <div className="w-1/2 border-r border-zinc-200 flex flex-col bg-zinc-50/50">
+                                <div className="p-3 border-b border-zinc-200 bg-white">
+                                    <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">Predetermined Tasks</div>
+                                    <div className="flex gap-2">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Task title..." 
+                                            value={qtNewTitle}
+                                            onChange={e => setQtNewTitle(e.target.value)}
+                                            className="flex-1 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                        <input
+                                            type="text"
+                                            list="qt-locations"
+                                            placeholder="Location (comma separated)..."
+                                            value={qtNewLocation}
+                                            onChange={e => setQtNewLocation(e.target.value)}
+                                            className="w-48 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                        <datalist id="qt-locations">
+                                            {uniqueLocations.map(loc => <option key={loc} value={loc} />)}
+                                        </datalist>
+                                        <input 
+                                            type="number" 
+                                            placeholder="Mins" 
+                                            value={qtNewDuration}
+                                            onChange={e => setQtNewDuration(e.target.value)}
+                                            className="w-16 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                        <button 
+                                            onClick={handleAddQuickTaskDef}
+                                            disabled={!qtNewTitle.trim()}
+                                            className="p-1.5 bg-zinc-800 text-white rounded hover:bg-zinc-700 disabled:opacity-50 shrink-0"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    {uniqueLocations.length > 0 && (
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            <button 
+                                                onClick={() => setQtLocationFilter(null)}
+                                                className={`text-[10px] px-2 py-1 rounded-full font-bold transition-colors ${!qtLocationFilter ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}
+                                            >
+                                                All
+                                            </button>
+                                            {uniqueLocations.map(loc => (
+                                                <button 
+                                                    key={loc}
+                                                    onClick={() => setQtLocationFilter(loc)}
+                                                    className={`text-[10px] px-2 py-1 rounded-full font-bold transition-colors ${qtLocationFilter === loc ? 'bg-orange-600 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}
+                                                >
+                                                    {loc}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                    {filteredQuickTasks.length === 0 ? (
+                                        <div className="text-xs text-zinc-400 text-center mt-4">No quick tasks found. Create one above.</div>
+                                    ) : (
+                                        filteredQuickTasks.map(t => (
+                                            <div 
+                                                key={t.id} 
+                                                onClick={() => setQtSelectedTask(t.id)}
+                                                className={`group flex items-center justify-between p-2 rounded cursor-pointer border ${qtSelectedTask === t.id ? 'bg-orange-50 border-orange-300 shadow-sm' : 'bg-white border-zinc-200 hover:border-orange-200'}`}
+                                            >
+                                                <div className="min-w-0 flex-1 flex flex-col justify-center">
+                                                    <div className="text-sm font-bold text-zinc-800 truncate">{t.title}</div>
+                                                    <div className="text-[10px] text-zinc-500 flex gap-2 flex-wrap items-center mt-0.5">
+                                                        <span>{t.duration} mins</span>
+                                                        {(t.locations || (t.location ? [t.location] : [])).map(loc => (
+                                                            <span key={loc} className="bg-zinc-100 border border-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded flex items-center gap-1 group/loc transition-colors hover:bg-zinc-200">
+                                                                {loc}
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); handleRemoveLocationFromTask(t.id, loc); }}
+                                                                    className="opacity-0 group-hover/loc:opacity-100 hover:text-red-500 transition-opacity"
+                                                                >
+                                                                    &times;
+                                                                </button>
+                                                            </span>
+                                                        ))}
+                                                        <div className="relative">
+                                                            <button 
+                                                                onClick={(e) => { 
+                                                                    e.stopPropagation(); 
+                                                                    setQtActiveDropdown(qtActiveDropdown === t.id ? null : t.id);
+                                                                    setQtDropdownInput('');
+                                                                }}
+                                                                className="text-zinc-400 hover:text-zinc-600 px-1 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold"
+                                                                title="Add Location Tag"
+                                                            >
+                                                                + Add
+                                                            </button>
+                                                            {qtActiveDropdown === t.id && (
+                                                                <div className="absolute top-full left-0 mt-1 bg-white border border-zinc-200 rounded shadow-xl z-[200] w-48 p-2 text-zinc-800" onClick={e => e.stopPropagation()}>
+                                                                    <div className="text-[10px] font-bold text-zinc-500 uppercase mb-2">Add Location</div>
+                                                                    <div className="max-h-32 overflow-y-auto mb-2 space-y-1">
+                                                                        {uniqueLocations.filter(loc => !(t.locations || (t.location ? [t.location] : [])).includes(loc)).map(loc => (
+                                                                            <button 
+                                                                                key={loc}
+                                                                                onClick={() => {
+                                                                                    handleAddSpecificLocationToTask(t.id, loc);
+                                                                                    setQtActiveDropdown(null);
+                                                                                }}
+                                                                                className="block w-full text-left text-xs p-1.5 hover:bg-zinc-100 rounded"
+                                                                            >
+                                                                                {loc}
+                                                                            </button>
+                                                                        ))}
+                                                                        {uniqueLocations.filter(loc => !(t.locations || (t.location ? [t.location] : [])).includes(loc)).length === 0 && (
+                                                                            <div className="text-xs text-zinc-400 italic px-1">No other locations...</div>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex gap-1 border-t border-zinc-100 pt-2">
+                                                                        <input 
+                                                                            type="text" 
+                                                                            value={qtDropdownInput}
+                                                                            onChange={e => setQtDropdownInput(e.target.value)}
+                                                                            placeholder="New..."
+                                                                            className="flex-1 text-xs border border-zinc-300 rounded px-1.5 py-1 outline-none focus:border-orange-500 min-w-0"
+                                                                            onKeyDown={(e) => {
+                                                                                if (e.key === 'Enter' && qtDropdownInput.trim()) {
+                                                                                    handleAddSpecificLocationToTask(t.id, qtDropdownInput);
+                                                                                    setQtActiveDropdown(null);
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                        <button 
+                                                                            onClick={() => {
+                                                                                if (qtDropdownInput.trim()) {
+                                                                                    handleAddSpecificLocationToTask(t.id, qtDropdownInput);
+                                                                                    setQtActiveDropdown(null);
+                                                                                }
+                                                                            }}
+                                                                            className="px-2 py-0.5 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-bold transition-colors"
+                                                                        >
+                                                                            +
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteQuickTaskDef(t.id); }}
+                                                    className="p-1 text-zinc-400 hover:text-red-500 rounded hover:bg-red-50 ml-2 shrink-0"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right Panel: Assign */}
+                            <div className="w-1/2 flex flex-col bg-white">
+                                <div className="p-4 flex-1 flex flex-col overflow-hidden">
+                                    {!qtSelectedTask ? (
+                                        <div className="h-full flex items-center justify-center text-sm text-zinc-400 text-center px-4">
+                                            Select a task from the left to assign it to team members.
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-4 flex-1 min-h-0">
+                                            <div className="shrink-0">
+                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">1. Select Time</div>
+                                                <input 
+                                                    type="time" 
+                                                    value={qtStartTime}
+                                                    onChange={e => setQtStartTime(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
+                                                />
+                                            </div>
+
+                                            <div className="flex flex-col flex-1 min-h-0">
+                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider shrink-0">2. Select Team Members</div>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search team members..."
+                                                    value={qtSearchQuery}
+                                                    onChange={e => setQtSearchQuery(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500 mb-2 shrink-0"
+                                                />
+                                                <div className="space-y-1 flex-1 overflow-y-auto border border-zinc-200 rounded p-1 min-h-0">
+                                                    {teamMembers
+                                                        .filter(u => u.name.toLowerCase().includes(qtSearchQuery.toLowerCase()))
+                                                        .sort((a, b) => a.name.localeCompare(b.name))
+                                                        .map(u => (
+                                                        <label key={u.id} className="flex items-center gap-2 p-1.5 hover:bg-zinc-50 rounded cursor-pointer">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={qtSelectedUsers.includes(u.id)}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) setQtSelectedUsers([...qtSelectedUsers, u.id]);
+                                                                    else setQtSelectedUsers(qtSelectedUsers.filter(id => id !== u.id));
+                                                                }}
+                                                                className="rounded border-zinc-300 text-orange-600 focus:ring-orange-500"
+                                                            />
+                                                            <span className="text-sm font-medium text-zinc-700">{u.name}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-4 border-t border-zinc-100 bg-zinc-50 shrink-0">
+                                    <button
+                                        onClick={handleAssignQuickTask}
+                                        disabled={!qtSelectedTask || qtSelectedUsers.length === 0}
+                                        className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                        <Plus className="w-4 h-4" /> Add to Planners
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Orders Dialog */}
+            {showOrdersDialog && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl border border-zinc-200 w-[95vw] max-w-[1600px] h-[90vh] overflow-hidden animate-fade-in flex flex-col">
+                        <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex justify-between items-center shrink-0">
+                            <h3 className="font-bold text-zinc-800 flex items-center gap-2">
+                                <ShoppingBag className="w-5 h-5 text-purple-500" />
+                                Production Orders
+                            </h3>
+                            <button onClick={() => setShowOrdersDialog(false)} className="p-1 hover:bg-zinc-200 rounded text-zinc-500 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 flex overflow-hidden">
+                            {/* Left Panel: Orders List */}
+                            <div className="w-1/2 border-r border-zinc-200 flex flex-col bg-zinc-50/50">
+                                <div className="p-3 border-b border-zinc-200 bg-white">
+                                    <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">Select Live Production Order</div>
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search by order ID, customer or title..." 
+                                            value={orderListSearchQuery}
+                                            onChange={e => setOrderListSearchQuery(e.target.value)}
+                                            className="w-full text-sm pl-9 pr-3 py-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-purple-500"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                    {(() => {
+                                        const filteredOrders = productionOrders.filter(order => {
+                                            const query = orderListSearchQuery.toLowerCase().trim();
+                                            if (!query) return true;
+                                            
+                                            const customer = customers[order.customerId];
+                                            const customerName = (customer?.company || customer?.name || order.customerId || '').toLowerCase();
+                                            const title = (order.title || '').toLowerCase();
+                                            const portalId = (order.portalId || '').toLowerCase();
+                                            const id = (order.id || '').toLowerCase();
+
+                                            return customerName.includes(query) || title.includes(query) || portalId.includes(query) || id.includes(query);
+                                        });
+
+                                        if (filteredOrders.length === 0) {
+                                            return <div className="text-xs text-zinc-400 text-center mt-4">No active production orders found.</div>;
+                                        }
+
+                                        return filteredOrders.map(order => {
+                                            const customer = customers[order.customerId];
+                                            const customerName = customer ? (customer.company || customer.name) : (order.customerId || 'Unknown Customer');
+                                            const totalItems = order.items?.reduce((acc: number, i: any) => acc + (i.qty || 0), 0) || 0;
+
+                                            return (
+                                                <div 
+                                                    key={order.id} 
+                                                    onClick={() => setSelectedOrder(order.id)}
+                                                    className={`group flex flex-col p-3 rounded cursor-pointer border transition-all ${selectedOrder === order.id ? 'bg-purple-50 border-purple-300 shadow-sm' : 'bg-white border-zinc-200 hover:border-purple-200'}`}
+                                                >
+                                                    <div className="flex justify-between items-start">
+                                                        <span className="text-xs font-bold text-zinc-500">Order #{order.portalId || order.id.slice(0, 6)}</span>
+                                                        {order.date && <span className="text-[10px] bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded font-medium">Due: {order.date}</span>}
+                                                    </div>
+                                                    <div className="text-sm font-bold text-zinc-800 mt-1">{customerName}</div>
+                                                    <div className="text-xs text-zinc-600 truncate mt-0.5">{order.title || 'Untitled Order'}</div>
+                                                    <div className="text-[10px] text-purple-600 font-semibold mt-1">
+                                                        {totalItems} item{totalItems !== 1 ? 's' : ''} in production
+                                                    </div>
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            </div>
+
+                            {/* Right Panel: Assign Order */}
+                            <div className="w-1/2 flex flex-col bg-white">
+                                <div className="p-4 flex-1 flex flex-col overflow-hidden">
+                                    {!selectedOrder ? (
+                                        <div className="h-full flex items-center justify-center text-sm text-zinc-400 text-center px-4">
+                                            Select an order from the left to assign it to team members.
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-4 flex-1 min-h-0">
+                                            <div className="shrink-0">
+                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">1. Select Start Time</div>
+                                                <input 
+                                                    type="time" 
+                                                    value={orderStartTime}
+                                                    onChange={e => setOrderStartTime(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-purple-500"
+                                                />
+                                            </div>
+
+                                            <div className="shrink-0">
+                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">2. Estimated Duration (Minutes)</div>
+                                                <input 
+                                                    type="number" 
+                                                    value={orderDuration}
+                                                    onChange={e => setOrderDuration(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-purple-500"
+                                                    placeholder="120"
+                                                />
+                                            </div>
+
+                                            <div className="flex flex-col flex-1 min-h-0">
+                                                <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider shrink-0">3. Select Team Members</div>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search team members..."
+                                                    value={orderSearchQuery}
+                                                    onChange={e => setOrderSearchQuery(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-purple-500 mb-2 shrink-0"
+                                                />
+                                                <div className="space-y-1 flex-1 overflow-y-auto border border-zinc-200 rounded p-1 min-h-0">
+                                                    {teamMembers
+                                                        .filter(u => u.name.toLowerCase().includes(orderSearchQuery.toLowerCase()))
+                                                        .sort((a, b) => a.name.localeCompare(b.name))
+                                                        .map(u => (
+                                                        <label key={u.id} className="flex items-center gap-2 p-1.5 hover:bg-zinc-50 rounded cursor-pointer">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={orderSelectedUsers.includes(u.id)}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) setOrderSelectedUsers([...orderSelectedUsers, u.id]);
+                                                                    else setOrderSelectedUsers(orderSelectedUsers.filter(id => id !== u.id));
+                                                                }}
+                                                                className="rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
+                                                            />
+                                                            <span className="text-sm font-medium text-zinc-700">{u.name}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-4 border-t border-zinc-100 bg-zinc-50 shrink-0">
+                                    <button
+                                        onClick={handleAssignOrderTask}
+                                        disabled={!selectedOrder || orderSelectedUsers.length === 0}
+                                        className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                        <Plus className="w-4 h-4" /> Add Order to Planners
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

@@ -94,7 +94,7 @@ export interface DailyTimeCard {
   clockOut: number | null;
   totalHours: number;
   totalIdleHours?: number; // Subtracted from total due to missed check-ins
-  status: 'Complete' | 'Active' | 'Missing';
+  status: 'Complete' | 'Active' | 'Missing' | 'No-Call No-Show' | 'Sick' | 'Emergency';
   clockInDepartment?: string;
   isUnscheduled?: boolean;
 }
@@ -107,6 +107,9 @@ export interface AppSettings {
   payPeriodStartDay: DayOfWeek;
   checkInIntervalHours?: number;
   autoPauseEnabled?: boolean;
+  useCustomPayPeriods?: boolean;
+  customCycleStart?: string; // YYYY-MM-DD
+  customCycleEnd?: string;   // YYYY-MM-DD
 }
 
 export interface ScheduleBlock {

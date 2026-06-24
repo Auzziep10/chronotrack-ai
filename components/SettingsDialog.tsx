@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Settings, Database, Cloud, Info, UserPlus, Users, Calendar, Check, UserCog, Trash2 } from 'lucide-react';
+import { X, Settings, Cloud, Info, UserPlus, Users, Calendar, Check, UserCog, Trash2 } from 'lucide-react';
 import { User, AppSettings, PayFrequency, DayOfWeek, DailyAvailability, Department } from '../types';
 import { DAYS_OF_WEEK } from '../constants';
 import { UserProfileDialog } from './UserProfileDialog';
@@ -13,14 +13,68 @@ interface Props {
   onDeleteUser: (userId: string) => void;
   settings: AppSettings;
   onUpdateSettings: (settings: AppSettings) => void;
+  currentUser?: User | null;
 }
 
-export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddUser, onUpdateUser, onDeleteUser, settings, onUpdateSettings }) => {
+export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddUser, onUpdateUser, onDeleteUser, settings, onUpdateSettings, currentUser = null }) => {
   const [newUser, setNewUser] = useState({ name: '', role: '', pin: '', username: '', password: '' });
   const [userError, setUserError] = useState('');
 
   // Profile Dialog State
   const [editingUser, setEditingUser] = useState<User | null>(null);
+
+  const handleToggleCustomCycles = (checked: boolean) => {
+    const updates: Partial<AppSettings> = { useCustomPayPeriods: checked };
+    if (checked) {
+      if (!settings.customCycleStart) {
+        const today = new Date();
+        const startStr = today.toISOString().split('T')[0];
+        updates.customCycleStart = startStr;
+      }
+      if (!settings.customCycleEnd) {
+        const start = settings.customCycleStart || new Date().toISOString().split('T')[0];
+        const startDateObj = new Date(start + 'T00:00:00');
+        const end = new Date(startDateObj.getTime() + 13 * 24 * 60 * 60 * 1000);
+        updates.customCycleEnd = end.toISOString().split('T')[0];
+      }
+    }
+    onUpdateSettings({ ...settings, ...updates });
+  };
+
+  const getPreviewPeriods = () => {
+    if (!settings.customCycleStart || !settings.customCycleEnd) return [];
+    
+    const periods = [];
+    const today = new Date();
+    const anchorStart = new Date(settings.customCycleStart + 'T00:00:00');
+    const anchorEnd = new Date(settings.customCycleEnd + 'T23:59:59.999');
+    
+    const D_ms = anchorEnd.getTime() - anchorStart.getTime() + 1;
+    const D_days = Math.round(D_ms / (24 * 60 * 60 * 1000));
+    
+    if (D_days > 0) {
+      const todayMs = today.getTime();
+      const elapsedMs = todayMs - anchorStart.getTime();
+      const elapsedCycles = Math.floor(elapsedMs / D_ms);
+      
+      // Generate 5 preview cycles: 1 past, 1 current, 3 future
+      for (let i = -1; i <= 3; i++) {
+        const cycleIndex = elapsedCycles + i;
+        const start = new Date(anchorStart.getTime() + cycleIndex * D_ms);
+        const end = new Date(start.getTime() + D_ms - 1);
+        const isCurrent = todayMs >= start.getTime() && todayMs <= end.getTime();
+        
+        periods.push({
+          start,
+          end,
+          label: `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`,
+          isCurrent,
+          status: isCurrent ? 'Current Cycle' : cycleIndex < elapsedCycles ? 'Past Cycle' : 'Upcoming Cycle'
+        });
+      }
+    }
+    return periods;
+  };
 
   if (!isOpen) return null;
 
@@ -102,65 +156,161 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
                 <Calendar className="w-4 h-4 text-zinc-900" /> Pay Period Configuration
               </h4>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Custom Cycles Toggle Switch */}
+              <div className="flex items-center justify-between bg-zinc-50 p-4 rounded-lg border border-zinc-200">
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-500 mb-2">Frequency</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {(['Weekly', 'Bi-Weekly', 'Monthly'] as PayFrequency[]).map((freq) => (
-                      <button
-                        key={freq}
-                        onClick={() => onUpdateSettings({ ...settings, payFrequency: freq })}
-                        className={`relative p-2 rounded-lg border text-xs font-medium transition-all text-center
-                          ${settings.payFrequency === freq
-                            ? 'bg-zinc-50 border-zinc-300 text-zinc-800 shadow-sm'
-                            : 'bg-white border-zinc-200 text-zinc-600 hover:border-zinc-300'}`}
-                      >
-                        {freq}
-                        {settings.payFrequency === freq && (
-                          <div className="absolute top-1 right-1 text-zinc-900">
-                            <Check className="w-2 h-2" />
+                  <h5 className="text-sm font-bold text-zinc-800">Use Custom Cycles</h5>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Set a custom start/end date for your cycle. Subsequent cycles will automatically propagate when previous ones finish.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={settings.useCustomPayPeriods === true}
+                    onChange={(e) => handleToggleCustomCycles(e.target.checked)}
+                  />
+                  <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-zinc-900"></div>
+                </label>
+              </div>
+
+              {settings.useCustomPayPeriods ? (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-white p-5 rounded-xl border border-zinc-200">
+                  {/* Left: Configuration Form */}
+                  <div className="lg:col-span-5 space-y-4 border-b lg:border-b-0 lg:border-r border-zinc-200 pb-6 lg:pb-0 lg:pr-6">
+                    <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Anchor Cycle</h5>
+                    <p className="text-xs text-zinc-500">
+                      Configure your initial/starting cycle. The system will use its duration to project all subsequent intervals.
+                    </p>
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-500 mb-1">Anchor Start Date</label>
+                      <input
+                        type="date"
+                        value={settings.customCycleStart || ''}
+                        onChange={(e) => onUpdateSettings({ ...settings, customCycleStart: e.target.value })}
+                        className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 p-2 bg-zinc-50 font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-500 mb-1">Anchor End Date</label>
+                      <input
+                        type="date"
+                        value={settings.customCycleEnd || ''}
+                        onChange={(e) => onUpdateSettings({ ...settings, customCycleEnd: e.target.value })}
+                        className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 p-2 bg-zinc-50 font-medium"
+                      />
+                    </div>
+                    {settings.customCycleStart && settings.customCycleEnd && (
+                      <div className="bg-zinc-50 p-3 rounded-lg text-xs text-zinc-600 flex justify-between items-center border border-zinc-200">
+                        <span className="font-medium">Calculated Cycle Length:</span>
+                        <span className="font-bold text-zinc-900">
+                          {Math.round(
+                            (new Date(settings.customCycleEnd + 'T23:59:59.999').getTime() -
+                              new Date(settings.customCycleStart + 'T00:00:00').getTime() + 1) /
+                              (24 * 60 * 60 * 1000)
+                          )}{' '}
+                          Days
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Preview List */}
+                  <div className="lg:col-span-7 space-y-4">
+                    <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Generated Cycles Preview</h5>
+                    <p className="text-xs text-zinc-500">
+                      Subsequent pay cycles will automatically generate as previous ones finish:
+                    </p>
+                    <div className="border border-zinc-200 rounded-lg overflow-hidden divide-y divide-zinc-100 max-h-[200px] overflow-y-auto bg-zinc-50/30">
+                      {getPreviewPeriods().map((p, idx) => (
+                        <div
+                          key={idx}
+                          className={`p-3 text-xs flex justify-between items-center transition-colors ${
+                            p.isCurrent ? 'bg-zinc-900/5 font-semibold text-zinc-900' : 'text-zinc-600'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {p.isCurrent && <div className="w-2 h-2 rounded-full bg-zinc-900 animate-pulse"></div>}
+                            <span>{p.label}</span>
                           </div>
-                        )}
-                      </button>
-                    ))}
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              p.isCurrent
+                                ? 'bg-zinc-900 text-white shadow-sm'
+                                : p.status === 'Past Cycle'
+                                ? 'bg-zinc-100 text-zinc-400 border border-zinc-200/50'
+                                : 'bg-green-50 text-green-700 border border-green-200 shadow-sm'
+                            }`}
+                          >
+                            {p.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-500 mb-2">Frequency</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {(['Weekly', 'Bi-Weekly', 'Monthly'] as PayFrequency[]).map((freq) => (
+                        <button
+                          key={freq}
+                          onClick={() => onUpdateSettings({ ...settings, payFrequency: freq })}
+                          className={`relative p-2 rounded-lg border text-xs font-medium transition-all text-center
+                            ${settings.payFrequency === freq
+                              ? 'bg-zinc-50 border-zinc-300 text-zinc-800 shadow-sm'
+                              : 'bg-white border-zinc-200 text-zinc-600 hover:border-zinc-300'}`}
+                        >
+                          {freq}
+                          {settings.payFrequency === freq && (
+                            <div className="absolute top-1 right-1 text-zinc-900">
+                              <Check className="w-2 h-2" />
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-500 mb-2">Start Day</label>
-                  <select
-                    value={settings.payPeriodStartDay || 'Monday'}
-                    onChange={(e) => onUpdateSettings({ ...settings, payPeriodStartDay: e.target.value as DayOfWeek })}
-                    className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 p-2 bg-zinc-50"
-                  >
-                    {DAYS_OF_WEEK.map(day => (
-                      <option key={day} value={day}>{day}</option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-zinc-400 mt-1">First day of the reporting cycle</p>
-                </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-500 mb-2">Start Day</label>
+                    <select
+                      value={settings.payPeriodStartDay || 'Monday'}
+                      onChange={(e) => onUpdateSettings({ ...settings, payPeriodStartDay: e.target.value as DayOfWeek })}
+                      className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 p-2 bg-zinc-50"
+                    >
+                      {DAYS_OF_WEEK.map(day => (
+                        <option key={day} value={day}>{day}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-zinc-400 mt-1">First day of the reporting cycle</p>
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-500 mb-2">Check-in Interval</label>
-                  <select
-                    value={settings.checkInIntervalHours || 1}
-                    onChange={(e) => onUpdateSettings({ ...settings, checkInIntervalHours: Number(e.target.value) })}
-                    className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 p-2 bg-zinc-50"
-                  >
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(hour => (
-                      <option key={hour} value={hour}>{hour} Hour{hour > 1 ? 's' : ''}</option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-zinc-400 mt-1">Prompt staff to log activity every X hours</p>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-500 mb-2">Check-in Interval</label>
+                    <select
+                      value={settings.checkInIntervalHours || 1}
+                      onChange={(e) => onUpdateSettings({ ...settings, checkInIntervalHours: Number(e.target.value) })}
+                      className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 p-2 bg-zinc-50"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(hour => (
+                        <option key={hour} value={hour}>{hour} Hour{hour > 1 ? 's' : ''}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-zinc-400 mt-1">Prompt staff to log activity every X hours</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="mt-4 flex items-center justify-between bg-zinc-50 p-4 rounded-lg border border-zinc-200">
                 <div>
                   <h5 className="text-sm font-bold text-zinc-800">Discord Notifications</h5>
                   <p className="text-xs text-zinc-500 mt-1">Send warnings to Discord when staff miss check-ins.</p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
                   <input
                     type="checkbox"
                     className="sr-only peer"
@@ -291,27 +441,6 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h4 className="text-sm font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
-                <Database className="w-4 h-4 text-red-600" /> Data Management
-              </h4>
-              <div className="bg-white p-4 rounded-lg border border-red-100">
-                <p className="text-sm text-zinc-600 mb-3">
-                  Clear all local data including active sessions, user accounts, and settings. This cannot be undone.
-                </p>
-                <button
-                  onClick={() => {
-                    if (confirm('Are you sure you want to reset the application? All data will be lost.')) {
-                      localStorage.clear();
-                      window.location.reload();
-                    }
-                  }}
-                  className="text-sm bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-50 hover:border-red-300 transition-colors font-medium"
-                >
-                  Reset Application Data
-                </button>
-              </div>
-            </div>
 
             <div className="space-y-4">
               <h4 className="text-sm font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
@@ -350,6 +479,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
         onClose={() => setEditingUser(null)}
         onSave={onUpdateUser}
         isViewerAdmin={true}
+        viewerUser={currentUser}
       />
     </>
   );

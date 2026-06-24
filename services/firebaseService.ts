@@ -10,11 +10,15 @@ import {
     updateDoc,
     serverTimestamp,
     Timestamp,
-    arrayUnion
+    arrayUnion,
+    query,
+    where,
+    orderBy,
+    limit
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { User, UserSession, WorkLog, DailyTimeCard } from '../types';
+import { User, UserSession, WorkLog, DailyTimeCard, AppSettings, QuickTask, ChatMessage, ChatChannel } from '../types';
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
@@ -40,6 +44,17 @@ export const firebaseSilentAuth = async (): Promise<void> => {
         console.log("Firebase Anonymous Auth successful.");
     } catch (e) {
         console.error("Firebase Anonymous Auth failed:", e);
+    }
+
+    try {
+        const teamApps = getApps().filter(ap => ap.name === 'teamDashboard');
+        if (teamApps.length > 0) {
+            const teamAuth = getAuth(teamApps[0]);
+            await signInAnonymously(teamAuth);
+            console.log("Firebase Team Dashboard Anonymous Auth successful.");
+        }
+    } catch (e) {
+        console.warn("Firebase Team Dashboard Anonymous Auth failed (ensure Anonymous provider is enabled in Firebase Console for print-shop-os-f8092):", e);
     }
 };
 
@@ -384,7 +399,7 @@ export const subscribeToShiftBlocks = (onUpdate: (blocks: any[]) => void) => {
         const blocks = snapshot.docs.map(d => {
             const data = d.data();
             const { updatedAt, ...block } = data; // Strip Firestore-specific fields for clean state
-            return block;
+            return { id: d.id, ...block };
         });
         onUpdate(blocks);
     });
@@ -395,7 +410,7 @@ export const firebaseGetShiftBlocks = async (): Promise<any[]> => {
     const snapshot = await getDocs(collection(db, SHIFTS_COL));
     return snapshot.docs.map(d => {
         const { updatedAt, ...block } = d.data();
-        return block;
+        return { id: d.id, ...block };
     });
 };
 
@@ -457,3 +472,206 @@ export const subscribeToSettings = (onUpdate: (settings: AppSettings | null) => 
         }
     });
 };
+
+// ─── QUICK TASKS ─────────────────────────────────────────────────────
+const QUICK_TASKS_COL = 'quickTasks';
+
+export const subscribeToQuickTasks = (onUpdate: (tasks: QuickTask[]) => void) => {
+    return onSnapshot(collection(db, QUICK_TASKS_COL), (snapshot) => {
+        if (snapshot.empty) {
+            onUpdate([]);
+            return;
+        }
+        const tasks = snapshot.docs.map(d => {
+            const data = d.data();
+            const { updatedAt, ...task } = data;
+            return task as QuickTask;
+        });
+        onUpdate(tasks);
+    });
+};
+
+export const firebaseSaveQuickTask = async (task: QuickTask): Promise<void> => {
+    const clean: any = {};
+    Object.entries(task).forEach(([k, v]) => {
+        if (v !== undefined) clean[k] = v;
+    });
+    await setDoc(doc(db, QUICK_TASKS_COL, task.id), {
+        ...clean,
+        updatedAt: serverTimestamp()
+    }, { merge: true });
+};
+
+export const firebaseDeleteQuickTask = async (taskId: string): Promise<void> => {
+    await deleteDoc(doc(db, QUICK_TASKS_COL, taskId));
+};
+
+// ─── TEAM DASHBOARD DATABASE INTEGRATION ──────────────────────────────
+const teamDashboardConfig = {
+    apiKey: "AIzaSyAGiJrWnwbdY4PrI-YHMf7DWOS9wFlsY3c",
+    authDomain: "print-shop-os-f8092.firebaseapp.com",
+    projectId: "print-shop-os-f8092",
+    storageBucket: "print-shop-os-f8092.firebasestorage.app",
+    messagingSenderId: "637868552650",
+    appId: "1:637868552650:web:473f9f71ad41703ec7df33"
+};
+
+const teamApps = getApps().filter(app => app.name === 'teamDashboard');
+const teamApp = teamApps.length === 0 ? initializeApp(teamDashboardConfig, 'teamDashboard') : teamApps[0];
+export const teamDb = getFirestore(teamApp);
+
+export const subscribeToProductionOrders = (onUpdate: (orders: any[]) => void) => {
+    const q = query(collection(teamDb, 'orders'), where('statusIndex', 'in', [6, 7]));
+    return onSnapshot(q, (snapshot) => {
+        const ordersData = snapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id
+        }));
+        onUpdate(ordersData);
+    }, (error) => {
+        console.error("Firebase ProductionOrders Sync Error:", error);
+    });
+};
+
+export const subscribeToCustomers = (onUpdate: (customers: Record<string, any>) => void) => {
+    return onSnapshot(collection(teamDb, 'customers'), (snapshot) => {
+        const dbCusts: Record<string, any> = {};
+        snapshot.docs.forEach(doc => {
+            dbCusts[doc.id] = doc.data();
+        });
+        onUpdate(dbCusts);
+    }, (error) => {
+        console.error("Firebase Customers Sync Error:", error);
+    });
+};
+
+// ─── TEAM CHAT ROOM ──────────────────────────────────────────────────
+const CHAT_COL = 'chatMessages';
+
+/** Subscribe to chat messages for a specific channel, ordered by timestamp */
+export const subscribeToChatMessages = (
+    channel: string,
+    onUpdate: (messages: ChatMessage[]) => void
+) => {
+    const q = query(
+        collection(db, CHAT_COL),
+        where('channel', '==', channel),
+        orderBy('timestamp', 'asc')
+    );
+    return onSnapshot(q, (snapshot) => {
+        if (snapshot.empty) {
+            onUpdate([]);
+            return;
+        }
+        const messages = snapshot.docs.map(d => {
+            const data = d.data();
+            return {
+                ...data,
+                id: d.id,
+                timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toMillis() : data.timestamp
+            } as ChatMessage;
+        });
+        onUpdate(messages);
+    }, (error) => {
+        console.error("Firebase ChatMessages Sync Error:", error);
+    });
+};
+
+/** Send a chat message to Firestore */
+export const firebaseSendMessage = async (message: ChatMessage): Promise<void> => {
+    const clean: any = {};
+    Object.entries(message).forEach(([k, v]) => {
+        if (v !== undefined) clean[k] = v;
+    });
+
+    await setDoc(doc(db, CHAT_COL, message.id), {
+        ...clean,
+        timestamp: serverTimestamp()
+    });
+};
+
+/** Upload chat shared image to Firebase storage */
+export const firebaseUploadChatImage = async (imageName: string, base64Data: string): Promise<string> => {
+    try {
+        const timestamp = Date.now();
+        const fileRef = ref(storage, `chat-images/${timestamp}_${imageName}`);
+        
+        // Upload base64 image
+        await uploadString(fileRef, base64Data, 'data_url');
+        
+        // Get download URL
+        return await getDownloadURL(fileRef);
+    } catch (err) {
+        console.error("Error uploading chat image:", err);
+        throw err;
+    }
+};
+
+// ─── DYNAMIC CHAT CHANNELS ───────────────────────────────────────────
+const CHANNELS_COL = 'chatChannels';
+
+/** Subscribe to chat channels in real-time */
+export const subscribeToChatChannels = (onUpdate: (channels: ChatChannel[]) => void) => {
+    return onSnapshot(collection(db, CHANNELS_COL), (snapshot) => {
+        if (snapshot.empty) {
+            onUpdate([]);
+            return;
+        }
+        const channels = snapshot.docs.map(d => {
+            const data = d.data();
+            const { updatedAt, ...channel } = data;
+            return channel as ChatChannel;
+        });
+        onUpdate(channels);
+    }, (error) => {
+        console.error("Firebase ChatChannels Sync Error:", error);
+    });
+};
+
+/** Save or update a chat channel in Firestore */
+export const firebaseSaveChatChannel = async (channel: ChatChannel): Promise<void> => {
+    const clean: any = {};
+    Object.entries(channel).forEach(([k, v]) => {
+        if (v !== undefined) clean[k] = v;
+    });
+
+    await setDoc(doc(db, CHANNELS_COL, channel.id), {
+        ...clean,
+        updatedAt: serverTimestamp()
+    }, { merge: true });
+};
+
+/** Delete a chat channel from Firestore */
+export const firebaseDeleteChatChannel = async (channelId: string): Promise<void> => {
+    await deleteDoc(doc(db, CHANNELS_COL, channelId));
+};
+
+/** Delete all messages in a specific channel from Firestore */
+export const firebaseDeleteChannelMessages = async (channelId: string): Promise<void> => {
+    try {
+        const q = query(collection(db, CHAT_COL), where('channel', '==', channelId));
+        const snapshot = await getDocs(q);
+        const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
+        await Promise.all(deletePromises);
+    } catch (e) {
+        console.error(`Failed to delete messages for channel ${channelId}:`, e);
+    }
+};
+
+/** Subscribe to recent chat messages across all channels */
+export const subscribeToRecentMessages = (onUpdate: (messages: any[]) => void) => {
+    const q = query(collection(db, CHAT_COL), orderBy('timestamp', 'desc'), limit(20));
+    return onSnapshot(q, (snapshot) => {
+        const msgs = snapshot.docs.map(d => {
+            const data = d.data();
+            return {
+                ...data,
+                timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toMillis() : data.timestamp
+            };
+        });
+        onUpdate(msgs);
+    }, (error) => {
+        console.error("Firebase RecentMessages Sync Error:", error);
+    });
+};
+

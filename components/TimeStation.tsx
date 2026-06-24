@@ -4,6 +4,7 @@ import { Timer } from './Timer';
 import { PinPad } from './PinPad';
 import { Play, Pause, ShieldCheck, User as UserIcon, LogOut, CheckCircle2, QrCode as QrCodeIcon, X, Bell } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { LogAbsenceModal } from './LogAbsenceModal';
 
 
 interface Props {
@@ -17,14 +18,16 @@ interface Props {
   appSettings?: AppSettings;
   onUpdateSettings?: (settings: AppSettings) => void;
   shiftBlocks?: ScheduleBlock[];
+  onLogAbsence?: (user: User, type: 'No-Call No-Show' | 'Sick' | 'Emergency', notes?: string) => Promise<any>;
 }
 
-export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession, isAdmin, appSettings, onUpdateSettings, shiftBlocks }) => {
+export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn, onClockOut, onPauseSession, onResumeSession, isAdmin, appSettings, onUpdateSettings, shiftBlocks, onLogAbsence }) => {
   const [showPinPad, setShowPinPad] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [pinMessage, setPinMessage] = useState<string>('');
   const [actionMenuUser, setActionMenuUser] = useState<User | null>(null);
   const [unscheduledUser, setUnscheduledUser] = useState<User | null>(null);
+  const [absenceUser, setAbsenceUser] = useState<User | null>(null);
 
   const handlePinAction = () => {
     setPinMessage('');
@@ -288,6 +291,22 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
+                  <select
+                    className="text-xs border border-zinc-300 rounded-lg px-3 py-1.5 bg-white cursor-pointer font-bold text-zinc-900 shadow-sm"
+                    onChange={(e) => {
+                      const u = users.find(u => u.id === e.target.value);
+                      if (u) {
+                        setAbsenceUser(u);
+                        e.target.value = '';
+                      }
+                    }}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>+ Log Absence</option>
+                    {users.filter(u => !activeSessions[u.id]).map(u => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
                 </>
               )}
               <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium bg-white border border-zinc-200 px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap">
@@ -314,101 +333,110 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                 const isOverdue = appSettings?.autoPauseEnabled ? elapsedSinceLog > intervalMs : false;
 
                 return (
-                  <div key={session.userId} className={`p-4 rounded-xl border-2 transition-all hover:shadow-md
-                    ${session.isPaused ? 'border-amber-200 bg-amber-50 shadow-inner' :
-                      isOverdue ? 'border-red-100 bg-red-50' : 'border-zinc-100 bg-white'}`}>
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm
-                        ${session.isPaused ? 'bg-amber-500' : isOverdue ? 'bg-red-400' : 'bg-zinc-500'}`}>
+                  <div key={session.userId} className={`p-5 rounded-2xl border transition-all duration-300 hover:shadow-lg flex flex-col gap-4
+                    ${session.isPaused ? 'border-amber-200/50 bg-gradient-to-br from-amber-50/50 to-white shadow-sm' :
+                      isOverdue ? 'border-red-200/50 bg-gradient-to-br from-red-50/50 to-white shadow-sm' : 'border-zinc-200/60 bg-white shadow-sm'}`}>
+                    
+                    {/* Header */}
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-inner shrink-0
+                        ${session.isPaused ? 'bg-gradient-to-br from-amber-400 to-amber-500' : 
+                          isOverdue ? 'bg-gradient-to-br from-red-400 to-red-500' : 
+                          'bg-gradient-to-br from-zinc-700 to-zinc-900'}`}>
                         {session.user.avatarInitials}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-zinc-900 truncate">{session.user.name}</h4>
-                        <p className="text-xs text-zinc-500 truncate">{session.user.role}</p>
+                        <h4 className="font-bold text-zinc-900 text-base truncate tracking-tight leading-tight">{session.user.name}</h4>
+                        <p className="text-xs text-zinc-500 truncate font-medium capitalize mt-0.5">{session.user.role.replace(/_/g, ' ')}</p>
                       </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-zinc-500">Shift Time:</span>
-                        <Timer
-                          startTime={session.startTime}
-                          isActive={!session.isPaused}
-                          totalIdleTimeMs={session.totalIdleTimeMs}
-                          currentIdleStartTime={session.currentIdleStartTime}
-                        />
-                      </div>
-
+                      
+                      {/* Status Pill */}
                       {session.isPaused ? (
-                        <div className="flex items-center gap-2 text-xs text-amber-700 font-bold bg-amber-200 px-2 py-1 rounded animate-pulse">
-                          <Pause className="w-3 h-3" />
-                          <span>{session.pauseReason === 'lunch' ? 'ON LUNCH (PAUSED)' : 'SHIFT PAUSED (IDLE)'}</span>
+                        <div className="flex items-center gap-1 text-[10px] text-amber-700 font-bold bg-amber-100/80 px-2 py-1 rounded-full border border-amber-200 shrink-0">
+                          <Pause className="w-3 h-3" /> PAUSED
                         </div>
-                      ) : isOverdue && (
-                        <div className="flex items-center gap-2 text-xs text-red-600 font-semibold bg-red-100 px-2 py-1 rounded">
-                          <ShieldCheck className="w-3 h-3" />
-                          <span>Check-in Required</span>
+                      ) : isOverdue ? (
+                        <div className="flex items-center gap-1 text-[10px] text-red-700 font-bold bg-red-100/80 px-2 py-1 rounded-full border border-red-200 shrink-0">
+                          <ShieldCheck className="w-3 h-3" /> OVERDUE
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-[10px] text-green-700 font-bold bg-green-100/80 px-2 py-1 rounded-full border border-green-200 shrink-0">
+                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> ACTIVE
                         </div>
                       )}
+                    </div>
 
-                      <div className="text-xs text-zinc-400 pt-2 border-t border-zinc-100 mt-2 flex justify-between items-center">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
-                          <span>Last Log: {new Date(session.lastLogTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          {!session.isPaused && (appSettings?.autoPauseEnabled ?? true) && (
-                            <span className="flex items-center gap-1 text-amber-600/80 font-medium bg-amber-50/50 px-1.5 py-0.5 rounded border border-amber-100/50 w-fit">
-                              <Pause className="w-2.5 h-2.5" />
-                              Auto-pauses at {new Date(session.lastLogTime + ((appSettings?.checkInIntervalHours || 1) * 60 * 60 * 1000) + (10 * 60 * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          )}
+                    {/* Time Details Box */}
+                    <div className="bg-zinc-50/80 rounded-xl p-3.5 border border-zinc-100 flex flex-col gap-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-zinc-500 font-medium">Shift Duration</span>
+                        <div className="font-bold text-zinc-900 font-mono text-base tracking-tight">
+                          <Timer
+                            startTime={session.startTime}
+                            isActive={!session.isPaused}
+                            totalIdleTimeMs={session.totalIdleTimeMs}
+                            currentIdleStartTime={session.currentIdleStartTime}
+                          />
                         </div>
-                        {isAdmin && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                const currentUserDoc = users.find(u => u.id === session.userId) || session.user;
-                                if (!currentUserDoc.expoPushToken) {
-                                  alert(`${currentUserDoc.name} has not registered for push notifications on their mobile device yet.`);
-                                  return;
-                                }
-                                fetch('/api/push', {
-                                  method: 'POST',
-                                  headers: {
-                                    Accept: 'application/json',
-                                    'Content-Type': 'application/json',
-                                  },
-                                  body: JSON.stringify({
-                                    to: currentUserDoc.expoPushToken,
-                                    sound: 'default',
-                                    title: 'Test Push 🔔',
-                                    body: `Hello ${currentUserDoc.name}, this is a test notification!`,
-                                  }),
-                                }).then(res => res.json()).then(data => {
-                                  if (data.data?.status === 'ok') {
-                                    alert(`Test push sent to ${currentUserDoc.name}!`);
-                                  } else {
-                                    alert(`Expo Push Error: ${JSON.stringify(data)}`);
-                                  }
-                                }).catch(err => {
-                                  console.error("Push error:", err);
-                                  alert("Error sending push notification.");
-                                });
-                              }}
-                              className="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 shrink-0"
-                              title="Test iOS Push Notification"
-                            >
-                              <Bell className="w-3 h-3" />
-                              Ping
-                            </button>
-                            <button
-                              onClick={() => onClockOut(session.user)}
-                              className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2 py-1 rounded text-xs font-bold transition-colors shrink-0"
-                            >
-                              Clock Out
-                            </button>
-                          </div>
+                      </div>
+                      
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="text-zinc-500">Last log: <span className="font-semibold text-zinc-700">{new Date(session.lastLogTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span>
+                        {!session.isPaused && (appSettings?.autoPauseEnabled ?? true) && (
+                          <span className="flex items-center gap-1 text-amber-600 font-medium bg-amber-100/50 px-1.5 py-0.5 rounded">
+                            <Pause className="w-3 h-3" />
+                            Auto-pauses at {new Date(session.lastLogTime + ((appSettings?.checkInIntervalHours || 1) * 60 * 60 * 1000) + (10 * 60 * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                         )}
                       </div>
                     </div>
+
+                    {/* Actions */}
+                    {isAdmin && (
+                      <div className="flex gap-2 mt-auto pt-1">
+                        <button
+                          onClick={() => {
+                            const currentUserDoc = users.find(u => u.id === session.userId) || session.user;
+                            if (!currentUserDoc.expoPushToken) {
+                              alert(`${currentUserDoc.name} has not registered for push notifications on their mobile device yet.`);
+                              return;
+                            }
+                            fetch('/api/push', {
+                              method: 'POST',
+                              headers: {
+                                Accept: 'application/json',
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                to: currentUserDoc.expoPushToken,
+                                sound: 'default',
+                                title: 'Test Push 🔔',
+                                body: `Hello ${currentUserDoc.name}, this is a test notification!`,
+                              }),
+                            }).then(res => res.json()).then(data => {
+                              if (data.data?.status === 'ok') {
+                                alert(`Test push sent to ${currentUserDoc.name}!`);
+                              } else {
+                                alert(`Expo Push Error: ${JSON.stringify(data)}`);
+                              }
+                            }).catch(err => {
+                              console.error("Push error:", err);
+                              alert("Error sending push notification.");
+                            });
+                          }}
+                          className="flex-1 bg-white hover:bg-zinc-50 text-zinc-700 border border-zinc-200 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                          title="Test iOS Push Notification"
+                        >
+                          <Bell className="w-3.5 h-3.5 text-blue-500" /> Ping
+                        </button>
+                        <button
+                          onClick={() => onClockOut(session.user)}
+                          className="flex-1 bg-red-50 hover:bg-red-600 hover:text-white text-red-600 border border-red-100 hover:border-red-600 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 group"
+                        >
+                          <LogOut className="w-3.5 h-3.5 text-red-500 group-hover:text-white transition-colors" /> Clock Out
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -457,6 +485,19 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
           </div>
         )
       }
+      {absenceUser && (
+        <LogAbsenceModal
+          user={absenceUser}
+          isOpen={!!absenceUser}
+          onClose={() => setAbsenceUser(null)}
+          onSave={async (type, notes) => {
+            if (onLogAbsence) {
+              await onLogAbsence(absenceUser, type, notes);
+              alert(`Absence (${type}) logged successfully for ${absenceUser.name}.`);
+            }
+          }}
+        />
+      )}
     </div >
   );
 };
