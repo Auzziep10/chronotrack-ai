@@ -34,7 +34,8 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = initializeFirestore(app, {
     experimentalForceLongPolling: true,
-});
+    useFetchStreams: false,
+} as any);
 
 // Initialize Auth with React Native persistence
 let auth: any;
