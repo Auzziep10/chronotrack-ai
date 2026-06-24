@@ -306,10 +306,11 @@ const App: React.FC = () => {
 
                 // If this threshold matches the push notification threshold, send the Expo Push Notification!
                 if (thresholdMinutes === pushThresholdMinutes && activePushToken) {
-                   fetch('/api/push', {
+                   fetch('https://exp.host/--/api/v2/push/send', {
                        method: 'POST',
                        headers: {
-                           Accept: 'application/json',
+                           'Accept': 'application/json',
+                           'Accept-Encoding': 'gzip, deflate',
                            'Content-Type': 'application/json',
                        },
                        body: JSON.stringify({

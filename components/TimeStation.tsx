@@ -401,10 +401,11 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                               alert(`${currentUserDoc.name} has not registered for push notifications on their mobile device yet.`);
                               return;
                             }
-                            fetch('/api/push', {
+                            fetch('https://exp.host/--/api/v2/push/send', {
                               method: 'POST',
                               headers: {
-                                Accept: 'application/json',
+                                'Accept': 'application/json',
+                                'Accept-Encoding': 'gzip, deflate',
                                 'Content-Type': 'application/json',
                               },
                               body: JSON.stringify({
@@ -414,7 +415,7 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
                                 body: `Hello ${currentUserDoc.name}, this is a test notification!`,
                               }),
                             }).then(res => res.json()).then(data => {
-                              if (data.data?.status === 'ok') {
+                              if (data.data && Array.isArray(data.data) ? data.data[0]?.status === 'ok' : data.data?.status === 'ok') {
                                 alert(`Test push sent to ${currentUserDoc.name}!`);
                               } else {
                                 alert(`Expo Push Error: ${JSON.stringify(data)}`);
