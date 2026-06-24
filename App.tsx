@@ -78,7 +78,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('station');
   const [showSettings, setShowSettings] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  const [hasUnreadChat, setHasUnreadChat] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   // Shift Blocks State (From Firebase)
   const [shiftBlocks, setShiftBlocks] = useState<any[]>([]);
@@ -209,22 +209,95 @@ const App: React.FC = () => {
     };
   }, [isFirebaseAuthed]); 
 
-  // 3. Real-time recent messages listener to track unreads
+  // 3. Real-time recent messages listener to track unreads (both Firebase & offline LocalStorage)
   useEffect(() => {
-    if (!authToken || !isFirebaseConfigured() || !isFirebaseAuthed) return;
+    if (!authToken) return;
 
-    const unsub = subscribeToRecentMessages((recentMsgs) => {
-      let hasUnread = false;
-      recentMsgs.forEach(msg => {
+    let latestMessages: any[] = [];
+
+    const updateUnreadCount = (msgs: any[]) => {
+      const unreadChannelsSet = new Set<string>();
+      msgs.forEach(msg => {
         const lastViewed = Number(localStorage.getItem(`chrono_last_viewed_${msg.channel}`) || '0');
         if (msg.senderId !== currentUser?.id && msg.timestamp > lastViewed) {
-          hasUnread = true;
+          if (msg.channel.startsWith('dm-')) {
+            const dmUserId = msg.channel.substring(3);
+            const isAdminOrManager = currentUser?.role?.toLowerCase() === 'admin' || currentUser?.role?.toLowerCase() === 'manager';
+            if (isAdminOrManager || dmUserId === currentUser?.id) {
+              unreadChannelsSet.add(msg.channel);
+            }
+          } else {
+            unreadChannelsSet.add(msg.channel);
+          }
         }
       });
-      setHasUnreadChat(hasUnread);
-    });
-    return () => unsub();
-  }, [authToken, isFirebaseAuthed, showChat, currentUser?.id]);
+      setUnreadChatCount(unreadChannelsSet.size);
+    };
+
+    let unsub: (() => void) | undefined;
+
+    if (isFirebaseConfigured() && isFirebaseAuthed) {
+      unsub = subscribeToRecentMessages((recentMsgs) => {
+        latestMessages = recentMsgs;
+        updateUnreadCount(recentMsgs);
+      });
+    } else {
+      // LocalStorage Fallback for unreads
+      const checkLocalUnreads = () => {
+        const channelsList = ['general', 'announcements', 'shift-swap', 'random'];
+        const allKeys = Object.keys(localStorage);
+        allKeys.forEach(k => {
+          if (k.startsWith('chrono_local_chat_')) {
+            const chId = k.replace('chrono_local_chat_', '');
+            if (!channelsList.includes(chId)) {
+              channelsList.push(chId);
+            }
+          }
+        });
+
+        let allLocalMsgs: any[] = [];
+        channelsList.forEach(ch => {
+          try {
+            const stored = localStorage.getItem(`chrono_local_chat_${ch}`);
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (Array.isArray(parsed)) {
+                allLocalMsgs = allLocalMsgs.concat(parsed);
+              }
+            }
+          } catch (e) {}
+        });
+
+        allLocalMsgs.sort((a, b) => b.timestamp - a.timestamp);
+        latestMessages = allLocalMsgs.slice(0, 50);
+        updateUnreadCount(latestMessages);
+      };
+
+      checkLocalUnreads();
+
+      const handleLocalChatChange = (e: StorageEvent) => {
+        if (e.key?.startsWith('chrono_local_chat_') || e.key?.startsWith('chrono_last_viewed_')) {
+          checkLocalUnreads();
+        }
+      };
+      window.addEventListener('storage', handleLocalChatChange);
+      unsub = () => {
+        window.removeEventListener('storage', handleLocalChatChange);
+      };
+    }
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key?.startsWith('chrono_last_viewed_')) {
+        updateUnreadCount(latestMessages);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      if (unsub) unsub();
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [authToken, isFirebaseAuthed, showChat, currentUser]);
 
   // 4. Real-time settings listener
   useEffect(() => {
@@ -802,8 +875,10 @@ const App: React.FC = () => {
                 title="Team Chat"
               >
                 <MessageSquare className="w-5 h-5" />
-                {hasUnreadChat && (
-                  <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
+                {unreadChatCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-sm animate-pulse">
+                    {unreadChatCount}
+                  </span>
                 )}
               </button>
             )}
