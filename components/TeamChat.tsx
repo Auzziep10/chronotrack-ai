@@ -28,7 +28,8 @@ import {
   firebaseSaveChatChannel,
   firebaseDeleteChatChannel,
   firebaseDeleteChannelMessages,
-  firebaseGetUsers
+  firebaseGetUsers,
+  subscribeToRecentMessages
 } from '../services/firebaseService';
 
 interface Props {
@@ -76,6 +77,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [unreadChannels, setUnreadChannels] = useState<Set<string>>(new Set());
+  const [unreadDMs, setUnreadDMs] = useState<Set<string>>(new Set());
 
   // Channel CRUD Modals State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -97,7 +99,8 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
   const isAdminOrManager = isAdmin || currentUser?.role?.toLowerCase() === 'manager';
   const currentChannelObj = channels.find(c => c.id === activeChannel);
   const isRestrictedChannel = currentChannelObj?.restricted;
-  const canSendMessages = !isRestrictedChannel || isAdminOrManager;
+  const isDM = activeChannel.startsWith('dm-');
+  const canSendMessages = isDM || !isRestrictedChannel || isAdminOrManager;
 
   // Generate color styling for user avatar initials based on their name hash
   const getAvatarStyle = (name: string) => {
@@ -152,8 +155,8 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
   useEffect(() => {
     if (!isOpen || channels.length === 0) return;
 
-    // Verify current activeChannel still exists, fallback if deleted
-    if (!channels.some(c => c.id === activeChannel)) {
+    // Verify current activeChannel still exists, fallback if deleted (exclude DM channels)
+    if (!activeChannel.startsWith('dm-') && !channels.some(c => c.id === activeChannel)) {
       setActiveChannel(channels[0]?.id || 'general');
       return;
     }
@@ -182,7 +185,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
     }
   }, [activeChannel, channels, isOpen]);
 
-  // 3. Clear unread badge for the current channel when selected
+  // 3. Clear unread badge for the current channel/DM when selected
   useEffect(() => {
     if (unreadChannels.has(activeChannel)) {
       setUnreadChannels(prev => {
@@ -191,11 +194,18 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
         return next;
       });
     }
-  }, [activeChannel, unreadChannels]);
+    if (unreadDMs.has(activeChannel)) {
+      setUnreadDMs(prev => {
+        const next = new Set(prev);
+        next.delete(activeChannel);
+        return next;
+      });
+    }
+  }, [activeChannel, unreadChannels, unreadDMs]);
 
   // 4. Monitor messages for other channels to trigger unread badges
   useEffect(() => {
-    if (!isOpen || !isFirebaseConfigured() || channels.length === 0) return;
+    if (!isOpen || !isFirebaseConfigured() || !currentUser || channels.length === 0) return;
 
     const unsubscribers = channels.map(ch => {
       if (ch.id === activeChannel) return null;
@@ -215,10 +225,32 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
       });
     }).filter(Boolean) as (() => void)[];
 
+    // Stream recent messages globally for DM unreads
+    const unsubRecent = subscribeToRecentMessages((recentMsgs) => {
+      recentMsgs.forEach(msg => {
+        if (msg.channel === activeChannel || msg.senderId === currentUser.id) return;
+        if (msg.channel.startsWith('dm-')) {
+          const dmUserId = msg.channel.substring(3);
+          if (isAdminOrManager || dmUserId === currentUser.id) {
+            const lastViewedKey = `chrono_last_viewed_${msg.channel}`;
+            const lastViewed = Number(localStorage.getItem(lastViewedKey) || '0');
+            if (msg.timestamp > lastViewed) {
+              setUnreadDMs(prev => {
+                const next = new Set(prev);
+                next.add(msg.channel);
+                return next;
+              });
+            }
+          }
+        }
+      });
+    });
+
     return () => {
       unsubscribers.forEach(unsub => unsub());
+      unsubRecent();
     };
-  }, [activeChannel, channels, currentUser?.id, isOpen]);
+  }, [activeChannel, channels, currentUser?.id, isOpen, isAdminOrManager]);
 
   // 5. Update the "last viewed" timestamp when leaving/viewing a channel
   useEffect(() => {
@@ -585,6 +617,84 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                 );
               })}
             </nav>
+
+            {/* Direct Messages Section */}
+            {!currentUser?.role?.toLowerCase()?.includes('terminal') && (
+              <div className="mt-6">
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest px-3 mb-2">Direct Messages</p>
+                <nav className="space-y-1">
+                  {!isAdminOrManager ? (
+                    // For general staff: show single item to message admins
+                    (() => {
+                      const dmChannelId = `dm-${currentUser?.id}`;
+                      const isActive = activeChannel === dmChannelId;
+                      const hasUnread = unreadDMs.has(dmChannelId);
+
+                      return (
+                        <button
+                          onClick={() => setActiveChannel(dmChannelId)}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                            isActive
+                              ? 'bg-zinc-900 text-white shadow-md'
+                              : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-150'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <MessageSquare className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-zinc-400'}`} />
+                            <span className="truncate">Message Admins</span>
+                          </div>
+                          {hasUnread && (
+                            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                          )}
+                        </button>
+                      );
+                    })()
+                  ) : (
+                    // For admins/managers: list all general staff members
+                    users
+                      .filter(u => 
+                        u.role?.toLowerCase() !== 'admin' && 
+                        u.role?.toLowerCase() !== 'manager' && 
+                        u.role?.toLowerCase() !== 'terminal' &&
+                        u.id !== currentUser?.id
+                      )
+                      .map(member => {
+                        const dmChannelId = `dm-${member.id}`;
+                        const isActive = activeChannel === dmChannelId;
+                        const hasUnread = unreadDMs.has(dmChannelId);
+                        const isClockedIn = Object.keys(activeSessions).includes(member.id);
+
+                        return (
+                          <button
+                            key={member.id}
+                            onClick={() => setActiveChannel(dmChannelId)}
+                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                              isActive
+                                ? 'bg-zinc-900 text-white shadow-md'
+                                : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-150'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <div className="relative shrink-0">
+                                <div className={`w-6 h-6 rounded-full border flex items-center justify-center font-bold text-[9px] ${getAvatarStyle(member.name)}`}>
+                                  {member.avatarInitials}
+                                </div>
+                                {isClockedIn && (
+                                  <span className="absolute -bottom-0.5 -right-0.5 block h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-white" />
+                                )}
+                              </div>
+                              <span className="truncate">{member.name}</span>
+                            </div>
+                            {hasUnread && (
+                              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                            )}
+                          </button>
+                        );
+                      })
+                  )}
+                </nav>
+              </div>
+            )}
           </div>
 
           <div className="mt-auto p-4 border-t border-zinc-200 bg-zinc-100 hidden md:block">
@@ -612,30 +722,53 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
             <X className="w-5 h-5" />
           </button>
 
-          {/* Chat Header */}
-          <div className="px-6 py-4 border-b border-zinc-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pr-16">
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <Hash className="w-5 h-5 text-zinc-500 shrink-0" />
-                <h2 className="font-black text-zinc-900 text-lg truncate capitalize">{activeChannel}</h2>
-              </div>
-              <p className="text-xs text-zinc-500 font-medium truncate mt-0.5">
-                {currentChannelObj?.desc}
-              </p>
-            </div>
+          {/* Dynamic header resolution for DMs vs regular channels */}
+          {(() => {
+            let headerTitle = activeChannel;
+            let headerDesc = currentChannelObj?.desc || '';
 
-            {/* Search bar */}
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
-              <input
-                type="text"
-                placeholder="Search history..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-zinc-50 hover:bg-zinc-100 focus:bg-white pl-9 pr-4 py-2 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 transition-all placeholder-zinc-400"
-              />
-            </div>
-          </div>
+            if (isDM) {
+              const dmUserId = activeChannel.substring(3);
+              if (!isAdminOrManager) {
+                headerTitle = 'Message Admins';
+                headerDesc = 'Private helpline to Admins and Managers';
+              } else {
+                const dmUserObj = users.find(u => u.id === dmUserId);
+                headerTitle = dmUserObj ? `DM: ${dmUserObj.name}` : 'Direct Message';
+                headerDesc = dmUserObj ? `Private conversation with ${dmUserObj.name} (${dmUserObj.role})` : 'Private conversation';
+              }
+            }
+
+            return (
+              <div className="px-6 py-4 border-b border-zinc-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pr-16">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    {isDM ? (
+                      <MessageSquare className="w-5 h-5 text-zinc-800 shrink-0 animate-pulse" />
+                    ) : (
+                      <Hash className="w-5 h-5 text-zinc-500 shrink-0" />
+                    )}
+                    <h2 className="font-black text-zinc-900 text-lg truncate capitalize">{headerTitle}</h2>
+                  </div>
+                  <p className="text-xs text-zinc-500 font-medium truncate mt-0.5">
+                    {headerDesc}
+                  </p>
+                </div>
+
+                {/* Search bar */}
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
+                  <input
+                    type="text"
+                    placeholder="Search history..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-zinc-50 hover:bg-zinc-100 focus:bg-white pl-9 pr-4 py-2 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 transition-all placeholder-zinc-400"
+                  />
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Message Area */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -650,8 +783,12 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                 ) : (
                   <>
                     <Sparkles className="w-12 h-12 text-zinc-300 mb-3" />
-                    <p className="font-bold text-zinc-950">Welcome to #{activeChannel}!</p>
-                    <p className="text-xs mt-1">This is the start of the conversation. Say hello to your team!</p>
+                    <p className="font-bold text-zinc-950">
+                      {isDM ? "This is the start of your private chat." : `Welcome to #${activeChannel}!`}
+                    </p>
+                    <p className="text-xs mt-1">
+                      {isDM ? "Only you and Admins/Managers can read this conversation." : "This is the start of the conversation. Say hello to your team!"}
+                    </p>
                   </>
                 )}
               </div>
@@ -760,7 +897,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
 
                 <input
                   type="text"
-                  placeholder={isUploading ? "Uploading image..." : `Message #${activeChannel}...`}
+                  placeholder={isUploading ? "Uploading image..." : `Message ${isDM ? "privately..." : `#${activeChannel}...`}`}
                   disabled={isUploading}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
