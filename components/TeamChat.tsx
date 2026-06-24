@@ -27,7 +27,8 @@ import {
   subscribeToChatChannels,
   firebaseSaveChatChannel,
   firebaseDeleteChatChannel,
-  firebaseDeleteChannelMessages
+  firebaseDeleteChannelMessages,
+  firebaseGetUsers
 } from '../services/firebaseService';
 
 interface Props {
@@ -260,8 +261,31 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
     if (isFirebaseConfigured()) {
       try {
         await firebaseSendMessage(newMessage);
+        
+        // Trigger Push Notifications to other non-muted channel users
+        if (currentChannelObj?.notificationsEnabled !== false) {
+          const allUsers = await firebaseGetUsers();
+          const notifications = allUsers
+            .filter(u => u.id !== currentUser.id && u.expoPushToken && !u.mutedChannels?.includes(activeChannel))
+            .map(u => ({
+              to: u.expoPushToken,
+              sound: 'default',
+              title: `#${activeChannel} - ${currentUser.name}`,
+              body: text || 'Sent an image'
+            }));
+
+          if (notifications.length > 0) {
+            await fetch('/api/push', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(notifications),
+            });
+          }
+        }
       } catch (err: any) {
-        console.error("Failed to send message via Firebase:", err);
+        console.error("Failed to send message/push via Firebase:", err);
       }
     } else {
       // LocalStorage Fallback Write

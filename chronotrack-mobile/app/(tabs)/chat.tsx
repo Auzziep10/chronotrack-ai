@@ -23,7 +23,8 @@ import {
   subscribeToChatMessages, 
   firebaseSendMessage, 
   subscribeToChatChannels, 
-  firebaseSaveChatChannel 
+  firebaseSaveChatChannel,
+  firebaseGetUsers
 } from '../../src/services/firebaseService';
 
 const DEFAULT_CHANNELS: ChatChannel[] = [
@@ -62,6 +63,7 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [showChannelModal, setShowChannelModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -108,11 +110,21 @@ export default function ChatScreen() {
     }
 
     setIsLoading(true);
+    setError(null);
     if (isFirebaseConfigured()) {
-      const unsubscribe = subscribeToChatMessages(activeChannel, (syncedMessages) => {
-        setMessages(syncedMessages);
-        setIsLoading(false);
-      });
+      const unsubscribe = subscribeToChatMessages(
+        activeChannel, 
+        (syncedMessages) => {
+          setMessages(syncedMessages);
+          setIsLoading(false);
+          setError(null);
+        },
+        (err) => {
+          console.error(err);
+          setIsLoading(false);
+          setError("Failed to sync chat messages. (Is Firestore composite index missing or building?)");
+        }
+      );
       return () => unsubscribe();
     } else {
       setMessages([]);
@@ -140,8 +152,33 @@ export default function ChatScreen() {
     if (isFirebaseConfigured()) {
       try {
         await firebaseSendMessage(newMessage);
+        
+        // Trigger Push Notifications to other non-muted channel users
+        if (currentChannelObj?.notificationsEnabled !== false) {
+          const allUsers = await firebaseGetUsers();
+          const notifications = allUsers
+            .filter(u => u.id !== currentUser.id && u.expoPushToken && !u.mutedChannels?.includes(activeChannel))
+            .map(u => ({
+              to: u.expoPushToken,
+              sound: 'default',
+              title: `#${activeChannel} - ${currentUser.name}`,
+              body: text
+            }));
+
+          if (notifications.length > 0) {
+            await fetch('https://exp.host/--/api/v2/push/send', {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Accept-Encoding': 'gzip, deflate',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(notifications),
+            });
+          }
+        }
       } catch (err) {
-        console.error("Failed to send message via Firebase:", err);
+        console.error("Failed to send message/push via Firebase:", err);
       }
     }
     setInputText('');
@@ -218,6 +255,23 @@ export default function ChatScreen() {
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.accent} />
+              </View>
+            </TouchableWithoutFeedback>
+          ) : error ? (
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.errorContainer}>
+                <Info size={40} color="#dc2626" style={{ marginBottom: 12 }} />
+                <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity 
+                  style={styles.retryBtn} 
+                  onPress={() => {
+                    const ch = activeChannel;
+                    setActiveChannel('');
+                    setTimeout(() => setActiveChannel(ch), 50);
+                  }}
+                >
+                  <Text style={styles.retryBtnText}>Retry Connection</Text>
+                </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
           ) : messages.length === 0 ? (
@@ -637,5 +691,31 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#dc2626',
     fontWeight: 'bold',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.xl,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#b91c1c',
+    textAlign: 'center',
+    fontWeight: '600',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  retryBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.borderRadius.md,
+    ...theme.shadows.glowPrimary,
+  },
+  retryBtnText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });

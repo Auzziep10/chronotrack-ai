@@ -299,10 +299,10 @@ export const subscribeToSettings = (onUpdate: (settings: AppSettings | null) => 
 const CHAT_COL = 'chatMessages';
 const CHANNELS_COL = 'chatChannels';
 
-/** Subscribe to chat messages for a specific channel, ordered by timestamp */
 export const subscribeToChatMessages = (
     channel: string,
-    onUpdate: (messages: ChatMessage[]) => void
+    onUpdate: (messages: ChatMessage[]) => void,
+    onError?: (error: any) => void
 ) => {
     const q = query(
         collection(db, CHAT_COL),
@@ -325,6 +325,7 @@ export const subscribeToChatMessages = (
         onUpdate(messages);
     }, (error) => {
         console.error("Firebase ChatMessages Sync Error:", error);
+        if (onError) onError(error);
     });
 };
 
