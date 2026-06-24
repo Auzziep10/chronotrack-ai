@@ -245,7 +245,6 @@ const App: React.FC = () => {
     });
 
     return () => {
-      unsubUsers();
       unsubSettings();
     };
   }, [isFirebaseAuthed]); 
