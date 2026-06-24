@@ -17,7 +17,8 @@ import {
   X,
   Settings as SettingsIcon,
   Edit2,
-  ThumbsUp
+  ThumbsUp,
+  Heart
 } from 'lucide-react';
 import { ChatMessage, ChatChannel, User, UserSession } from '../types';
 import { 
@@ -367,14 +368,14 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
   };
 
   // Toggle reaction on a message
-  const handleToggleReaction = async (messageId: string) => {
+  const handleToggleReaction = async (messageId: string, reactionType: 'thumbsUp' | 'heart' = 'thumbsUp') => {
     if (!currentUser) return;
 
     if (isFirebaseConfigured()) {
       try {
-        await firebaseToggleReaction(messageId, currentUser.id);
+        await firebaseToggleReaction(messageId, currentUser.id, reactionType);
       } catch (err: any) {
-        console.error("Failed to toggle reaction via Firebase:", err);
+        console.error(`Failed to toggle ${reactionType} reaction via Firebase:`, err);
       }
     } else {
       // LocalStorage Fallback Toggle
@@ -382,15 +383,15 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
       const localMsgs = messages.map(msg => {
         if (msg.id !== messageId) return msg;
         const reactions = msg.reactions || {};
-        const thumbsUp = reactions.thumbsUp || [];
-        const updatedThumbsUp = thumbsUp.includes(currentUser.id)
-          ? thumbsUp.filter(id => id !== currentUser.id)
-          : [...thumbsUp, currentUser.id];
+        const reactionList = reactions[reactionType] || [];
+        const updatedList = reactionList.includes(currentUser.id)
+          ? reactionList.filter(id => id !== currentUser.id)
+          : [...reactionList, currentUser.id];
         return {
           ...msg,
           reactions: {
             ...reactions,
-            thumbsUp: updatedThumbsUp
+            [reactionType]: updatedList
           }
         };
       });
@@ -885,7 +886,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                         {/* Action buttons (only show on hover) */}
                         <div className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0 focus-within:opacity-100 ${isOwnMessage ? 'flex-row' : 'flex-row-reverse'}`}>
                           <button
-                            onClick={() => handleToggleReaction(msg.id)}
+                            onClick={() => handleToggleReaction(msg.id, 'thumbsUp')}
                             className={`p-1.5 rounded-xl border transition-all ${
                               msg.reactions?.thumbsUp?.includes(currentUser?.id || '')
                                 ? 'text-zinc-950 bg-zinc-100 border-zinc-300 hover:bg-zinc-200'
@@ -894,6 +895,17 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                             title={msg.reactions?.thumbsUp?.includes(currentUser?.id || '') ? "Unlike message" : "Like message"}
                           >
                             <ThumbsUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleToggleReaction(msg.id, 'heart')}
+                            className={`p-1.5 rounded-xl border transition-all ${
+                              msg.reactions?.heart?.includes(currentUser?.id || '')
+                                ? 'text-rose-600 bg-rose-50 border-rose-200 hover:bg-rose-100'
+                                : 'text-zinc-400 border-transparent hover:text-rose-600 hover:bg-rose-50'
+                            }`}
+                            title={msg.reactions?.heart?.includes(currentUser?.id || '') ? "Remove heart" : "Heart message"}
+                          >
+                            <Heart className={`w-3.5 h-3.5 ${msg.reactions?.heart?.includes(currentUser?.id || '') ? 'fill-rose-600' : ''}`} />
                           </button>
                           {isOwnMessage && (
                             <button
@@ -926,26 +938,46 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                           )}
                           {msg.content && <p>{msg.content}</p>}
 
-                          {/* Reaction badge overlapping bottom border */}
-                          {msg.reactions?.thumbsUp && msg.reactions.thumbsUp.length > 0 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleReaction(msg.id);
-                              }}
-                              className={`absolute -bottom-2.5 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border shadow-sm transition-all ${
-                                isOwnMessage ? 'right-4' : 'left-4'
-                              } ${
-                                msg.reactions.thumbsUp.includes(currentUser?.id || '')
-                                  ? 'bg-zinc-100 text-zinc-950 border-zinc-300 hover:bg-zinc-200'
-                                  : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
-                              }`}
-                              title={`${msg.reactions.thumbsUp.length} likes`}
-                            >
-                              <span>👍</span>
-                              <span className="text-[10px]">{msg.reactions.thumbsUp.length}</span>
-                            </button>
-                          )}
+                          {/* Reaction badges overlapping bottom border */}
+                          <div className={`absolute -bottom-2.5 flex items-center gap-1.5 ${
+                            isOwnMessage ? 'right-4 flex-row-reverse' : 'left-4'
+                          }`}>
+                            {msg.reactions?.thumbsUp && msg.reactions.thumbsUp.length > 0 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleReaction(msg.id, 'thumbsUp');
+                                }}
+                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border shadow-sm transition-all ${
+                                  msg.reactions.thumbsUp.includes(currentUser?.id || '')
+                                    ? 'bg-zinc-100 text-zinc-950 border-zinc-300 hover:bg-zinc-200'
+                                    : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
+                                }`}
+                                title={`Liked by: ${msg.reactions.thumbsUp.map(id => users.find(u => u.id === id)?.name || 'Unknown').join(', ')}`}
+                              >
+                                <span>👍</span>
+                                <span className="text-[10px]">{msg.reactions.thumbsUp.length}</span>
+                              </button>
+                            )}
+
+                            {msg.reactions?.heart && msg.reactions.heart.length > 0 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleReaction(msg.id, 'heart');
+                                }}
+                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border shadow-sm transition-all ${
+                                  msg.reactions.heart.includes(currentUser?.id || '')
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                                    : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
+                                }`}
+                                title={`Hearted by: ${msg.reactions.heart.map(id => users.find(u => u.id === id)?.name || 'Unknown').join(', ')}`}
+                              >
+                                <span className="text-rose-600">❤️</span>
+                                <span className="text-[10px]">{msg.reactions.heart.length}</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

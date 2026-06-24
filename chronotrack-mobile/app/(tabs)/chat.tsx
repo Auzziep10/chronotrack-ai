@@ -287,16 +287,32 @@ export default function ChatScreen() {
                 </Text>
               ) : null}
 
-              {/* Thumbs Up Reaction Badge */}
-              {item.reactions?.thumbsUp && item.reactions.thumbsUp.length > 0 && (
+              {/* Reaction Badges Container */}
+              {((item.reactions?.thumbsUp && item.reactions.thumbsUp.length > 0) || 
+                (item.reactions?.heart && item.reactions.heart.length > 0)) && (
                 <View style={[
-                  styles.reactionBadgeContainer, 
+                  styles.reactionBadgesContainer,
                   isOwnMessage ? styles.reactionBadgeOwn : styles.reactionBadgeOther
                 ]}>
-                  <Text style={styles.reactionBadgeEmoji}>👍</Text>
-                  <Text style={[styles.reactionBadgeCount, isOwnMessage && styles.reactionBadgeCountOwn]}>
-                    {item.reactions.thumbsUp.length}
-                  </Text>
+                  {item.reactions?.thumbsUp && item.reactions.thumbsUp.length > 0 && (
+                    <View style={styles.reactionBadgeMini}>
+                      <Text style={styles.reactionBadgeEmoji}>👍</Text>
+                      <Text style={[styles.reactionBadgeCount, isOwnMessage && styles.reactionBadgeCountOwn]}>
+                        {item.reactions.thumbsUp.length}
+                      </Text>
+                    </View>
+                  )}
+                  {item.reactions?.heart && item.reactions.heart.length > 0 && (
+                    <View style={[
+                      styles.reactionBadgeMini,
+                      item.reactions?.thumbsUp && item.reactions.thumbsUp.length > 0 && { marginLeft: 4 }
+                    ]}>
+                      <Text style={styles.reactionBadgeEmoji}>❤️</Text>
+                      <Text style={[styles.reactionBadgeCount, isOwnMessage && styles.reactionBadgeCountOwnHeart]}>
+                        {item.reactions.heart.length}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
             </View>
@@ -598,8 +614,8 @@ export default function ChatScreen() {
         >
           <TouchableWithoutFeedback onPress={() => setSelectedMessageForReaction(null)}>
             <View style={styles.reactionModalOverlay}>
-              <View style={styles.reactionModalContent}>
-                <Text style={styles.reactionModalTitle}>Add Reaction</Text>
+              <View style={[styles.reactionModalContent, { maxWidth: 280, width: '85%' }]}>
+                <Text style={styles.reactionModalTitle}>Reactions</Text>
                 
                 <View style={styles.reactionRow}>
                   {(() => {
@@ -609,7 +625,7 @@ export default function ChatScreen() {
                         style={[styles.reactionBtn, hasReacted && styles.reactionBtnActive]}
                         onPress={async () => {
                           if (selectedMessageForReaction && currentUser) {
-                            await firebaseToggleReaction(selectedMessageForReaction.id, currentUser.id);
+                            await firebaseToggleReaction(selectedMessageForReaction.id, currentUser.id, 'thumbsUp');
                             setSelectedMessageForReaction(null);
                           }
                         }}
@@ -621,13 +637,68 @@ export default function ChatScreen() {
                       </TouchableOpacity>
                     );
                   })()}
+
+                  {(() => {
+                    const hasReacted = selectedMessageForReaction?.reactions?.heart?.includes(currentUser?.id || '');
+                    return (
+                      <TouchableOpacity
+                        style={[styles.reactionBtn, hasReacted && styles.reactionBtnActiveHeart, { marginLeft: 12 }]}
+                        onPress={async () => {
+                          if (selectedMessageForReaction && currentUser) {
+                            await firebaseToggleReaction(selectedMessageForReaction.id, currentUser.id, 'heart');
+                            setSelectedMessageForReaction(null);
+                          }
+                        }}
+                      >
+                        <Text style={styles.reactionBtnEmoji}>❤️</Text>
+                        <Text style={[styles.reactionBtnText, hasReacted && styles.reactionBtnTextActiveHeart]}>
+                          {hasReacted ? 'Loved' : 'Love'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
                 </View>
+
+                {/* Reaction Details */}
+                {(() => {
+                  const thumbsUpUsers = selectedMessageForReaction?.reactions?.thumbsUp || [];
+                  const heartUsers = selectedMessageForReaction?.reactions?.heart || [];
+                  
+                  const resolveNames = (ids: string[]) => {
+                    return ids.map(id => users.find(u => u.id === id)?.name || 'Unknown User');
+                  };
+
+                  if (thumbsUpUsers.length === 0 && heartUsers.length === 0) {
+                    return null;
+                  }
+
+                  return (
+                    <View style={styles.reactionDetailsContainer}>
+                      {thumbsUpUsers.length > 0 && (
+                        <View style={styles.reactionDetailSection}>
+                          <Text style={styles.reactionDetailHeading}>👍 Liked by:</Text>
+                          <Text style={styles.reactionDetailNames}>
+                            {resolveNames(thumbsUpUsers).join(', ')}
+                          </Text>
+                        </View>
+                      )}
+                      {heartUsers.length > 0 && (
+                        <View style={[styles.reactionDetailSection, thumbsUpUsers.length > 0 && { marginTop: 8 }]}>
+                          <Text style={styles.reactionDetailHeading}>❤️ Loved by:</Text>
+                          <Text style={styles.reactionDetailNames}>
+                            {resolveNames(heartUsers).join(', ')}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })()}
 
                 <TouchableOpacity 
                   style={styles.reactionCloseBtn} 
                   onPress={() => setSelectedMessageForReaction(null)}
                 >
-                  <Text style={styles.reactionCloseBtnText}>Cancel</Text>
+                  <Text style={styles.reactionCloseBtnText}>Close</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1005,16 +1076,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  reactionBadgeContainer: {
+  reactionBadgesContainer: {
     position: 'absolute',
-    bottom: -8,
-    right: 10,
+    bottom: -10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  reactionBadgeMini: {
     backgroundColor: 'white',
     borderWidth: 1,
     borderColor: '#e4e4e7',
     borderRadius: 12,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
@@ -1022,11 +1097,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 1,
     elevation: 2,
-    zIndex: 10,
   },
   reactionBadgeOwn: {
     right: 12,
-    borderColor: theme.colors.primary,
   },
   reactionBadgeOther: {
     left: 12,
@@ -1043,6 +1116,9 @@ const styles = StyleSheet.create({
   },
   reactionBadgeCountOwn: {
     color: theme.colors.primary,
+  },
+  reactionBadgeCountOwnHeart: {
+    color: '#e11d48',
   },
   reactionModalOverlay: {
     flex: 1,
@@ -1089,6 +1165,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff6ff',
     borderColor: theme.colors.primary,
   },
+  reactionBtnActiveHeart: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#e11d48',
+  },
   reactionBtnEmoji: {
     fontSize: 18,
     marginRight: 4,
@@ -1101,6 +1181,9 @@ const styles = StyleSheet.create({
   reactionBtnTextActive: {
     color: theme.colors.primary,
   },
+  reactionBtnTextActiveHeart: {
+    color: '#e11d48',
+  },
   reactionCloseBtn: {
     paddingVertical: 6,
     width: '100%',
@@ -1111,5 +1194,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.textSecondary,
     fontWeight: '600',
+  },
+  reactionDetailsContainer: {
+    width: '100%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  reactionDetailSection: {
+    width: '100%',
+  },
+  reactionDetailHeading: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+    marginBottom: 2,
+  },
+  reactionDetailNames: {
+    fontSize: 12,
+    color: theme.colors.text,
+    lineHeight: 16,
   },
 });

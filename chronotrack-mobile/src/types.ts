@@ -164,6 +164,7 @@ export interface ChatMessage {
   imageUrl?: string;
   reactions?: {
     thumbsUp?: string[];
+    heart?: string[];
   };
 }
 
