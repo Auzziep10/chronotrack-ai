@@ -592,6 +592,11 @@ export const firebaseSendMessage = async (message: ChatMessage): Promise<void> =
     });
 };
 
+/** Delete a chat message from Firestore */
+export const firebaseDeleteChatMessage = async (messageId: string): Promise<void> => {
+    await deleteDoc(doc(db, CHAT_COL, messageId));
+};
+
 /** Upload chat shared image to Firebase storage */
 export const firebaseUploadChatImage = async (imageName: string, base64Data: string): Promise<string> => {
     try {

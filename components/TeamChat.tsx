@@ -29,7 +29,8 @@ import {
   firebaseDeleteChatChannel,
   firebaseDeleteChannelMessages,
   firebaseGetUsers,
-  subscribeToRecentMessages
+  subscribeToRecentMessages,
+  firebaseDeleteChatMessage
 } from '../services/firebaseService';
 
 interface Props {
@@ -336,6 +337,31 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
     }
 
     setInputText('');
+  };
+
+  // Delete a message
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!window.confirm("Are you sure you want to delete this message?")) return;
+
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseDeleteChatMessage(messageId);
+      } catch (err: any) {
+        console.error("Failed to delete message via Firebase:", err);
+      }
+    } else {
+      // LocalStorage Fallback Delete
+      const key = `chrono_local_chat_${activeChannel}`;
+      const localMsgs = messages.filter(msg => msg.id !== messageId);
+      localStorage.setItem(key, JSON.stringify(localMsgs));
+      setMessages(localMsgs);
+
+      // Trigger standard storage event manually for the current tab
+      window.dispatchEvent(new StorageEvent('storage', {
+        key,
+        newValue: JSON.stringify(localMsgs)
+      }));
+    }
   };
 
   // Handle image upload from button
@@ -814,24 +840,35 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                         </span>
                       </div>
 
-                      <div className={`p-4 rounded-3xl text-sm border leading-relaxed shadow-sm transition-all break-words w-full ${
-                        isOwnMessage
-                          ? 'bg-zinc-900 text-white border-zinc-900 rounded-tr-none'
-                          : 'bg-zinc-50 text-zinc-800 border-zinc-200 rounded-tl-none'
-                      }`}>
-                        {msg.imageUrl && (
-                          <div className="mb-2 max-w-sm rounded-lg overflow-hidden border border-zinc-200/50 bg-black/5">
-                            <img 
-                              src={msg.imageUrl} 
-                              alt="Shared upload" 
-                              className="max-h-72 object-contain w-full"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://placehold.co/400x300?text=Image+Load+Error';
-                              }}
-                            />
-                          </div>
+                      <div className="relative group w-full flex items-center gap-2">
+                        {isOwnMessage && (
+                          <button
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all shrink-0 focus:opacity-100"
+                            title="Delete message"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         )}
-                        {msg.content && <p>{msg.content}</p>}
+                        <div className={`p-4 rounded-3xl text-sm border leading-relaxed shadow-sm transition-all break-words w-full ${
+                          isOwnMessage
+                            ? 'bg-zinc-900 text-white border-zinc-900 rounded-tr-none'
+                            : 'bg-zinc-50 text-zinc-800 border-zinc-200 rounded-tl-none'
+                        }`}>
+                          {msg.imageUrl && (
+                            <div className="mb-2 max-w-sm rounded-lg overflow-hidden border border-zinc-200/50 bg-black/5">
+                              <img 
+                                src={msg.imageUrl} 
+                                alt="Shared upload" 
+                                className="max-h-72 object-contain w-full"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = 'https://placehold.co/400x300?text=Image+Load+Error';
+                                }}
+                              />
+                            </div>
+                          )}
+                          {msg.content && <p>{msg.content}</p>}
+                        </div>
                       </div>
                     </div>
                   </div>
