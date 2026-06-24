@@ -89,29 +89,38 @@ export default function ChatScreen() {
 
   // 1. Subscribe to Channels List
   useEffect(() => {
+    console.log("[ChatScreen] Channels subscription useEffect. currentUser:", currentUser?.name);
     if (!currentUser) return;
     if (isFirebaseConfigured()) {
+      console.log("[ChatScreen] Subscribing to chat channels...");
       const unsubscribe = subscribeToChatChannels((syncedChannels) => {
+        console.log("[ChatScreen] Received channels:", syncedChannels.map(c => c.name));
         if (syncedChannels.length === 0) {
-          // Seed default channels if completely empty
+          console.log("[ChatScreen] Channels empty, seeding default channels...");
           DEFAULT_CHANNELS.forEach(ch => firebaseSaveChatChannel(ch));
         } else {
           setChannels(syncedChannels);
         }
       });
-      return () => unsubscribe();
+      return () => {
+        console.log("[ChatScreen] Unsubscribing from chat channels");
+        unsubscribe();
+      };
     } else {
+      console.log("[ChatScreen] Firebase not configured, using default channels");
       setChannels(DEFAULT_CHANNELS);
     }
   }, [currentUser]);
 
   // 2. Subscribe to Messages of Active Channel
   useEffect(() => {
+    console.log("[ChatScreen] Messages subscription useEffect. currentUser:", currentUser?.name, "channels:", channels.length, "activeChannel:", activeChannel);
     if (!currentUser) return;
     if (channels.length === 0) return;
 
     // Verify current activeChannel still exists
     if (!activeChannel.startsWith('dm-') && !channels.some(c => c.id === activeChannel)) {
+      console.log("[ChatScreen] Active channel doesn't exist, resetting to:", channels[0]?.id || 'general');
       setActiveChannel(channels[0]?.id || 'general');
       return;
     }
@@ -119,25 +128,31 @@ export default function ChatScreen() {
     setIsLoading(true);
     setError(null);
     if (isFirebaseConfigured()) {
+      console.log("[ChatScreen] Subscribing to messages for channel:", activeChannel);
       const unsubscribe = subscribeToChatMessages(
         activeChannel, 
         (syncedMessages) => {
+          console.log("[ChatScreen] Received messages count:", syncedMessages.length);
           setMessages(syncedMessages);
           setIsLoading(false);
           setError(null);
         },
         (err) => {
-          console.error(err);
+          console.error("[ChatScreen] Messages subscription error:", err);
           setIsLoading(false);
           setError("Failed to sync chat messages. (Is Firestore composite index missing or building?)");
         }
       );
-      return () => unsubscribe();
+      return () => {
+        console.log("[ChatScreen] Unsubscribing from messages for channel:", activeChannel);
+        unsubscribe();
+      };
     } else {
+      console.log("[ChatScreen] Firebase not configured, clearing messages");
       setMessages([]);
       setIsLoading(false);
     }
-  }, [activeChannel, channels]);
+  }, [activeChannel, channels, currentUser]);
 
   // 3. Mark active channel as read when channel changes or new messages arrive
   useEffect(() => {
