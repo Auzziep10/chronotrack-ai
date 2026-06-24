@@ -2,6 +2,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import {
     getFirestore,
     doc,
+    getDoc,
     setDoc,
     deleteDoc,
     onSnapshot,
@@ -387,6 +388,47 @@ export const firebaseDeleteChannelMessages = async (channelId: string): Promise<
         await Promise.all(deletePromises);
     } catch (e) {
         console.error(`Failed to delete messages for channel ${channelId}:`, e);
+    }
+};
+
+/** Subscribe to recent chat messages across all channels */
+export const subscribeToRecentMessages = (onUpdate: (messages: any[]) => void) => {
+    const q = query(collection(db, CHAT_COL), orderBy('timestamp', 'desc'), limit(50));
+    return onSnapshot(q, (snapshot) => {
+        const msgs = snapshot.docs.map(d => {
+            const data = d.data();
+            return {
+                ...data,
+                id: d.id,
+                timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toMillis() : (data.timestamp || Date.now())
+            };
+        });
+        onUpdate(msgs);
+    }, (error) => {
+        console.error("Firebase RecentMessages Sync Error:", error);
+    });
+};
+
+/** Toggle a message thumbs-up reaction in Firestore */
+export const firebaseToggleReaction = async (messageId: string, userId: string, reactionType: string = 'thumbsUp'): Promise<void> => {
+    const msgRef = doc(db, CHAT_COL, messageId);
+    try {
+        const docSnap = await getDoc(msgRef);
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            const reactions = data.reactions || {};
+            const userList = reactions[reactionType] || [];
+            
+            const updatedList = userList.includes(userId)
+                ? userList.filter((id: string) => id !== userId)
+                : [...userList, userId];
+            
+            await updateDoc(msgRef, {
+                [`reactions.${reactionType}`]: updatedList
+            });
+        }
+    } catch (e) {
+        console.error("Failed to toggle reaction:", e);
     }
 };
 

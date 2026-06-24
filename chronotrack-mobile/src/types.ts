@@ -162,6 +162,9 @@ export interface ChatMessage {
   timestamp: number;
   channel: string;
   imageUrl?: string;
+  reactions?: {
+    thumbsUp?: string[];
+  };
 }
 
 export interface ChatChannel {

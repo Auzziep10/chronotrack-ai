@@ -2,8 +2,11 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { ClipboardList, Calendar, Settings as SettingsIcon, MessageSquare } from 'lucide-react-native';
 import { theme } from '../../src/theme';
+import { useAuth } from '../../src/context/AuthContext';
 
 export default function TabsLayout() {
+  const { unreadCount } = useAuth();
+
   return (
     <Tabs
       screenOptions={{
@@ -45,6 +48,13 @@ export default function TabsLayout() {
         options={{
           title: 'Chat',
           tabBarIcon: ({ color }) => <MessageSquare color={color} size={24} />,
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: '#dc2626',
+            color: 'white',
+            fontSize: 10,
+            lineHeight: 14,
+          }
         }}
       />
       <Tabs.Screen

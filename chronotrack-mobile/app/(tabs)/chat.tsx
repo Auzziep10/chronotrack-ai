@@ -12,7 +12,9 @@ import {
   Modal, 
   SafeAreaView,
   TouchableWithoutFeedback,
-  Keyboard
+  Keyboard,
+  ScrollView,
+  Image
 } from 'react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import { theme } from '../../src/theme';
@@ -24,7 +26,8 @@ import {
   firebaseSendMessage, 
   subscribeToChatChannels, 
   firebaseSaveChatChannel,
-  firebaseGetUsers
+  firebaseGetUsers,
+  firebaseToggleReaction
 } from '../../src/services/firebaseService';
 
 const DEFAULT_CHANNELS: ChatChannel[] = [
@@ -56,7 +59,7 @@ const AVATAR_COLORS = [
 ];
 
 export default function ChatScreen() {
-  const { currentUser } = useAuth();
+  const { currentUser, users, unreadCounts, markChannelAsRead } = useAuth();
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [activeChannel, setActiveChannel] = useState('general');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -64,13 +67,15 @@ export default function ChatScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedMessageForReaction, setSelectedMessageForReaction] = useState<ChatMessage | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
 
   const isAdminOrManager = currentUser?.role?.toLowerCase() === 'admin' || currentUser?.role?.toLowerCase() === 'manager';
   const currentChannelObj = channels.find(c => c.id === activeChannel);
   const isRestrictedChannel = currentChannelObj?.restricted;
-  const canSendMessages = !isRestrictedChannel || isAdminOrManager;
+  const isDM = activeChannel.startsWith('dm-');
+  const canSendMessages = isDM || !isRestrictedChannel || isAdminOrManager;
 
   // Generate color styling for user avatar initials based on name hash
   const getAvatarStyle = (name: string) => {
@@ -84,6 +89,7 @@ export default function ChatScreen() {
 
   // 1. Subscribe to Channels List
   useEffect(() => {
+    if (!currentUser) return;
     if (isFirebaseConfigured()) {
       const unsubscribe = subscribeToChatChannels((syncedChannels) => {
         if (syncedChannels.length === 0) {
@@ -97,14 +103,15 @@ export default function ChatScreen() {
     } else {
       setChannels(DEFAULT_CHANNELS);
     }
-  }, []);
+  }, [currentUser]);
 
   // 2. Subscribe to Messages of Active Channel
   useEffect(() => {
+    if (!currentUser) return;
     if (channels.length === 0) return;
 
     // Verify current activeChannel still exists
-    if (!channels.some(c => c.id === activeChannel)) {
+    if (!activeChannel.startsWith('dm-') && !channels.some(c => c.id === activeChannel)) {
       setActiveChannel(channels[0]?.id || 'general');
       return;
     }
@@ -132,6 +139,13 @@ export default function ChatScreen() {
     }
   }, [activeChannel, channels]);
 
+  // 3. Mark active channel as read when channel changes or new messages arrive
+  useEffect(() => {
+    if (activeChannel) {
+      markChannelAsRead(activeChannel);
+    }
+  }, [activeChannel, messages, markChannelAsRead]);
+
   // Send a message
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
@@ -153,15 +167,39 @@ export default function ChatScreen() {
       try {
         await firebaseSendMessage(newMessage);
         
-        // Trigger Push Notifications to other non-muted channel users
-        if (currentChannelObj?.notificationsEnabled !== false) {
+        // Trigger Push Notifications
+        let shouldSendPush = false;
+        let recipients: any[] = [];
+        let pushTitle = '';
+
+        if (isDM) {
+          shouldSendPush = true;
+          const dmUserId = activeChannel.substring(3);
           const allUsers = await firebaseGetUsers();
-          const notifications = allUsers
-            .filter(u => u.id !== currentUser.id && u.expoPushToken && !u.mutedChannels?.includes(activeChannel))
+          
+          if (isAdminOrManager) {
+            // Sender is Admin/Manager, recipient is the specific staff member (dmUserId)
+            recipients = allUsers.filter(u => u.id === dmUserId);
+            pushTitle = `Message from Admin - ${currentUser.name}`;
+          } else {
+            // Sender is Staff member, recipient is all Admins/Managers
+            recipients = allUsers.filter(u => u.role?.toLowerCase() === 'admin' || u.role?.toLowerCase() === 'manager');
+            pushTitle = `Staff Message - ${currentUser.name}`;
+          }
+        } else if (currentChannelObj?.notificationsEnabled !== false) {
+          shouldSendPush = true;
+          const allUsers = await firebaseGetUsers();
+          recipients = allUsers.filter(u => !u.mutedChannels?.includes(activeChannel));
+          pushTitle = `#${activeChannel} - ${currentUser.name}`;
+        }
+
+        if (shouldSendPush && recipients.length > 0) {
+          const notifications = recipients
+            .filter(u => u.id !== currentUser.id && u.expoPushToken)
             .map(u => ({
               to: u.expoPushToken,
               sound: 'default',
-              title: `#${activeChannel} - ${currentUser.name}`,
+              title: pushTitle,
               body: text
             }));
 
@@ -216,15 +254,58 @@ export default function ChatScreen() {
             </View>
             <Text style={styles.timestamp}>{formatTime(item.timestamp)}</Text>
           </View>
-          <View style={[styles.messageBubble, isOwnMessage ? styles.bubbleOwn : styles.bubbleOther]}>
-            <Text style={[styles.messageText, isOwnMessage ? styles.textOwn : styles.textOther]}>
-              {item.content}
-            </Text>
-          </View>
+          <TouchableOpacity 
+            activeOpacity={0.85}
+            onLongPress={() => setSelectedMessageForReaction(item)}
+          >
+            <View style={[styles.messageBubble, isOwnMessage ? styles.bubbleOwn : styles.bubbleOther]}>
+              {item.imageUrl && (
+                <Image 
+                  source={{ uri: item.imageUrl }} 
+                  style={styles.messageImage} 
+                  resizeMode="contain"
+                />
+              )}
+              {item.content ? (
+                <Text style={[styles.messageText, isOwnMessage ? styles.textOwn : styles.textOther]}>
+                  {item.content}
+                </Text>
+              ) : null}
+
+              {/* Thumbs Up Reaction Badge */}
+              {item.reactions?.thumbsUp && item.reactions.thumbsUp.length > 0 && (
+                <View style={[
+                  styles.reactionBadgeContainer, 
+                  isOwnMessage ? styles.reactionBadgeOwn : styles.reactionBadgeOther
+                ]}>
+                  <Text style={styles.reactionBadgeEmoji}>👍</Text>
+                  <Text style={[styles.reactionBadgeCount, isOwnMessage && styles.reactionBadgeCountOwn]}>
+                    {item.reactions.thumbsUp.length}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
         </View>
       </View>
     );
   };
+
+  // Dynamic header resolution for DMs vs regular channels
+  let headerTitle = activeChannel;
+  let headerDesc = currentChannelObj?.desc || '';
+
+  if (isDM) {
+    const dmUserId = activeChannel.substring(3);
+    if (!isAdminOrManager) {
+      headerTitle = 'Message Admins';
+      headerDesc = 'Private helpline to Admins and Managers';
+    } else {
+      const dmUserObj = users.find(u => u.id === dmUserId);
+      headerTitle = dmUserObj ? `DM: ${dmUserObj.name}` : 'Direct Message';
+      headerDesc = dmUserObj ? `Private conversation with ${dmUserObj.name} (${dmUserObj.role})` : 'Private conversation';
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -243,10 +324,19 @@ export default function ChatScreen() {
           }}
         >
           <View style={styles.headerTitleContainer}>
-            <Hash size={20} color={theme.colors.accent} style={styles.hashIcon} />
-            <Text style={styles.headerTitle}>#{activeChannel}</Text>
+            {isDM ? (
+              <MessageSquare size={20} color={theme.colors.accent} style={styles.hashIcon} />
+            ) : (
+              <Hash size={20} color={theme.colors.accent} style={styles.hashIcon} />
+            )}
+            <View style={{ flexDirection: 'column', marginLeft: 4, maxWidth: '70%' }}>
+              <Text style={styles.headerTitle} numberOfLines={1}>{headerTitle}</Text>
+              {headerDesc ? (
+                <Text style={styles.headerSubtitle} numberOfLines={1}>{headerDesc}</Text>
+              ) : null}
+            </View>
           </View>
-          <Text style={styles.channelSelectBtn}>Switch Channel</Text>
+          <Text style={styles.channelSelectBtn}>Switch</Text>
         </TouchableOpacity>
 
         {/* Message List */}
@@ -278,8 +368,12 @@ export default function ChatScreen() {
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View style={styles.emptyContainer}>
                 <MessageSquare size={48} color={theme.colors.textSecondary} style={{ marginBottom: 12, opacity: 0.5 }} />
-                <Text style={styles.emptyTitle}>Welcome to #{activeChannel}!</Text>
-                <Text style={styles.emptySubtitle}>Be the first to say hello to the team.</Text>
+                <Text style={styles.emptyTitle}>
+                  {isDM ? "This is the start of your private chat." : `Welcome to #${activeChannel}!`}
+                </Text>
+                <Text style={styles.emptySubtitle}>
+                  {isDM ? "Only you and Admins/Managers can read this conversation." : "Be the first to say hello to the team."}
+                </Text>
               </View>
             </TouchableWithoutFeedback>
           ) : (
@@ -323,7 +417,7 @@ export default function ChatScreen() {
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
-                placeholder={`Message #${activeChannel}...`}
+                placeholder={isDM ? "Message privately..." : `Message #${activeChannel}...`}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={inputText}
                 onChangeText={setInputText}
@@ -363,13 +457,14 @@ export default function ChatScreen() {
                 </TouchableOpacity>
               </View>
 
-              <FlatList
-                data={channels}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => {
+              <ScrollView contentContainerStyle={styles.channelList}>
+                <Text style={styles.sectionHeader}>Channels</Text>
+                {channels.map((item) => {
                   const isActive = item.id === activeChannel;
+                  const unreadNum = unreadCounts[item.id] || 0;
                   return (
                     <TouchableOpacity
+                      key={item.id}
                       style={[styles.channelItem, isActive && styles.channelItemActive]}
                       onPress={() => {
                         setActiveChannel(item.id);
@@ -382,19 +477,148 @@ export default function ChatScreen() {
                           {item.name}
                         </Text>
                       </View>
-                      {item.restricted && (
-                        <View style={styles.restrictedBadge}>
-                          <Text style={styles.restrictedBadgeText}>Read-Only</Text>
-                        </View>
-                      )}
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {unreadNum > 0 && (
+                          <View style={styles.unreadBadge}>
+                            <Text style={styles.unreadBadgeText}>{unreadNum}</Text>
+                          </View>
+                        )}
+                        {item.restricted && (
+                          <View style={styles.restrictedBadge}>
+                            <Text style={styles.restrictedBadgeText}>Read-Only</Text>
+                          </View>
+                        )}
+                      </View>
                     </TouchableOpacity>
                   );
-                }}
-                contentContainerStyle={styles.channelList}
-              />
+                })}
+
+                {/* Direct Messages Section */}
+                {!currentUser?.role?.toLowerCase()?.includes('terminal') && (
+                  <>
+                    <Text style={[styles.sectionHeader, { marginTop: 16 }]}>Direct Messages</Text>
+                    {!isAdminOrManager ? (
+                      // For general staff: show single item to message admins
+                      (() => {
+                        const dmChannelId = `dm-${currentUser?.id}`;
+                        const isActive = activeChannel === dmChannelId;
+                        const unreadNum = unreadCounts[dmChannelId] || 0;
+                        return (
+                          <TouchableOpacity
+                            style={[styles.channelItem, isActive && styles.channelItemActive]}
+                            onPress={() => {
+                              setActiveChannel(dmChannelId);
+                              setShowChannelModal(false);
+                            }}
+                          >
+                            <View style={styles.channelItemLeft}>
+                              <MessageSquare size={18} color={isActive ? theme.colors.accent : theme.colors.textSecondary} style={{ marginRight: 8 }} />
+                              <Text style={[styles.channelItemName, isActive && styles.channelItemNameActive]}>
+                                Message Admins
+                              </Text>
+                            </View>
+                            {unreadNum > 0 && (
+                              <View style={styles.unreadBadge}>
+                                <Text style={styles.unreadBadgeText}>{unreadNum}</Text>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })()
+                    ) : (
+                      // For admins/managers: list all general staff members
+                      users
+                        .filter(u => 
+                          u.role?.toLowerCase() !== 'admin' && 
+                          u.role?.toLowerCase() !== 'manager' && 
+                          u.role?.toLowerCase() !== 'terminal' &&
+                          !u.role?.toLowerCase()?.trim()?.includes('client') &&
+                          u.id !== currentUser?.id
+                        )
+                        .map(member => {
+                          const dmChannelId = `dm-${member.id}`;
+                          const isActive = activeChannel === dmChannelId;
+                          const initials = member.avatarInitials || '??';
+                          const avatarColors = getAvatarStyle(member.name);
+                          const unreadNum = unreadCounts[dmChannelId] || 0;
+                          
+                          return (
+                            <TouchableOpacity
+                              key={member.id}
+                              style={[styles.channelItem, isActive && styles.channelItemActive]}
+                              onPress={() => {
+                                setActiveChannel(dmChannelId);
+                                setShowChannelModal(false);
+                              }}
+                            >
+                              <View style={styles.channelItemLeft}>
+                                <View style={[styles.dmAvatar, { backgroundColor: avatarColors.bg, borderColor: avatarColors.border, marginRight: 8 }]}>
+                                  <Text style={[styles.dmAvatarText, { color: avatarColors.text }]}>{initials}</Text>
+                                </View>
+                                <Text style={[styles.channelItemName, isActive && styles.channelItemNameActive]}>
+                                  {member.name}
+                                </Text>
+                              </View>
+                              {unreadNum > 0 && (
+                                <View style={styles.unreadBadge}>
+                                  <Text style={styles.unreadBadgeText}>{unreadNum}</Text>
+                                </View>
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })
+                    )}
+                  </>
+                )}
+              </ScrollView>
             </View>
           </View>
         </Modal>
+        {/* Message Reaction Popup Modal */}
+        <Modal
+          visible={selectedMessageForReaction !== null}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setSelectedMessageForReaction(null)}
+        >
+          <TouchableWithoutFeedback onPress={() => setSelectedMessageForReaction(null)}>
+            <View style={styles.reactionModalOverlay}>
+              <View style={styles.reactionModalContent}>
+                <Text style={styles.reactionModalTitle}>Add Reaction</Text>
+                
+                <View style={styles.reactionRow}>
+                  {(() => {
+                    const hasReacted = selectedMessageForReaction?.reactions?.thumbsUp?.includes(currentUser?.id || '');
+                    return (
+                      <TouchableOpacity
+                        style={[styles.reactionBtn, hasReacted && styles.reactionBtnActive]}
+                        onPress={async () => {
+                          if (selectedMessageForReaction && currentUser) {
+                            await firebaseToggleReaction(selectedMessageForReaction.id, currentUser.id);
+                            setSelectedMessageForReaction(null);
+                          }
+                        }}
+                      >
+                        <Text style={styles.reactionBtnEmoji}>👍</Text>
+                        <Text style={[styles.reactionBtnText, hasReacted && styles.reactionBtnTextActive]}>
+                          {hasReacted ? 'Liked' : 'Like'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
+                </View>
+
+                <TouchableOpacity 
+                  style={styles.reactionCloseBtn} 
+                  onPress={() => setSelectedMessageForReaction(null)}
+                >
+                  <Text style={styles.reactionCloseBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -409,7 +633,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerBar: {
-    height: 56,
+    minHeight: 56,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -717,5 +942,159 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    color: theme.colors.textSecondary,
+    marginTop: 1,
+  },
+  sectionHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+  },
+  dmAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dmAvatarText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  messageImage: {
+    width: 200,
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 6,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  unreadBadge: {
+    backgroundColor: '#dc2626',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginRight: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unreadBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  reactionBadgeContainer: {
+    position: 'absolute',
+    bottom: -8,
+    right: 10,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#e4e4e7',
+    borderRadius: 12,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 2,
+    zIndex: 10,
+  },
+  reactionBadgeOwn: {
+    right: 12,
+    borderColor: theme.colors.primary,
+  },
+  reactionBadgeOther: {
+    left: 12,
+    right: undefined,
+  },
+  reactionBadgeEmoji: {
+    fontSize: 9,
+    marginRight: 1,
+  },
+  reactionBadgeCount: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: theme.colors.textSecondary,
+  },
+  reactionBadgeCountOwn: {
+    color: theme.colors.primary,
+  },
+  reactionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reactionModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    width: '80%',
+    maxWidth: 260,
+    padding: theme.spacing.lg,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  reactionModalTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginBottom: 16,
+  },
+  reactionRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    width: '100%',
+    marginBottom: 16,
+  },
+  reactionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f4f4f5',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e4e4e7',
+  },
+  reactionBtnActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: theme.colors.primary,
+  },
+  reactionBtnEmoji: {
+    fontSize: 18,
+    marginRight: 4,
+  },
+  reactionBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
+  reactionBtnTextActive: {
+    color: theme.colors.primary,
+  },
+  reactionCloseBtn: {
+    paddingVertical: 6,
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  reactionCloseBtnText: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontWeight: '600',
   },
 });

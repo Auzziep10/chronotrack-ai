@@ -1,11 +1,13 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, UserSession } from '../types';
 import { 
   firebaseSilentAuth, 
   isFirebaseConfigured, 
   firebaseGetUsers, 
   subscribeToActiveSessions,
-  subscribeToSettings
+  subscribeToSettings,
+  subscribeToRecentMessages
 } from '../services/firebaseService';
 
 interface AuthContextType {
@@ -16,6 +18,9 @@ interface AuthContextType {
   isLoading: boolean;
   users: User[];
   appSettings: any;
+  unreadCounts: Record<string, number>;
+  unreadCount: number;
+  markChannelAsRead: (channelId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -25,7 +30,10 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
   isLoading: true,
   users: [],
-  appSettings: null
+  appSettings: null,
+  unreadCounts: {},
+  unreadCount: 0,
+  markChannelAsRead: async () => {}
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -34,6 +42,97 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
   const [appSettings, setAppSettings] = useState<any>(null);
+  const [lastViewedTimes, setLastViewedTimes] = useState<Record<string, number>>({});
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const markChannelAsRead = async (channelId: string) => {
+    const now = Date.now();
+    setLastViewedTimes(prev => ({
+      ...prev,
+      [channelId]: now
+    }));
+    setUnreadCounts(prev => {
+      const updated = { ...prev };
+      delete updated[channelId];
+      const total = Object.values(updated).reduce((sum, val) => sum + val, 0);
+      setUnreadCount(total);
+      return updated;
+    });
+    try {
+      await AsyncStorage.setItem(`chrono_last_viewed_${channelId}`, String(now));
+    } catch (e) {
+      console.error("Failed to save last viewed time:", e);
+    }
+  };
+
+  useEffect(() => {
+    const loadLastViewed = async () => {
+      try {
+        const keys = await AsyncStorage.getAllKeys();
+        const lastViewedKeys = keys.filter(k => k.startsWith('chrono_last_viewed_'));
+        if (lastViewedKeys.length > 0) {
+          const pairs = await AsyncStorage.multiGet(lastViewedKeys);
+          const times: Record<string, number> = {};
+          pairs.forEach(([key, val]) => {
+            const channelId = key.replace('chrono_last_viewed_', '');
+            times[channelId] = Number(val || '0');
+          });
+          setLastViewedTimes(times);
+        }
+      } catch (e) {
+        console.error("Failed to load last viewed times:", e);
+      }
+    };
+    if (currentUser) {
+      loadLastViewed();
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser || !isFirebaseConfigured()) {
+      setUnreadCounts({});
+      setUnreadCount(0);
+      return;
+    }
+
+    const unsubRecent = subscribeToRecentMessages((recentMsgs) => {
+      const counts: Record<string, number> = {};
+      const isAdminOrManager = currentUser.role?.toLowerCase() === 'admin' || currentUser.role?.toLowerCase() === 'manager';
+
+      recentMsgs.forEach(msg => {
+        if (msg.senderId === currentUser.id) return;
+
+        if (msg.channel.startsWith('dm-')) {
+          const dmUserId = msg.channel.substring(3);
+          if (!isAdminOrManager && dmUserId !== currentUser.id) {
+            return;
+          }
+          
+          // Exclude direct messages involving clients from unread count
+          const dmUser = users.find(u => u.id === dmUserId);
+          if (dmUser?.role?.toLowerCase()?.trim()?.includes('client')) {
+            return;
+          }
+          const senderUser = users.find(u => u.id === msg.senderId);
+          if (senderUser?.role?.toLowerCase()?.trim()?.includes('client')) {
+            return;
+          }
+        }
+
+        const lastViewed = lastViewedTimes[msg.channel] || 0;
+        if (msg.timestamp > lastViewed) {
+          counts[msg.channel] = (counts[msg.channel] || 0) + 1;
+        }
+      });
+
+      setUnreadCounts(counts);
+      const total = Object.values(counts).reduce((sum, val) => sum + val, 0);
+      setUnreadCount(total);
+    });
+
+    return () => unsubRecent();
+  }, [currentUser, lastViewedTimes, users]);
 
   useEffect(() => {
     const init = async () => {
@@ -98,10 +197,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setCurrentUser(null);
     setActiveSession(null);
+    setLastViewedTimes({});
+    setUnreadCounts({});
+    setUnreadCount(0);
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, activeSession, login, logout, isLoading, users, appSettings }}>
+    <AuthContext.Provider value={{ 
+      currentUser, 
+      activeSession, 
+      login, 
+      logout, 
+      isLoading, 
+      users, 
+      appSettings,
+      unreadCounts,
+      unreadCount,
+      markChannelAsRead
+    }}>
       {children}
     </AuthContext.Provider>
   );
