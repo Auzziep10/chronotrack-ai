@@ -163,4 +163,12 @@ export interface ChatMessage {
   timestamp: number;
   channel: string;
   imageUrl?: string;
-}
+}
+
+export interface ChatChannel {
+  id: string;
+  name: string;
+  desc: string;
+  restricted?: boolean;
+}
+

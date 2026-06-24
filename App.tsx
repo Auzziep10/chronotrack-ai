@@ -28,10 +28,11 @@ import {
   firebaseSilentAuth,
   subscribeToSettings,
   firebaseSaveSettings,
-  firebaseSaveTimeCard
+  firebaseSaveTimeCard,
+  subscribeToRecentMessages
 } from './services/firebaseService';
 
-type Tab = 'station' | 'activity' | 'manager' | 'planner' | 'documents' | 'chat';
+type Tab = 'station' | 'activity' | 'manager' | 'planner' | 'documents';
 
 const App: React.FC = () => {
   // Global State: Auth Token (Session Persistence)
@@ -76,6 +77,8 @@ const App: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<Tab>('station');
   const [showSettings, setShowSettings] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
 
   // Shift Blocks State (From Firebase)
   const [shiftBlocks, setShiftBlocks] = useState<any[]>([]);
@@ -201,7 +204,32 @@ const App: React.FC = () => {
       }
     });
 
-    // 3. Real-time settings listener
+    return () => {
+      unsubUsers();
+    };
+  }, [isFirebaseAuthed]); 
+
+  // 3. Real-time recent messages listener to track unreads
+  useEffect(() => {
+    if (!authToken || !isFirebaseConfigured() || !isFirebaseAuthed) return;
+
+    const unsub = subscribeToRecentMessages((recentMsgs) => {
+      let hasUnread = false;
+      recentMsgs.forEach(msg => {
+        const lastViewed = Number(localStorage.getItem(`chrono_last_viewed_${msg.channel}`) || '0');
+        if (msg.senderId !== currentUser?.id && msg.timestamp > lastViewed) {
+          hasUnread = true;
+        }
+      });
+      setHasUnreadChat(hasUnread);
+    });
+    return () => unsub();
+  }, [authToken, isFirebaseAuthed, showChat, currentUser?.id]);
+
+  // 4. Real-time settings listener
+  useEffect(() => {
+    if (!isFirebaseConfigured() || !isFirebaseAuthed) return;
+
     const unsubSettings = subscribeToSettings((firebaseSettings) => {
       if (firebaseSettings) {
         setAppSettings(prev => ({ ...prev, ...firebaseSettings }));
@@ -767,6 +795,18 @@ const App: React.FC = () => {
               <span className="text-xs font-bold text-zinc-800">{Object.keys(activeSessions).length}</span>
             </div>
             <div className="hidden sm:block h-8 w-px bg-zinc-200 mx-2"></div>
+            {!isTerminal && (
+              <button
+                onClick={() => setShowChat(true)}
+                className="p-2 text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors relative"
+                title="Team Chat"
+              >
+                <MessageSquare className="w-5 h-5" />
+                {hasUnreadChat && (
+                  <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
+                )}
+              </button>
+            )}
             {isAdmin && !isTerminal && (
               <button
                 onClick={() => setShowSettings(true)}
@@ -853,19 +893,6 @@ const App: React.FC = () => {
                 Forms & Docs
               </button>
             )}
-
-            {!isTerminal && (
-              <button
-                onClick={() => setActiveTab('chat')}
-                className={`${activeTab === 'chat'
-                  ? 'border-zinc-300 text-zinc-900'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors print:hidden`}
-              >
-                <MessageSquare className="w-4 h-4" />
-                Team Chat
-              </button>
-            )}
           </nav>
         </div>
       </div>
@@ -908,8 +935,6 @@ const App: React.FC = () => {
             <DailyPlanner users={users} currentUser={currentUser} />
           ) : activeTab === 'documents' ? (
             <PrintableForms currentUser={currentUser} />
-          ) : activeTab === 'chat' ? (
-            <TeamChat currentUser={currentUser} activeSessions={activeSessions} users={users} />
           ) : (
             <ActivityManager users={users} settings={appSettings} activeSessions={activeSessions} onClockIn={handleClockIn} onClockOut={handleClockOut} onUpdateUser={handleUpdateUser} onLogAbsence={handleLogAbsence} currentUser={currentUser} />
           )}
@@ -947,6 +972,14 @@ const App: React.FC = () => {
         settings={appSettings}
         onUpdateSettings={handleUpdateSettings}
         currentUser={currentUser}
+      />
+
+      <TeamChat
+        isOpen={showChat}
+        onClose={() => setShowChat(false)}
+        currentUser={currentUser}
+        activeSessions={activeSessions}
+        users={users}
       />
     </div>
   );
