@@ -451,6 +451,43 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                       </div>
                     </div>
                   )}
+
+                  {/* Submitted Onboarding Documents Section */}
+                  <div className="pt-4 border-t border-zinc-100">
+                    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-zinc-500" /> Submitted Onboarding Documents
+                    </label>
+                    {formData.onboardingDocuments && formData.onboardingDocuments.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-2.5">
+                        {formData.onboardingDocuments.map(doc => (
+                          <a
+                            key={doc.id}
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 p-3 bg-white border border-zinc-200 rounded-lg shadow-sm hover:border-zinc-300 hover:shadow-md transition-all group"
+                          >
+                            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                              <FileText className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-semibold text-zinc-900 truncate">
+                                {doc.formType === 'w9' ? 'W-9 Form' : 'Direct Deposit'}
+                              </div>
+                              <div className="text-[10px] text-zinc-500">
+                                {new Date(doc.uploadedAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <Download className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600" />
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-4 text-center text-sm text-zinc-500 italic">
+                        No documents submitted yet.
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
             )}
@@ -686,42 +723,6 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 />
               </div>
 
-              {/* Submitted Documents Section */}
-              <div className="pt-4 border-t border-zinc-100">
-                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-zinc-500" /> Submitted Onboarding Documents
-                </label>
-                {formData.onboardingDocuments && formData.onboardingDocuments.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {formData.onboardingDocuments.map(doc => (
-                      <a
-                        key={doc.id}
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-3 bg-white border border-zinc-200 rounded-lg shadow-sm hover:border-zinc-300 hover:shadow-md transition-all group"
-                      >
-                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                          <FileText className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-semibold text-zinc-900 truncate">
-                            {doc.formType === 'w9' ? 'W-9 Form' : 'Direct Deposit'}
-                          </div>
-                          <div className="text-[10px] text-zinc-500">
-                            {new Date(doc.uploadedAt).toLocaleDateString()}
-                          </div>
-                        </div>
-                        <Download className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600" />
-                      </a>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-4 text-center text-sm text-zinc-500 italic">
-                    No documents submitted yet.
-                  </div>
-                )}
-              </div>
 
               {/* Permissions Section */}
               <section className="space-y-2" ref={dropdownRef}>
