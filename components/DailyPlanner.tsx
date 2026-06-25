@@ -16,19 +16,19 @@ const TOTAL_HOURS = END_HOUR - START_HOUR;
 
 // Colors matching the screenshot (approximate)
 const STATUS_COLORS = {
-    active: 'bg-blue-500 text-white border-blue-600',
-    pending: 'bg-orange-500 text-white border-orange-600', // "Not Started" / "Print 1..."
-    completed: 'bg-green-500 text-white border-green-600',
+    active: 'bg-green-500 text-white border-green-600',
+    pending: 'bg-yellow-500 text-yellow-950 border-yellow-600', // "Not Started" / "Print 1..."
+    completed: 'bg-zinc-500 text-white border-zinc-600',
     delayed: 'bg-red-500 text-white border-red-600',
     order: 'bg-purple-600 text-white border-purple-700',
-    default: 'bg-orange-400 text-white border-orange-500'
+    default: 'bg-yellow-500 text-yellow-950 border-yellow-600'
 };
 
 const STATUS_LABELS = {
     active: 'Active',
     pending: 'Not Started',
     completed: 'Complete',
-    delayed: 'Delayed',
+    delayed: "Can't Start",
     order: 'Orders'
 };
 
@@ -1440,12 +1440,12 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                             <div className="mt-1 pt-1.5 border-t border-zinc-700 flex items-center justify-between">
                                                                 <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-bold">Status</span>
                                                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold capitalize ${
-                                                                    block.status === 'completed' ? 'bg-green-500/20 text-green-300' :
-                                                                    block.status === 'in_progress' ? 'bg-blue-500/20 text-blue-300' :
+                                                                    block.status === 'completed' ? 'bg-zinc-500/20 text-zinc-300' :
+                                                                    block.status === 'in_progress' ? 'bg-green-500/20 text-green-300' :
                                                                     block.status === 'delayed' ? 'bg-red-500/20 text-red-300' :
-                                                                    'bg-orange-500/20 text-orange-300'
+                                                                    'bg-yellow-500/20 text-yellow-600'
                                                                 }`}>
-                                                                    {block.status.replace('_', ' ')}
+                                                                    {block.status === 'delayed' ? "Can't Start" : block.status.replace('_', ' ')}
                                                                 </span>
                                                             </div>
                                                         </div>

@@ -367,18 +367,18 @@ export default function ActivityScreen() {
                 
                 switch (task.status) {
                   case 'in_progress':
-                    statusColor = '#2563eb';
-                    bgColor = '#eff6ff';
-                    textColor = '#1d4ed8';
-                    progressBadgeBg = '#dbeafe';
-                    progressBadgeText = '#1d4ed8';
+                    statusColor = '#10b981';
+                    bgColor = '#f0fdf4';
+                    textColor = '#15803d';
+                    progressBadgeBg = '#dcfce7';
+                    progressBadgeText = '#166534';
                     break;
                   case 'completed':
-                    statusColor = '#10b981';
-                    bgColor = '#ecfdf5';
-                    textColor = '#047857';
-                    progressBadgeBg = '#d1fae5';
-                    progressBadgeText = '#065f46';
+                    statusColor = '#71717a';
+                    bgColor = '#fafafa';
+                    textColor = '#3f3f46';
+                    progressBadgeBg = '#f4f4f5';
+                    progressBadgeText = '#27272a';
                     break;
                   case 'delayed':
                     statusColor = '#ef4444';
@@ -388,11 +388,11 @@ export default function ActivityScreen() {
                     progressBadgeText = '#991b1b';
                     break;
                   case 'pending':
-                    statusColor = '#f97316';
-                    bgColor = '#fff7ed';
-                    textColor = '#c2410c';
-                    progressBadgeBg = '#ffedd5';
-                    progressBadgeText = '#c2410c';
+                    statusColor = '#eab308';
+                    bgColor = '#fefce8';
+                    textColor = '#854d0e';
+                    progressBadgeBg = '#fef9c3';
+                    progressBadgeText = '#854d0e';
                     break;
                 }
                 
@@ -401,16 +401,16 @@ export default function ActivityScreen() {
                 let showGlow = false;
                 
                 if (task.status === 'completed') {
-                  dotColor = '#10B981';
+                  dotColor = '#71717a';
                 } else if (task.status === 'delayed') {
                   dotColor = '#EF4444';
                 } else if (isActive) {
                   dotColor = '#EF4444';
                   showGlow = true;
                 } else if (task.status === 'pending') {
-                  dotColor = '#F97316';
+                  dotColor = '#eab308';
                 } else if (task.status === 'in_progress') {
-                  dotColor = '#2563eb';
+                  dotColor = '#10b981';
                 }
                 
                 const formattedStart = new Date(task.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });

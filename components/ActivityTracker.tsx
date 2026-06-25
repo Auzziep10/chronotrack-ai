@@ -344,10 +344,10 @@ export const ActivityTracker: React.FC<Props> = ({
 
   const getTaskStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'text-green-900 bg-green-50 border-green-500';
-      case 'in_progress': return 'text-blue-900 bg-blue-50 border-blue-500';
+      case 'completed': return 'text-zinc-900 bg-zinc-50 border-zinc-500';
+      case 'in_progress': return 'text-green-900 bg-green-50 border-green-500';
       case 'delayed': return 'text-red-900 bg-red-50 border-red-500';
-      default: return 'text-orange-600 bg-orange-50 border-orange-300';
+      default: return 'text-yellow-800 bg-yellow-50 border-yellow-300';
     }
   };
 
