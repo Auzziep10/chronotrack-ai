@@ -704,7 +704,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
               </div>
 
               {/* Bio-Lock Permissions Section */}
-              <section className="space-y-2 relative" ref={dropdownRef}>
+              <section className="space-y-2" ref={dropdownRef}>
                 <button
                   type="button"
                   onClick={() => setShowPermsDropdown(!showPermsDropdown)}
@@ -718,7 +718,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 </button>
 
                 {showPermsDropdown && (
-                  <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-lg shadow-xl max-h-96 overflow-y-auto p-4 space-y-4 z-[70]">
+                  <div className="mt-2 bg-white border border-zinc-200 rounded-lg p-4 space-y-4">
                     {['Administration', 'Team Management', 'Time & Attendance', 'Operations', 'Reporting'].map(category => {
                       const catPerms = AVAILABLE_PERMISSIONS.filter(p => p.category === category);
                       if (catPerms.length === 0) return null;
