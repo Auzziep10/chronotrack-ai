@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, User as UserIcon, Phone, Mail, MapPin, Briefcase, Clock, AlertTriangle, Save, MessageSquare, Lock, Check, FileText, Download, ChevronDown, ChevronUp, Shield, Target, Key, DollarSign } from 'lucide-react';
+import { X, User as UserIcon, Phone, Mail, MapPin, Briefcase, Clock, AlertTriangle, Save, MessageSquare, Lock, Check, FileText, Download, ChevronDown, ChevronUp, ChevronRight, Shield, Target, Key, DollarSign } from 'lucide-react';
 import { User, DayOfWeek, DailyAvailability, Department } from '../types';
 import { AVAILABLE_PERMISSIONS } from '../constants';
 
@@ -501,13 +501,15 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 <button
                   type="button"
                   onClick={() => setShowSchedulingDropdown(!showSchedulingDropdown)}
-                  className="w-full flex items-center justify-between border-b border-zinc-100 pb-2 text-left hover:opacity-85 transition-all"
+                  className="w-full flex items-center gap-2 border-b border-zinc-100 pb-2 text-left hover:opacity-85 transition-all"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Clock className="w-4 h-4 text-zinc-500 shrink-0" />
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">Scheduling</span>
-                  </div>
-                  {showSchedulingDropdown ? <ChevronUp className="w-4 h-4 text-zinc-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />}
+                  {showSchedulingDropdown ? (
+                    <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
+                  )}
+                  <Clock className="w-4 h-4 text-zinc-500 shrink-0" />
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">Scheduling</span>
                 </button>
 
                 {showSchedulingDropdown && (
@@ -729,13 +731,15 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 <button
                   type="button"
                   onClick={() => setShowPermsDropdown(!showPermsDropdown)}
-                  className="w-full flex items-center justify-between border-b border-zinc-100 pb-2 text-left hover:opacity-85 transition-all"
+                  className="w-full flex items-center gap-2 border-b border-zinc-100 pb-2 text-left hover:opacity-85 transition-all"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Lock className="w-4 h-4 text-red-500 shrink-0" />
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">Permissions</span>
-                  </div>
-                  {showPermsDropdown ? <ChevronUp className="w-4 h-4 text-zinc-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />}
+                  {showPermsDropdown ? (
+                    <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
+                  )}
+                  <Lock className="w-4 h-4 text-red-500 shrink-0" />
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">Permissions</span>
                 </button>
 
                 {showPermsDropdown && (
