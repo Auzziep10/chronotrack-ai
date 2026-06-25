@@ -59,6 +59,19 @@ const getMigratedUnavailability = (user: User) => {
   };
 };
 
+const formatPhoneNumber = (value: string) => {
+  if (!value) return '';
+  const cleaned = value.replace(/\D/g, '');
+  const match = cleaned.slice(0, 10);
+  if (match.length <= 3) {
+    return match;
+  }
+  if (match.length <= 6) {
+    return `(${match.slice(0, 3)})${match.slice(3)}`;
+  }
+  return `(${match.slice(0, 3)})${match.slice(3, 6)}-${match.slice(6)}`;
+};
+
 export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSave, isViewerAdmin = false, viewerUser = null }) => {
   const [formData, setFormData] = useState<User | null>(null);
   const [showPermsDropdown, setShowPermsDropdown] = useState(false);
@@ -93,6 +106,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
       const migrated = getMigratedUnavailability(user);
       setFormData({
         ...user,
+        phoneNumber: user.phoneNumber ? formatPhoneNumber(user.phoneNumber) : '',
         recurringUnavailability: migrated.recurringUnavailability,
         dateUnavailability: migrated.dateUnavailability
       });
@@ -304,8 +318,8 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                     <input
                       type="tel"
                       value={formData.phoneNumber || ''}
-                      onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })}
-                      placeholder="(555) 000-0000"
+                      onChange={e => setFormData({ ...formData, phoneNumber: formatPhoneNumber(e.target.value) })}
+                      placeholder="(555)000-0000"
                       className="w-full pl-10 text-sm border border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-500"
                     />
                   </div>
