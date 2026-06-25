@@ -491,6 +491,20 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                     </div>
                   )}
                 </div>
+
+                {/* Correction Reviews Section */}
+                <div className="mt-6">
+                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2 mb-3">
+                    <MessageSquare className="w-4 h-4 text-zinc-500" /> Correction Reviews
+                  </h4>
+                  <textarea
+                    value={formData.correctionNotes || ''}
+                    onChange={e => setFormData({ ...formData, correctionNotes: e.target.value })}
+                    placeholder="Log any disciplinary actions, performance corrections, or time card adjustments here..."
+                    rows={4}
+                    className="w-full text-sm border-zinc-300 rounded-md shadow-sm focus:ring-zinc-500 focus:border-zinc-500 p-3 bg-yellow-50/50"
+                  />
+                </div>
               </section>
             )}
           </div>
@@ -713,19 +727,6 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 )}
               </div>
 
-              {/* Correction Review Section */}
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-2 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-zinc-500" /> Correction Reviews
-                </label>
-                <textarea
-                  value={formData.correctionNotes || ''}
-                  onChange={e => setFormData({ ...formData, correctionNotes: e.target.value })}
-                  placeholder="Log any disciplinary actions, performance corrections, or time card adjustments here..."
-                  rows={4}
-                  className="w-full text-sm border-zinc-300 rounded-md shadow-sm focus:ring-zinc-500 focus:border-zinc-500 p-3 bg-yellow-50/50"
-                />
-              </div>
 
 
               {/* Permissions Section */}
