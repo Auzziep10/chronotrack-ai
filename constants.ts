@@ -167,7 +167,7 @@ export const AVAILABLE_PERMISSIONS = [
   {
     id: 'manage_permissions',
     label: 'Assign Roles & Permissions',
-    description: 'Grant or revoke Bio-Lock permissions for staff.',
+    description: 'Grant or revoke permissions for staff.',
     category: 'Team Management',
     detailedExplanation: 'Allows security management by checking or unchecking permission boxes and editing system roles for other users (except admin privileges unless they are an admin).'
   },

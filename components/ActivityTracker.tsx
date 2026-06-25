@@ -4,7 +4,7 @@ import { WorkLogForm } from './WorkLogForm';
 import { HistoryLog } from './HistoryLog';
 import { AiSummary } from './AiSummary';
 import { Timer } from './Timer';
-import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw, Play, Calendar, Users, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, Circle, AlertCircle, RefreshCcw, Play, Calendar, Users, MessageSquare, Bell, ShieldCheck, Pause } from 'lucide-react';
 
 
 import { DiscordSetupModal } from './DiscordSetupModal';
@@ -316,6 +316,153 @@ export const ActivityTracker: React.FC<Props> = ({
   }
 
   if (!selectedUserId) {
+    if (isAdminOrManager) {
+      return (
+        <div className="max-w-6xl mx-auto py-6 animate-fade-in space-y-6">
+          <div className="flex flex-wrap justify-between items-center gap-4 border-b border-zinc-100 pb-4">
+            <div>
+              <h2 className="text-2xl font-bold text-zinc-905">Active Time Cards</h2>
+              <p className="text-zinc-500 text-sm">Real-time status of all clocked-in staff members.</p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium bg-white border border-zinc-200 px-3 py-1.5 rounded-lg shadow-sm">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
+              Live Tracking ({visibleUsers.length})
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {visibleUsers.map(session => {
+              const now = Date.now();
+              const elapsedSinceLog = now - session.lastLogTime;
+              const intervalMs = (appSettings?.checkInIntervalHours || 1) * 60 * 60 * 1000;
+              const isOverdue = appSettings?.autoPauseEnabled ? elapsedSinceLog > intervalMs : false;
+
+              return (
+                <div key={session.userId} className={`p-5 rounded-2xl border transition-all duration-300 hover:shadow-lg flex flex-col gap-4
+                  ${session.isPaused ? 'border-amber-200/50 bg-gradient-to-br from-amber-50/50 to-white shadow-sm' :
+                    isOverdue ? 'border-red-200/50 bg-gradient-to-br from-red-50/50 to-white shadow-sm' : 'border-zinc-200/60 bg-white shadow-sm'}`}>
+                  
+                  {/* Header */}
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-inner shrink-0
+                      ${session.isPaused ? 'bg-gradient-to-br from-amber-400 to-amber-500' : 
+                        isOverdue ? 'bg-gradient-to-br from-red-400 to-red-500' : 
+                        'bg-gradient-to-br from-zinc-700 to-zinc-900'}`}>
+                      {session.user.avatarInitials}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-zinc-900 text-base truncate tracking-tight leading-tight">{session.user.name}</h4>
+                      <p className="text-xs text-zinc-500 truncate font-medium capitalize mt-0.5">{session.user.role.replace(/_/g, ' ')}</p>
+                    </div>
+                    
+                    {/* Status Pill */}
+                    {session.isPaused ? (
+                      <div className="flex items-center gap-1 text-[10px] text-amber-700 font-bold bg-amber-100/80 px-2 py-1 rounded-full border border-amber-200 shrink-0 font-sans">
+                        <Pause className="w-3 h-3" /> PAUSED
+                      </div>
+                    ) : isOverdue ? (
+                      <div className="flex items-center gap-1 text-[10px] text-red-700 font-bold bg-red-100/80 px-2 py-1 rounded-full border border-red-200 shrink-0 font-sans">
+                        <ShieldCheck className="w-3 h-3" /> OVERDUE
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-[10px] text-green-700 font-bold bg-green-100/80 px-2 py-1 rounded-full border border-green-200 shrink-0 font-sans">
+                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> ACTIVE
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Time Details Box */}
+                  <div className="bg-zinc-50/80 rounded-xl p-3.5 border border-zinc-100 flex flex-col gap-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-zinc-500 font-medium">Shift Duration</span>
+                      <div className="font-bold text-zinc-900 font-mono text-base tracking-tight">
+                        <Timer
+                          startTime={session.startTime}
+                          isActive={!session.isPaused}
+                          totalIdleTimeMs={session.totalIdleTimeMs}
+                          currentIdleStartTime={session.currentIdleStartTime}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-1 text-[11px] text-zinc-500">
+                      <div>
+                        Last log: <span className="font-semibold text-zinc-700">{new Date(session.lastLogTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      {!session.isPaused && (appSettings?.autoPauseEnabled ?? true) && (
+                        <div className="flex items-center gap-1 text-amber-600 font-medium bg-amber-100/30 px-1.5 py-0.5 rounded w-fit mt-1">
+                          <Pause className="w-3 h-3 shrink-0" />
+                          Auto-pauses: {new Date(session.lastLogTime + ((appSettings?.checkInIntervalHours || 1) * 60 * 60 * 1000) + (10 * 60 * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-col gap-2 mt-auto">
+                    <button
+                      onClick={() => setSelectedUserId(session.userId)}
+                      className="w-full bg-zinc-900 hover:bg-zinc-800 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                    >
+                      <LayoutDashboard className="w-3.5 h-3.5" /> View / Log Activity
+                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          const currentUserDoc = session.user;
+                          if (!currentUserDoc.expoPushToken) {
+                            alert(`${currentUserDoc.name} has not registered for push notifications on their mobile device yet.`);
+                            return;
+                          }
+                          fetch('https://exp.host/--/api/v2/push/send', {
+                            method: 'POST',
+                            headers: {
+                              'Accept': 'application/json',
+                              'Accept-Encoding': 'gzip, deflate',
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              to: currentUserDoc.expoPushToken,
+                              sound: 'default',
+                              title: 'Test Push 🔔',
+                              body: `Hello ${currentUserDoc.name}, this is a test notification!`,
+                            }),
+                          }).then(res => res.json()).then(data => {
+                            if (data.data && Array.isArray(data.data) ? data.data[0]?.status === 'ok' : data.data?.status === 'ok') {
+                              alert(`Test push sent to ${currentUserDoc.name}!`);
+                            } else {
+                              alert(`Expo Push Error: ${JSON.stringify(data)}`);
+                            }
+                          }).catch(err => {
+                            console.error("Push error:", err);
+                            alert("Error sending push notification.");
+                          });
+                        }}
+                        className="flex-1 bg-white hover:bg-zinc-50 text-zinc-700 border border-zinc-200 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                        title="Test iOS Push Notification"
+                      >
+                        <Bell className="w-3.5 h-3.5 text-blue-500" /> Ping
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to end ${session.user.name}'s shift?`)) {
+                            if (onClockOut) onClockOut(session.user);
+                          }
+                        }}
+                        className="flex-1 bg-red-50 hover:bg-red-600 hover:text-white text-red-600 border border-red-100 hover:border-red-600 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 group"
+                      >
+                        <LogOut className="w-3.5 h-3.5 text-red-500 group-hover:text-white transition-colors" /> Clock Out
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="max-w-3xl mx-auto py-10 animate-fade-in">
         <h2 className="text-2xl font-bold text-zinc-800 mb-6 text-center">Who is using this device?</h2>

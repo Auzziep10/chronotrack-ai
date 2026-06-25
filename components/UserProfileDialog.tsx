@@ -723,7 +723,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 )}
               </div>
 
-              {/* Bio-Lock Permissions Section */}
+              {/* Permissions Section */}
               <section className="space-y-2" ref={dropdownRef}>
                 <button
                   type="button"
@@ -732,7 +732,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <Lock className="w-4 h-4 text-red-500 shrink-0" />
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">Bio-Lock Permissions</span>
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">Permissions</span>
                   </div>
                   {showPermsDropdown ? <ChevronUp className="w-4 h-4 text-zinc-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />}
                 </button>
