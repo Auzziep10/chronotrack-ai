@@ -556,10 +556,10 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                       </div>
                     </div>
 
-                    {/* Date-Specific Unavailability */}
+                    {/* Requested Time Off */}
                     <div className="space-y-2 pt-4 border-t border-zinc-200">
                       <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                        Date-Specific Unavailability Exceptions
+                        Requested Time Off
                       </label>
                       <div className="bg-white rounded-lg border border-zinc-200 p-4 space-y-3">
                         {(formData.dateUnavailability || []).length > 0 ? (
@@ -581,7 +581,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                             ))}
                           </div>
                         ) : (
-                          <p className="text-xs text-zinc-400 italic">No date-specific unavailability exceptions set.</p>
+                          <p className="text-xs text-zinc-400 italic">No requested time off exceptions set.</p>
                         )}
 
                         <div className="border-t border-zinc-100 pt-3">
@@ -661,7 +661,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                                 disabled={!newDateBlock.date}
                                 className="w-full bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed text-white text-xs font-semibold py-2 px-3 rounded-md transition-colors h-8 flex items-center justify-center"
                               >
-                                + Add Blocked Date
+                                + Add Requested Time Off
                               </button>
                             </div>
                           </div>
