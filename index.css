@@ -70,4 +70,5 @@ body {
 .input-icon-wrapper > div > input,
 .input-icon-wrapper > div > select {
   padding-left: 2.5rem !important; /* 40px left padding */
+  color: #18181b !important; /* Ensure input text is dark zinc-900 instead of inheriting the gray icon color */
 }
