@@ -48,15 +48,28 @@ export default function PlannerScreen() {
     const start = new Date(shift.startTime);
     const end = new Date(shift.endTime);
     
+    let badgeStyle = styles.badgePending;
+    let badgeTextStyle = styles.badgeTextPending;
+    let statusLabel = shift.status?.replace('_', ' ').toUpperCase() || 'PENDING';
+
+    if (shift.status === 'in_progress') {
+      badgeStyle = styles.badgeActive;
+      badgeTextStyle = styles.badgeTextActive;
+    } else if (shift.status === 'completed') {
+      badgeStyle = styles.badgeCompleted;
+      badgeTextStyle = styles.badgeTextCompleted;
+    } else if (shift.status === 'delayed') {
+      badgeStyle = styles.badgeDelayed;
+      badgeTextStyle = styles.badgeTextDelayed;
+      statusLabel = "CAN'T START";
+    }
+
     return (
       <View key={shift.id} style={styles.shiftCard}>
         <View style={styles.shiftHeader}>
           <Text style={styles.shiftTitle}>{shift.title || 'Scheduled Shift'}</Text>
-          <View style={[
-            styles.badge, 
-            shift.status === 'in_progress' ? styles.badgeActive : styles.badgePending
-          ]}>
-            <Text style={styles.badgeText}>{shift.status?.replace('_', ' ').toUpperCase() || 'PENDING'}</Text>
+          <View style={[styles.badge, badgeStyle]}>
+            <Text style={[styles.badgeText, badgeTextStyle]}>{statusLabel}</Text>
           </View>
         </View>
         
@@ -166,17 +179,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
   },
   badgeActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: '#f0fdf4',
+    borderColor: '#dcfce7',
+  },
+  badgeTextActive: {
+    color: '#15803d',
+  },
+  badgeCompleted: {
+    backgroundColor: '#fafafa',
+    borderColor: '#f4f4f5',
+  },
+  badgeTextCompleted: {
+    color: '#3f3f46',
+  },
+  badgeDelayed: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fee2e2',
+  },
+  badgeTextDelayed: {
+    color: '#991b1b',
   },
   badgePending: {
-    backgroundColor: theme.colors.divider,
+    backgroundColor: '#fefce8',
+    borderColor: '#fef9c3',
+  },
+  badgeTextPending: {
+    color: '#854d0e',
   },
   badgeText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: theme.colors.text,
     letterSpacing: 1,
   },
   shiftDetail: {

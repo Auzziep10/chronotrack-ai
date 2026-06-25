@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigation } from 'expo-router';
 import { 
   View, 
   Text, 
@@ -70,6 +71,15 @@ export default function ChatScreen() {
   const [selectedMessageForReaction, setSelectedMessageForReaction] = useState<ChatMessage | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    const unsubscribe = (navigation as any).addListener('tabPress', (e: any) => {
+      Keyboard.dismiss();
+      setShowChannelModal(true);
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const isAdminOrManager = currentUser?.role?.toLowerCase() === 'admin' || currentUser?.role?.toLowerCase() === 'manager';
   const currentChannelObj = channels.find(c => c.id === activeChannel);
@@ -346,29 +356,21 @@ export default function ChatScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {/* Header/Channel Selector Bar */}
-        <TouchableOpacity 
-          style={styles.headerBar}
-          activeOpacity={0.8}
-          onPress={() => {
-            Keyboard.dismiss();
-            setShowChannelModal(true);
-          }}
-        >
+        <View style={styles.headerBar}>
           <View style={styles.headerTitleContainer}>
             {isDM ? (
               <MessageSquare size={20} color={theme.colors.accent} style={styles.hashIcon} />
             ) : (
               <Hash size={20} color={theme.colors.accent} style={styles.hashIcon} />
             )}
-            <View style={{ flexDirection: 'column', marginLeft: 4, maxWidth: '70%' }}>
+            <View style={{ flexDirection: 'column', marginLeft: 4, maxWidth: '85%' }}>
               <Text style={styles.headerTitle} numberOfLines={1}>{headerTitle}</Text>
               {headerDesc ? (
                 <Text style={styles.headerSubtitle} numberOfLines={1}>{headerDesc}</Text>
               ) : null}
             </View>
           </View>
-          <Text style={styles.channelSelectBtn}>Switch</Text>
-        </TouchableOpacity>
+        </View>
 
         {/* Message List */}
         <View style={styles.chatArea}>
