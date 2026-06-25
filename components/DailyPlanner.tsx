@@ -296,8 +296,9 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const currentPerms = (() => {
         let perms: string[] = [];
         if (currentUser) {
-            if (Array.isArray(currentUser.permissions)) perms = currentUser.permissions;
-            else if (typeof currentUser.permissions === 'string') perms = currentUser.permissions.split(',').map((s: string) => s.trim());
+            const rawPerms = currentUser.permissions as any;
+            if (Array.isArray(rawPerms)) perms = rawPerms;
+            else if (typeof rawPerms === 'string') perms = rawPerms.split(',').map((s: string) => s.trim());
         }
         return perms;
     })();
@@ -1868,8 +1869,8 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             <div className="w-1/2 border-r border-zinc-200 flex flex-col bg-zinc-50/50">
                                 <div className="p-3 border-b border-zinc-200 bg-white">
                                     <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">Select Live Production Order</div>
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+                                    <div className="input-icon-wrapper">
+                                        <Search className="text-zinc-400" />
                                         <input 
                                             type="text" 
                                             placeholder="Search by order ID, customer or title..." 

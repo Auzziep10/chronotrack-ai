@@ -22,8 +22,9 @@ export const ShiftCalendarViews: React.FC<Props> = ({ viewType, currentDate, use
     const isAdminOrManager = (() => {
         let currentPerms: string[] = [];
         if (currentUser) {
-            if (Array.isArray(currentUser.permissions)) currentPerms = currentUser.permissions;
-            else if (typeof currentUser.permissions === 'string') currentPerms = currentUser.permissions.split(',').map((s: string) => s.trim());
+            const perms = currentUser.permissions as any;
+            if (Array.isArray(perms)) currentPerms = perms;
+            else if (typeof perms === 'string') currentPerms = perms.split(',').map((s: string) => s.trim());
         }
         const hasAdmin = currentPerms.includes('admin') || (currentUser?.role?.toLowerCase() === 'admin');
         const hasManager = currentPerms.includes('manage_team') || currentPerms.includes('manage_schedule') || (currentUser?.role?.toLowerCase() === 'manager');

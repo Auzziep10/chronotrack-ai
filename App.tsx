@@ -153,7 +153,8 @@ const App: React.FC = () => {
             role: data.role || 'Staff',
             primaryDepartment: data.primaryDepartment || 'Production',
             pin: '',
-            availability: {} as any,
+            recurringUnavailability: [],
+            dateUnavailability: [],
             lateDays: 0,
             correctionNotes: ''
           };

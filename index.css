@@ -41,3 +41,33 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Global styling for input containers with icons */
+.input-icon-wrapper {
+  position: relative;
+  display: block;
+  width: 100%;
+  color: #a1a1aa; /* Default text-zinc-400 color for child icons */
+}
+
+/* Ensure the leading icon is styled consistently and is not clickable */
+.input-icon-wrapper > svg:first-of-type,
+.input-icon-wrapper > div:first-of-type svg {
+  position: absolute !important;
+  left: 0.75rem !important; /* 12px absolute offset */
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 1rem !important; /* 16px size */
+  height: 1rem !important;
+  color: currentColor; /* Use color from utility class or inherited parent color */
+  pointer-events: none !important;
+  z-index: 10 !important;
+}
+
+/* Indent text/placeholder inside the input/select itself to clear the leading icon */
+.input-icon-wrapper > input,
+.input-icon-wrapper > select,
+.input-icon-wrapper > div > input,
+.input-icon-wrapper > div > select {
+  padding-left: 2.5rem !important; /* 40px left padding */
+}

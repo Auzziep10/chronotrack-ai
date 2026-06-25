@@ -73,7 +73,8 @@ export const DEFAULT_USERS: User[] = [
     email: 'alex.j@company.com',
     phoneNumber: '555-0101',
     address: '123 Maple St, Springfield',
-    availability: defaultAvailability,
+    recurringUnavailability: [],
+    dateUnavailability: [],
     lateDays: 0,
     correctionNotes: 'Coached on 10/12 regarding missed scans.'
   },
@@ -89,7 +90,8 @@ export const DEFAULT_USERS: User[] = [
     email: 'sarah.c@company.com',
     phoneNumber: '555-0102',
     address: '456 Oak Ave, Springfield',
-    availability: defaultAvailability,
+    recurringUnavailability: [],
+    dateUnavailability: [],
     lateDays: 2,
     correctionNotes: ''
   },
@@ -105,7 +107,8 @@ export const DEFAULT_USERS: User[] = [
     email: 'mike.r@company.com',
     phoneNumber: '555-0103',
     address: '789 Pine Ln, Springfield',
-    availability: defaultAvailability,
+    recurringUnavailability: [],
+    dateUnavailability: [],
     lateDays: 1,
     correctionNotes: ''
   },
@@ -121,15 +124,10 @@ export const DEFAULT_USERS: User[] = [
     email: 'emily.b@company.com',
     phoneNumber: '555-0104',
     address: '321 Birch Rd, Springfield',
-    availability: {
-      ...defaultAvailability,
-      'Tuesday': { active: true, start: '10:00', end: '18:00' },
-      'Wednesday': { active: true, start: '10:00', end: '18:00' },
-      'Thursday': { active: true, start: '10:00', end: '18:00' },
-      'Friday': { active: true, start: '10:00', end: '18:00' },
-      'Saturday': { active: true, start: '10:00', end: '18:00' },
-      'Monday': { active: false, start: '09:00', end: '17:00' }
-    },
+    recurringUnavailability: [
+      { day: 'Monday', allDay: true }
+    ],
+    dateUnavailability: [],
     lateDays: 0,
     correctionNotes: ''
   },

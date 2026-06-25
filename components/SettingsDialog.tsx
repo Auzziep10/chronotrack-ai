@@ -104,16 +104,6 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
       .toUpperCase()
       .substring(0, 2);
 
-    const defaultAvail: Record<DayOfWeek, DailyAvailability> = {} as any;
-    DAYS_OF_WEEK.forEach(day => {
-      const isWeekend = day === 'Saturday' || day === 'Sunday';
-      defaultAvail[day] = {
-        active: !isWeekend,
-        start: '09:00',
-        end: '17:00'
-      };
-    });
-
     const user: User = {
       id: `u-${Date.now()}`,
       name: newUser.name,
@@ -123,7 +113,8 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
       primaryDepartment: Department.Production, // Default to Production
       avatarInitials: initials,
       pin: newUser.pin,
-      availability: defaultAvail,
+      recurringUnavailability: [],
+      dateUnavailability: [],
       lateDays: 0,
       correctionNotes: ''
     };

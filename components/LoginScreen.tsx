@@ -104,10 +104,8 @@ export const LoginScreen: React.FC<Props> = ({ onLogin, users }) => {
                             <label htmlFor="password" className="block text-sm font-medium text-zinc-700">
                                 Password
                             </label>
-                            <div className="mt-1 relative rounded-md shadow-sm">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Key className="h-4 w-4 text-zinc-400" />
-                                </div>
+                            <div className="mt-1 relative rounded-md shadow-sm input-icon-wrapper">
+                                <Key className="text-zinc-400" />
                                 <input
                                     id="password"
                                     type="password"

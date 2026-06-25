@@ -64,8 +64,9 @@ export interface User {
   pushAlertPrefs?: number[]; // [5, 10, 15] for mobile notifications before check-ins
   expoPushToken?: string;
   mobileClockInEnabled?: boolean;
-  // Work Info
-  availability: Record<DayOfWeek, DailyAvailability>;
+  availability?: Record<DayOfWeek, DailyAvailability>;
+  recurringUnavailability?: Array<{ day: DayOfWeek; allDay: boolean; start?: string; end?: string }>;
+  dateUnavailability?: Array<{ date: string; allDay: boolean; start?: string; end?: string }>;
   lateDays?: number;
   correctionNotes?: string;
   timeOffRequests?: TimeOffRequest[];

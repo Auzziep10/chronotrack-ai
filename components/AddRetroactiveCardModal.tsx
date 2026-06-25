@@ -105,8 +105,8 @@ export const AddRetroactiveCardModal: React.FC<Props> = ({ user, isOpen, onClose
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-zinc-500 uppercase mb-1.5 ml-0.5">Clock In</label>
-                <div className="relative">
-                  <Clock className="absolute left-3.5 top-3 w-4 h-4 text-zinc-400" />
+                <div className="input-icon-wrapper">
+                  <Clock className="text-zinc-400" />
                   <input
                     type="time"
                     value={clockInTime}
@@ -118,8 +118,8 @@ export const AddRetroactiveCardModal: React.FC<Props> = ({ user, isOpen, onClose
 
               <div>
                 <label className="block text-xs font-bold text-zinc-500 uppercase mb-1.5 ml-0.5">Clock Out</label>
-                <div className="relative">
-                  <Clock className="absolute left-3.5 top-3 w-4 h-4 text-zinc-400" />
+                <div className="input-icon-wrapper">
+                  <Clock className="text-zinc-400" />
                   <input
                     type="time"
                     value={clockOutTime}

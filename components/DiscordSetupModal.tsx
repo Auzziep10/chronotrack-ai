@@ -97,8 +97,8 @@ export const DiscordSetupModal: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
                     <section>
                         <label className="block text-sm font-bold text-zinc-700 mb-2">Your Discord ID</label>
-                        <div className="relative">
-                            <MessageSquare className="absolute left-3 top-3 w-5 h-5 text-zinc-400" />
+                        <div className="input-icon-wrapper">
+                            <MessageSquare className="text-zinc-400" />
                             <input
                                 type="text"
                                 value={formData.discordId || ''}

@@ -64,8 +64,9 @@ export interface User {
   discordAlertPrefs?: number[]; // [30, 45, 60]
   expoPushToken?: string;
   mobileClockInEnabled?: boolean;
-  // Work Info
-  availability: Record<DayOfWeek, DailyAvailability>;
+  availability?: Record<DayOfWeek, DailyAvailability>;
+  recurringUnavailability?: Array<{ day: DayOfWeek; allDay: boolean; start?: string; end?: string }>;
+  dateUnavailability?: Array<{ date: string; allDay: boolean; start?: string; end?: string }>;
   lateDays?: number;
   correctionNotes?: string;
   timeOffRequests?: TimeOffRequest[];
@@ -117,7 +118,7 @@ export interface AppSettings {
 
 export interface ScheduleBlock {
   id: string;
-  scheduleId: string;
+  scheduleId?: string;
   assignedTo: string; // userId
   assignedToName?: string; // Mapped for easier display
   title: string;
@@ -128,6 +129,7 @@ export interface ScheduleBlock {
   status: 'pending' | 'in_progress' | 'completed' | 'delayed';
   location?: string;
   department?: Department;
+  date?: string; // ISO date string
   checkIns?: Array<{
     id?: string;
     timestamp: any;
@@ -177,4 +179,3 @@ export interface ChatChannel {
   restricted?: boolean;
   notificationsEnabled?: boolean;
 }
-
