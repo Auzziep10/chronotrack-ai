@@ -294,11 +294,11 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
           {/* Split Top Layout: Left = Personal Information, Right = Work Information */}
           <div className={`grid grid-cols-1 ${viewerHasPermission('manage_users') ? 'lg:grid-cols-2' : ''} gap-8`}>
             {/* Personal Information */}
-            <section className="space-y-4">
+            <section className="space-y-4 flex flex-col h-full">
               <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
                 <UserIcon className="w-4 h-4 text-zinc-500" /> Personal Information
               </h4>
-              <div className="space-y-3 pl-6">
+              <div className="space-y-3 pl-6 flex-1 flex flex-col">
                 <div>
                   <label className="block text-xs font-medium text-zinc-500 mb-1">Full Name</label>
                   <div className="input-icon-wrapper">
@@ -354,7 +354,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                   </div>
                 </div>
 
-                <div>
+                <div className="flex-1 flex flex-col">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">Discord ID (for notifications)</label>
                   <div className="input-icon-wrapper">
                     <MessageSquare className="text-zinc-400" />
@@ -366,15 +366,17 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                       className="w-full pl-10 text-sm border border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-500"
                     />
                   </div>
-                  <div className="mt-4 text-xs text-zinc-500 bg-zinc-50 rounded-lg p-3 border border-zinc-100">
-                    <div className="font-bold text-zinc-700 mb-1">How to find your Discord ID on Mobile:</div>
-                    <ol className="list-decimal pl-4 space-y-1">
-                      <li>Open Discord & tap your profile icon (bottom right).</li>
-                      <li>Go to <strong>Settings</strong> (gear icon) <span className="text-zinc-400">→</span> <strong>Advanced</strong>.</li>
-                      <li>Turn on <strong>Developer Mode</strong>.</li>
-                      <li>Go back to your Profile.</li>
-                      <li>Tap the three dots (top right) and select <strong>Copy User ID</strong>.</li>
-                    </ol>
+                  <div className="flex-1 flex flex-col justify-end mt-4">
+                    <div className="text-xs text-zinc-500 bg-zinc-50 rounded-lg p-3 border border-zinc-100">
+                      <div className="font-bold text-zinc-700 mb-1">How to find your Discord ID on Mobile:</div>
+                      <ol className="list-decimal pl-4 space-y-1">
+                        <li>Open Discord & tap your profile icon (bottom right).</li>
+                        <li>Go to <strong>Settings</strong> (gear icon) <span className="text-zinc-400">→</span> <strong>Advanced</strong>.</li>
+                        <li>Turn on <strong>Developer Mode</strong>.</li>
+                        <li>Go back to your Profile.</li>
+                        <li>Tap the three dots (top right) and select <strong>Copy User ID</strong>.</li>
+                      </ol>
+                    </div>
                   </div>
                 </div>
               </div>
