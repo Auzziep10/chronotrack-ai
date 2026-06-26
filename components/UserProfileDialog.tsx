@@ -962,7 +962,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                               {range === '60' && '60 Days'}
                               {range === '90' && '90 Days'}
                               {range === 'yearly' && 'Yearly'}
-                              {range === 'complete' && 'Complete'}
+                              {range === 'complete' && 'All'}
                             </button>
                           ))}
                         </div>
