@@ -29,6 +29,7 @@ const RELIABILITY_CONFIG = {
     noCallShows: 1,
     tardys: 3,
     undocumentedSick: 2,
+    lowSampleSizeShifts: 10,
   }
 };
 
@@ -1095,19 +1096,30 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                         <div className="bg-zinc-900 text-white border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
                           <div className="space-y-1">
                             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Composite Reliability Score</span>
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
                               <span className="text-3xl font-extrabold">{reliabilityCalculations.score}/100</span>
                               <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${reliabilityCalculations.ratingColor.replace('bg-', 'bg-white/10 ').replace('text-', 'text-')}`}>
                                 {reliabilityCalculations.rating}
                               </span>
+                              {shiftsWorked < RELIABILITY_CONFIG.thresholds.lowSampleSizeShifts && (
+                                <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/35 px-2.5 py-0.5 rounded-full shrink-0 animate-pulse">
+                                  ⚠ Limited data — only {shiftsWorked} shifts this period
+                                </span>
+                              )}
                             </div>
                             <p className="text-[11px] text-zinc-400 max-w-lg pt-1">
                               Calculated weighted score based on punctuality, undocumented sick absences, and unplanned time off. Authorized vacation time does not count against this score.
                             </p>
                           </div>
                           
-                          {/* Mini breakdown of deductions */}
+                          {/* Mini breakdown of deductions & shift count */}
                           <div className="flex gap-4 shrink-0 text-center text-xs border-t sm:border-t-0 sm:border-l border-zinc-800 pt-3 sm:pt-0 sm:pl-6">
+                            <div>
+                              <div className="text-[10px] text-zinc-500 font-bold uppercase cursor-help" title="To show scheduled vs worked shifts (e.g. X of Y), schedule data needs to be passed via props.">Shifts ⓘ</div>
+                              <div className="font-semibold text-zinc-300">
+                                {shiftsWorked}
+                              </div>
+                            </div>
                             <div>
                               <div className="text-[10px] text-zinc-500 font-bold uppercase">No-Show</div>
                               <div className={`font-semibold ${reliabilityCalculations.deductions.noCall > 0 ? 'text-red-400' : 'text-zinc-500'}`}>
