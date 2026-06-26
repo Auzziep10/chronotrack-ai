@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, User as UserIcon, Phone, Mail, MapPin, Briefcase, Clock, AlertTriangle, Save, MessageSquare, Lock, Check, FileText, Download, ChevronDown, ChevronUp, ChevronRight, Shield, Target, Key, DollarSign } from 'lucide-react';
+import { X, User as UserIcon, Phone, Mail, MapPin, Briefcase, Clock, AlertTriangle, AlertCircle, Save, MessageSquare, Lock, Check, FileText, Download, ChevronDown, ChevronUp, ChevronRight, Shield, Target, Key, DollarSign, ClipboardCheck, Calendar } from 'lucide-react';
 import { User, DayOfWeek, DailyAvailability, Department } from '../types';
 import { AVAILABLE_PERMISSIONS } from '../constants';
 
@@ -10,6 +10,7 @@ interface Props {
   onSave: (updatedUser: User) => void;
   isViewerAdmin?: boolean;
   viewerUser?: User | null;
+  timeCards?: any[];
 }
 
 const ORDERED_DAYS: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -72,10 +73,12 @@ const formatPhoneNumber = (value: string) => {
   return `(${match.slice(0, 3)})${match.slice(3, 6)}-${match.slice(6)}`;
 };
 
-export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSave, isViewerAdmin = false, viewerUser = null }) => {
+export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSave, isViewerAdmin = false, viewerUser = null, timeCards = [] }) => {
   const [formData, setFormData] = useState<User | null>(null);
   const [showPermsDropdown, setShowPermsDropdown] = useState(false);
   const [showSchedulingDropdown, setShowSchedulingDropdown] = useState(false);
+  const [showReviewDropdown, setShowReviewDropdown] = useState(false);
+  const [reviewRange, setReviewRange] = useState<'30' | '60' | '90' | 'yearly' | 'complete'>('30');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const [newDateBlock, setNewDateBlock] = useState({
@@ -729,7 +732,131 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 )}
               </div>
 
+              {/* Review Section */}
+              {(() => {
+                const metrics = (() => {
+                  if (!formData) return { sick: 0, timeOff: 0, noCall: 0, tardy: 0 };
+                  
+                  const userCards = (timeCards || []).filter(c => c.userId === formData.id);
+                  const userRequests = formData.timeOffRequests || [];
+                  
+                  const now = Date.now();
+                  let rangeStart = 0;
+                  if (reviewRange === '30') rangeStart = now - 30 * 24 * 60 * 60 * 1000;
+                  else if (reviewRange === '60') rangeStart = now - 60 * 24 * 60 * 60 * 1000;
+                  else if (reviewRange === '90') rangeStart = now - 90 * 24 * 60 * 60 * 1000;
+                  else if (reviewRange === 'yearly') rangeStart = now - 365 * 24 * 60 * 60 * 1000;
+                  
+                  const sickCount = userCards.filter(c => {
+                    if (reviewRange === 'complete') return c.status === 'Sick';
+                    return c.status === 'Sick' && c.clockIn >= rangeStart;
+                  }).length;
+                  
+                  const noCallCount = userCards.filter(c => {
+                    if (reviewRange === 'complete') return c.status === 'No-Call No-Show';
+                    return c.status === 'No-Call No-Show' && c.clockIn >= rangeStart;
+                  }).length;
+                  
+                  const timeOffCount = userRequests.filter(req => {
+                    if (reviewRange === 'complete') return true;
+                    const reqTime = req.submittedAt || new Date(req.startDate).getTime();
+                    return reqTime >= rangeStart;
+                  }).length;
+                  
+                  const tardyCount = formData.lateDays || 0;
+                  
+                  return {
+                    sick: sickCount,
+                    timeOff: timeOffCount,
+                    noCall: noCallCount,
+                    tardy: tardyCount
+                  };
+                })();
 
+                return (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowReviewDropdown(!showReviewDropdown)}
+                      className="w-full flex items-center gap-2 border-b border-zinc-100 pb-2 text-left hover:opacity-85 transition-all"
+                    >
+                      {showReviewDropdown ? (
+                        <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
+                      )}
+                      <ClipboardCheck className="w-4 h-4 text-zinc-500 shrink-0" />
+                      <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">Review</span>
+                    </button>
+
+                    {showReviewDropdown && (
+                      <div className="mt-4 space-y-4 bg-zinc-50/30 border border-zinc-200 rounded-lg p-4 animate-in slide-in-from-top-2 duration-200">
+                        {/* Segmented Control */}
+                        <div className="flex border border-zinc-200 rounded-lg overflow-hidden w-fit bg-white shadow-sm">
+                          {(['30', '60', '90', 'yearly', 'complete'] as const).map(range => (
+                            <button
+                              key={range}
+                              type="button"
+                              onClick={() => setReviewRange(range)}
+                              className={`px-3 py-1.5 text-[10px] sm:text-xs font-bold transition-colors ${
+                                reviewRange === range
+                                  ? 'bg-zinc-900 text-white'
+                                  : 'text-zinc-600 hover:bg-zinc-50'
+                              }`}
+                            >
+                              {range === '30' && '30 Days'}
+                              {range === '60' && '60 Days'}
+                              {range === '90' && '90 Days'}
+                              {range === 'yearly' && 'Yearly'}
+                              {range === 'complete' && 'Complete'}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Metrics Grid */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col justify-between min-h-[90px] shadow-sm">
+                            <div className="flex justify-between items-start">
+                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Sick Call-ins</span>
+                              <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                            </div>
+                            <div className="text-2xl font-bold text-zinc-900 mt-2">{metrics.sick}</div>
+                          </div>
+
+                          <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col justify-between min-h-[90px] shadow-sm">
+                            <div className="flex justify-between items-start">
+                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Time Off</span>
+                              <Calendar className="w-4 h-4 text-blue-500 shrink-0" />
+                            </div>
+                            <div className="text-2xl font-bold text-zinc-900 mt-2">{metrics.timeOff}</div>
+                          </div>
+
+                          <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col justify-between min-h-[90px] shadow-sm">
+                            <div className="flex justify-between items-start">
+                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">No Call Shows</span>
+                              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                            </div>
+                            <div className="text-2xl font-bold text-zinc-900 mt-2">{metrics.noCall}</div>
+                          </div>
+
+                          <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col justify-between min-h-[90px] shadow-sm">
+                            <div className="flex justify-between items-start">
+                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Tardys</span>
+                              <Clock className="w-4 h-4 text-indigo-500 shrink-0" />
+                            </div>
+                            <div className="text-2xl font-bold text-zinc-900 mt-2 flex items-baseline">
+                              {metrics.tardy}
+                              {reviewRange !== 'complete' && (
+                                <span className="text-[9px] text-zinc-400 font-medium ml-1 lowercase font-sans">(all-time)</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Permissions Section */}
               <section className="space-y-2" ref={dropdownRef}>

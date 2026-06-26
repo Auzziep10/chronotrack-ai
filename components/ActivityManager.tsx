@@ -1256,6 +1256,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
           }}
           isViewerAdmin={true}
           viewerUser={currentUser}
+          timeCards={timeCards}
         />
       )}
 
