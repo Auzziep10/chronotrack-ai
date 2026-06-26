@@ -598,221 +598,6 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
           {/* Remaining sections below the split top layout */}
           {viewerHasPermission('manage_users') && (
             <>
-              {/* Scheduling Accordion Section */}
-              <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowSchedulingDropdown(!showSchedulingDropdown)}
-                  className="w-full flex items-center gap-2 border-b border-zinc-100 pb-2 text-left hover:opacity-85 transition-all"
-                >
-                  {showSchedulingDropdown ? (
-                    <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
-                  )}
-                  <Clock className="w-4 h-4 text-zinc-500 shrink-0" />
-                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">Scheduling</span>
-                </button>
-
-                {showSchedulingDropdown && (
-                  <div className="mt-4 space-y-6 bg-zinc-50/30 border border-zinc-200 rounded-lg p-4 animate-in slide-in-from-top-2 duration-200">
-                    {/* Weekly Unavailability Grid */}
-                    <div className="space-y-2">
-                      <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                        Weekly Unavailability (Blocked Times)
-                      </label>
-                      <div className="bg-zinc-50 rounded-lg border border-zinc-200 overflow-hidden">
-                        {ORDERED_DAYS.map((day) => {
-                          const isBlocked = (formData.recurringUnavailability || []).some(item => item.day === day);
-                          const blockData = (formData.recurringUnavailability || []).find(item => item.day === day) || { allDay: true, start: '09:00', end: '17:00' };
-                          return (
-                            <div key={day} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 border-b border-zinc-200 last:border-0 hover:bg-white transition-colors bg-white/50">
-                              <div className="w-40 flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={isBlocked}
-                                  onChange={(e) => handleWeeklyBlockToggle(day, e.target.checked)}
-                                  className="h-4 w-4 text-zinc-900 rounded border-zinc-300 focus:ring-zinc-500"
-                                />
-                                <span className={`text-sm font-medium ${isBlocked ? 'text-zinc-900' : 'text-zinc-400'}`}>
-                                  {day} {isBlocked && <span className="text-[10px] text-red-500 font-semibold">(Blocked)</span>}
-                                </span>
-                              </div>
-
-                              {isBlocked && (
-                                <div className="flex-1 flex flex-wrap items-center gap-3 justify-end">
-                                  <div className="flex rounded-md shadow-sm" role="group">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleWeeklyAllDayToggle(day, true)}
-                                      className={`px-2.5 py-1 text-[11px] font-medium rounded-l-md border ${
-                                        blockData.allDay
-                                          ? 'bg-zinc-900 text-white border-zinc-900'
-                                          : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
-                                      }`}
-                                    >
-                                      All Day
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleWeeklyAllDayToggle(day, false)}
-                                      className={`px-2.5 py-1 text-[11px] font-medium rounded-r-md border-t border-b border-r ${
-                                        !blockData.allDay
-                                          ? 'bg-zinc-900 text-white border-zinc-900'
-                                          : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
-                                      }`}
-                                    >
-                                      Custom Hours
-                                    </button>
-                                  </div>
-
-                                  {!blockData.allDay && (
-                                    <div className="flex items-center gap-1.5 min-w-[200px]">
-                                      <select
-                                        value={blockData.start || '09:00'}
-                                        onChange={(e) => handleWeeklyTimeChange(day, 'start', e.target.value)}
-                                        className="block w-full text-xs border-zinc-300 rounded-md shadow-sm focus:ring-zinc-500 focus:border-zinc-300 bg-white"
-                                      >
-                                        {TIME_OPTIONS.map(t => (
-                                          <option key={`start-${day}-${t.value}`} value={t.value}>{t.label}</option>
-                                        ))}
-                                      </select>
-                                      <span className="text-zinc-400">-</span>
-                                      <select
-                                        value={blockData.end || '17:00'}
-                                        onChange={(e) => handleWeeklyTimeChange(day, 'end', e.target.value)}
-                                        className="block w-full text-xs border-zinc-300 rounded-md shadow-sm focus:ring-zinc-500 focus:border-zinc-300 bg-white"
-                                      >
-                                        {TIME_OPTIONS.map(t => (
-                                          <option key={`end-${day}-${t.value}`} value={t.value}>{t.label}</option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Requested Time Off */}
-                    <div className="space-y-2 pt-4 border-t border-zinc-200">
-                      <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                        Requested Time Off
-                      </label>
-                      <div className="bg-white rounded-lg border border-zinc-200 p-4 space-y-3">
-                        {(formData.dateUnavailability || []).length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {(formData.dateUnavailability || []).map((block, idx) => (
-                              <div key={idx} className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 rounded-lg px-3 py-1.5 transition-colors">
-                                <span className="text-xs font-semibold text-zinc-700">{block.date}</span>
-                                <span className="text-[10px] bg-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded font-medium">
-                                  {block.allDay ? 'All Day' : `${block.start} - ${block.end}`}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveDateBlock(idx)}
-                                  className="text-zinc-400 hover:text-zinc-600 focus:outline-none"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-zinc-400 italic">No requested time off exceptions set.</p>
-                        )}
-
-                        <div className="border-t border-zinc-100 pt-3">
-                          <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                            <div>
-                              <label className="block text-[10px] font-medium text-zinc-500 mb-1">Select Date</label>
-                              <input
-                                type="date"
-                                value={newDateBlock.date}
-                                onChange={(e) => setNewDateBlock(prev => ({ ...prev, date: e.target.value }))}
-                                className="block w-full text-xs border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-white"
-                              />
-                            </div>
-                            
-                            <div>
-                              <label className="block text-[10px] font-medium text-zinc-500 mb-1">Duration</label>
-                              <div className="flex rounded-md shadow-sm h-8" role="group">
-                                <button
-                                  type="button"
-                                  onClick={() => setNewDateBlock(prev => ({ ...prev, allDay: true }))}
-                                  className={`flex-1 px-2 py-1 text-[11px] font-medium rounded-l-md border ${
-                                    newDateBlock.allDay
-                                      ? 'bg-zinc-900 text-white border-zinc-900'
-                                      : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
-                                  }`}
-                                >
-                                  All Day
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setNewDateBlock(prev => ({ ...prev, allDay: false }))}
-                                  className={`flex-1 px-2 py-1 text-[11px] font-medium rounded-r-md border-t border-b border-r ${
-                                    !newDateBlock.allDay
-                                      ? 'bg-zinc-900 text-white border-zinc-900'
-                                      : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
-                                  }`}
-                                >
-                                  Custom Hours
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className={`flex items-center gap-1.5 ${newDateBlock.allDay ? 'opacity-30 pointer-events-none' : ''}`}>
-                              <div className="flex-1">
-                                <label className="block text-[10px] font-medium text-zinc-500 mb-1">Start Time</label>
-                                <select
-                                  disabled={newDateBlock.allDay}
-                                  value={newDateBlock.start}
-                                  onChange={(e) => setNewDateBlock(prev => ({ ...prev, start: e.target.value }))}
-                                  className="block w-full text-xs border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-white"
-                                >
-                                  {TIME_OPTIONS.map(t => (
-                                    <option key={`new-start-${t.value}`} value={t.value}>{t.label}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              <span className="text-zinc-400 mt-5">-</span>
-                              <div className="flex-1">
-                                <label className="block text-[10px] font-medium text-zinc-500 mb-1">End Time</label>
-                                <select
-                                  disabled={newDateBlock.allDay}
-                                  value={newDateBlock.end}
-                                  onChange={(e) => setNewDateBlock(prev => ({ ...prev, end: e.target.value }))}
-                                  className="block w-full text-xs border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-white"
-                                >
-                                  {TIME_OPTIONS.map(t => (
-                                    <option key={`new-end-${t.value}`} value={t.value}>{t.label}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
-
-                            <div>
-                              <button
-                                type="button"
-                                onClick={handleAddDateBlock}
-                                disabled={!newDateBlock.date}
-                                className="w-full bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed text-white text-xs font-semibold py-2 px-3 rounded-md transition-colors h-8 flex items-center justify-center"
-                              >
-                                + Add Requested Time Off
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Review Section */}
               {(() => {
                 // Proximity helper
@@ -1610,6 +1395,221 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                   </div>
                 );
               })()}
+
+              {/* Scheduling Accordion Section */}
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowSchedulingDropdown(!showSchedulingDropdown)}
+                  className="w-full flex items-center gap-2 border-b border-zinc-100 pb-2 text-left hover:opacity-85 transition-all"
+                >
+                  {showSchedulingDropdown ? (
+                    <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
+                  )}
+                  <Clock className="w-4 h-4 text-zinc-500 shrink-0" />
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">Schedule</span>
+                </button>
+
+                {showSchedulingDropdown && (
+                  <div className="mt-4 space-y-6 bg-zinc-50/30 border border-zinc-200 rounded-lg p-4 animate-in slide-in-from-top-2 duration-200">
+                    {/* Weekly Unavailability Grid */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                        Weekly Unavailability (Blocked Times)
+                      </label>
+                      <div className="bg-zinc-50 rounded-lg border border-zinc-200 overflow-hidden">
+                        {ORDERED_DAYS.map((day) => {
+                          const isBlocked = (formData.recurringUnavailability || []).some(item => item.day === day);
+                          const blockData = (formData.recurringUnavailability || []).find(item => item.day === day) || { allDay: true, start: '09:00', end: '17:00' };
+                          return (
+                            <div key={day} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 border-b border-zinc-200 last:border-0 hover:bg-white transition-colors bg-white/50">
+                              <div className="w-40 flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={isBlocked}
+                                  onChange={(e) => handleWeeklyBlockToggle(day, e.target.checked)}
+                                  className="h-4 w-4 text-zinc-900 rounded border-zinc-300 focus:ring-zinc-500"
+                                />
+                                <span className={`text-sm font-medium ${isBlocked ? 'text-zinc-900' : 'text-zinc-400'}`}>
+                                  {day} {isBlocked && <span className="text-[10px] text-red-500 font-semibold">(Blocked)</span>}
+                                </span>
+                              </div>
+
+                              {isBlocked && (
+                                <div className="flex-1 flex flex-wrap items-center gap-3 justify-end">
+                                  <div className="flex rounded-md shadow-sm" role="group">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleWeeklyAllDayToggle(day, true)}
+                                      className={`px-2.5 py-1 text-[11px] font-medium rounded-l-md border ${
+                                        blockData.allDay
+                                          ? 'bg-zinc-900 text-white border-zinc-900'
+                                          : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
+                                      }`}
+                                    >
+                                      All Day
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleWeeklyAllDayToggle(day, false)}
+                                      className={`px-2.5 py-1 text-[11px] font-medium rounded-r-md border-t border-b border-r ${
+                                        !blockData.allDay
+                                          ? 'bg-zinc-900 text-white border-zinc-900'
+                                          : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
+                                      }`}
+                                    >
+                                      Custom Hours
+                                    </button>
+                                  </div>
+
+                                  {!blockData.allDay && (
+                                    <div className="flex items-center gap-1.5 min-w-[200px]">
+                                      <select
+                                        value={blockData.start || '09:00'}
+                                        onChange={(e) => handleWeeklyTimeChange(day, 'start', e.target.value)}
+                                        className="block w-full text-xs border-zinc-300 rounded-md shadow-sm focus:ring-zinc-500 focus:border-zinc-300 bg-white"
+                                      >
+                                        {TIME_OPTIONS.map(t => (
+                                          <option key={`start-${day}-${t.value}`} value={t.value}>{t.label}</option>
+                                        ))}
+                                      </select>
+                                      <span className="text-zinc-400">-</span>
+                                      <select
+                                        value={blockData.end || '17:00'}
+                                        onChange={(e) => handleWeeklyTimeChange(day, 'end', e.target.value)}
+                                        className="block w-full text-xs border-zinc-300 rounded-md shadow-sm focus:ring-zinc-500 focus:border-zinc-300 bg-white"
+                                      >
+                                        {TIME_OPTIONS.map(t => (
+                                          <option key={`end-${day}-${t.value}`} value={t.value}>{t.label}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Requested Time Off */}
+                    <div className="space-y-2 pt-4 border-t border-zinc-200">
+                      <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                        Requested Time Off
+                      </label>
+                      <div className="bg-white rounded-lg border border-zinc-200 p-4 space-y-3">
+                        {(formData.dateUnavailability || []).length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {(formData.dateUnavailability || []).map((block, idx) => (
+                              <div key={idx} className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 rounded-lg px-3 py-1.5 transition-colors">
+                                <span className="text-xs font-semibold text-zinc-700">{block.date}</span>
+                                <span className="text-[10px] bg-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded font-medium">
+                                  {block.allDay ? 'All Day' : `${block.start} - ${block.end}`}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDateBlock(idx)}
+                                  className="text-zinc-400 hover:text-zinc-600 focus:outline-none"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-zinc-400 italic">No requested time off exceptions set.</p>
+                        )}
+
+                        <div className="border-t border-zinc-100 pt-3">
+                          <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                            <div>
+                              <label className="block text-[10px] font-medium text-zinc-500 mb-1">Select Date</label>
+                              <input
+                                type="date"
+                                value={newDateBlock.date}
+                                onChange={(e) => setNewDateBlock(prev => ({ ...prev, date: e.target.value }))}
+                                className="block w-full text-xs border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-white"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-[10px] font-medium text-zinc-500 mb-1">Duration</label>
+                              <div className="flex rounded-md shadow-sm h-8" role="group">
+                                <button
+                                  type="button"
+                                  onClick={() => setNewDateBlock(prev => ({ ...prev, allDay: true }))}
+                                  className={`flex-1 px-2 py-1 text-[11px] font-medium rounded-l-md border ${
+                                    newDateBlock.allDay
+                                      ? 'bg-zinc-900 text-white border-zinc-900'
+                                      : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
+                                  }`}
+                                >
+                                  All Day
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setNewDateBlock(prev => ({ ...prev, allDay: false }))}
+                                  className={`flex-1 px-2 py-1 text-[11px] font-medium rounded-r-md border-t border-b border-r ${
+                                    !newDateBlock.allDay
+                                      ? 'bg-zinc-900 text-white border-zinc-900'
+                                      : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
+                                  }`}
+                                >
+                                  Custom Hours
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className={`flex items-center gap-1.5 ${newDateBlock.allDay ? 'opacity-30 pointer-events-none' : ''}`}>
+                              <div className="flex-1">
+                                <label className="block text-[10px] font-medium text-zinc-500 mb-1">Start Time</label>
+                                <select
+                                  disabled={newDateBlock.allDay}
+                                  value={newDateBlock.start}
+                                  onChange={(e) => setNewDateBlock(prev => ({ ...prev, start: e.target.value }))}
+                                  className="block w-full text-xs border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-white"
+                                >
+                                  {TIME_OPTIONS.map(t => (
+                                    <option key={`new-start-${t.value}`} value={t.value}>{t.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <span className="text-zinc-400 mt-5">-</span>
+                              <div className="flex-1">
+                                <label className="block text-[10px] font-medium text-zinc-500 mb-1">End Time</label>
+                                <select
+                                  disabled={newDateBlock.allDay}
+                                  value={newDateBlock.end}
+                                  onChange={(e) => setNewDateBlock(prev => ({ ...prev, end: e.target.value }))}
+                                  className="block w-full text-xs border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-white"
+                                >
+                                  {TIME_OPTIONS.map(t => (
+                                    <option key={`new-end-${t.value}`} value={t.value}>{t.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            <div>
+                              <button
+                                type="button"
+                                onClick={handleAddDateBlock}
+                                disabled={!newDateBlock.date}
+                                className="w-full bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed text-white text-xs font-semibold py-2 px-3 rounded-md transition-colors h-8 flex items-center justify-center"
+                              >
+                                + Add Requested Time Off
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Permissions Section */}
               <section className="space-y-2" ref={dropdownRef}>
