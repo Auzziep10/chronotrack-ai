@@ -1182,10 +1182,10 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                           ))}
                         </div>
 
-                        {/* Reliability Score Banner */}
+                        {/* Reliability Banner */}
                         <div className="bg-zinc-900 text-white border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
                           <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Composite Reliability Score</span>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Reliability</span>
                             <div className="flex flex-wrap items-center gap-3">
                               <span className="text-3xl font-extrabold">{reliabilityCalculations.score}/100</span>
                               <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${reliabilityCalculations.ratingColor.replace('bg-', 'bg-white/10 ').replace('text-', 'text-')}`}>
