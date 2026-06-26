@@ -471,6 +471,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
         onSave={onUpdateUser}
         isViewerAdmin={true}
         viewerUser={currentUser}
+        users={users}
       />
     </>
   );

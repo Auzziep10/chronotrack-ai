@@ -22,14 +22,95 @@ const generateMockData = (users: User[]) => {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
     const dateStr = date.toISOString().split('T')[0];
-    if (date.getDay() === 0 || date.getDay() === 6) continue;
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
     displayUsers.forEach(user => {
-      if (Math.random() > 0.1) {
-        const startHour = 8 + (Math.random() * 2);
-        const endHour = 16 + (Math.random() * 2);
-        const startTime = new Date(date).setHours(Math.floor(startHour), Math.floor((startHour % 1) * 60));
-        const endTime = new Date(date).setHours(Math.floor(endHour), Math.floor((endHour % 1) * 60));
+      // Deterministic generation based on user index and i to ensure consistency
+      const seedVal = (user.id.charCodeAt(user.id.length - 1) + i) % 15;
+      
+      if (isWeekend) {
+        // Occasionally record emergency / sick on weekend if scheduled (let's say seedVal === 14)
+        if (seedVal === 14) {
+          timeCards.push({
+            id: `tc-${user.id}-${i}`,
+            userId: user.id,
+            date: dateStr,
+            clockIn: new Date(date).setHours(9, 0),
+            clockOut: null,
+            totalHours: 0,
+            status: 'Sick',
+            sickDocumentationProvided: i % 2 === 0,
+            managerNotes: 'Sick call-in over the weekend.'
+          });
+        }
+        return; // Normal weekend, no shift
+      }
+
+      if (seedVal === 3) {
+        // Tardy complete shift
+        const startHour = 8.5; // 30 mins late
+        const startTime = new Date(date).setHours(8, 30);
+        const endTime = new Date(date).setHours(17, 0);
+        timeCards.push({
+          id: `tc-${user.id}-${i}`,
+          userId: user.id,
+          date: dateStr,
+          clockIn: startTime,
+          clockOut: endTime,
+          totalHours: 8.5,
+          status: 'Complete',
+          minutesLate: 30,
+          tardyShiftTitle: 'Morning Production Shift'
+        });
+      } else if (seedVal === 7) {
+        // Sick day
+        timeCards.push({
+          id: `tc-${user.id}-${i}`,
+          userId: user.id,
+          date: dateStr,
+          clockIn: new Date(date).setHours(9, 0),
+          clockOut: null,
+          totalHours: 0,
+          status: 'Sick',
+          sickDocumentationProvided: i % 2 === 0,
+          managerNotes: 'Called in sick'
+        });
+      } else if (seedVal === 11 && user.id === 'u2') {
+        // No call no show for Sarah Connor
+        const coverer = displayUsers.find(u => u.id !== user.id) || { id: 'u1', name: 'Alex Johnson' };
+        timeCards.push({
+          id: `tc-${user.id}-${i}`,
+          userId: user.id,
+          date: dateStr,
+          clockIn: new Date(date).setHours(9, 0),
+          clockOut: null,
+          totalHours: 0,
+          status: 'No-Call No-Show',
+          missedShiftTitle: 'Morning Production Shift',
+          coveredByUserId: coverer.id,
+          coveredByUserName: coverer.name
+        });
+      } else if (seedVal === 12 && user.id === 'u3') {
+        // Tardy for Mike Ross (10 mins late)
+        const startTime = new Date(date).setHours(8, 10);
+        const endTime = new Date(date).setHours(17, 0);
+        timeCards.push({
+          id: `tc-${user.id}-${i}`,
+          userId: user.id,
+          date: dateStr,
+          clockIn: startTime,
+          clockOut: endTime,
+          totalHours: 8.83,
+          status: 'Complete',
+          minutesLate: 10,
+          tardyShiftTitle: 'Warehouse Shift'
+        });
+      } else {
+        // Normal worked shift
+        const startHour = 8;
+        const endHour = 17;
+        const startTime = new Date(date).setHours(startHour, 0);
+        const endTime = new Date(date).setHours(endHour, 0);
 
         timeCards.push({
           id: `tc-${user.id}-${i}`,
@@ -37,31 +118,21 @@ const generateMockData = (users: User[]) => {
           date: dateStr,
           clockIn: startTime,
           clockOut: endTime,
-          totalHours: endHour - startHour,
+          totalHours: 9.0,
           status: 'Complete'
         });
 
-        const numLogs = 1 + Math.floor(Math.random() * 3);
-        for (let j = 0; j < numLogs; j++) {
-          const deptKeys = Object.values(Department);
-          const randomDept = deptKeys[Math.floor(Math.random() * deptKeys.length)];
-
-          logs.push({
-            id: `log-${user.id}-${i}-${j}`,
-            userId: user.id,
-            userName: user.name,
-            timestamp: startTime + (j * 3600000),
-            periodStart: startTime + (j * 3600000),
-            periodEnd: startTime + ((j + 1) * 3600000),
-            department: randomDept,
-            task: `Task ${j + 1} for ${randomDept}`,
-            notes: j % 3 === 0 ? "Detailed notes..." : undefined,
-            productionData: randomDept === Department.Production ? {
-              projectName: `Project-${Math.floor(Math.random() * 100)}`,
-              quantity: Math.floor(Math.random() * 500)
-            } : undefined
-          });
-        }
+        // Add log
+        logs.push({
+          id: `log-${user.id}-${i}-1`,
+          userId: user.id,
+          userName: user.name,
+          timestamp: startTime,
+          periodStart: startTime,
+          periodEnd: endTime,
+          department: user.primaryDepartment || Department.Production,
+          task: `Standard operations`,
+        });
       }
     });
   }
@@ -256,7 +327,13 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     const fetchData = async () => {
       // 1. Load Local Fallback
       const { storageService } = await import('../services/storageService');
-      const localData = storageService.getAllData();
+      let localData = storageService.getAllData();
+      if (localData.timeCards.length === 0) {
+        const seeded = generateMockData(users);
+        seeded.timeCards.forEach(tc => storageService.saveTimeCard(tc));
+        seeded.logs.forEach(l => storageService.saveLog(l));
+        localData = storageService.getAllData();
+      }
       setTimeCards(localData.timeCards);
       setLogs(localData.logs);
 
@@ -1257,6 +1334,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
           isViewerAdmin={true}
           viewerUser={currentUser}
           timeCards={timeCards}
+          users={users}
         />
       )}
 

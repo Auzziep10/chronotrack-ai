@@ -76,7 +76,19 @@ export const DEFAULT_USERS: User[] = [
     recurringUnavailability: [],
     dateUnavailability: [],
     lateDays: 0,
-    correctionNotes: 'Coached on 10/12 regarding missed scans.'
+    correctionNotes: 'Coached on 10/12 regarding missed scans.',
+    timeOffRequests: [
+      {
+        id: 'tor-u1-1',
+        startDate: '2026-06-10',
+        endDate: '2026-06-14',
+        status: 'Approved',
+        reason: 'Family vacation',
+        submittedAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
+        category: 'Vacation',
+        requestedInAdvance: true
+      }
+    ]
   },
   {
     id: 'u2',
@@ -93,7 +105,29 @@ export const DEFAULT_USERS: User[] = [
     recurringUnavailability: [],
     dateUnavailability: [],
     lateDays: 2,
-    correctionNotes: ''
+    correctionNotes: '',
+    timeOffRequests: [
+      {
+        id: 'tor-u2-1',
+        startDate: '2026-06-18',
+        endDate: '2026-06-19',
+        status: 'Approved',
+        reason: 'Flu symptoms',
+        submittedAt: Date.now() - 7 * 24 * 60 * 60 * 1000,
+        category: 'Sick',
+        requestedInAdvance: false
+      },
+      {
+        id: 'tor-u2-2',
+        startDate: '2026-07-02',
+        endDate: '2026-07-05',
+        status: 'Pending',
+        reason: 'Weekend trip',
+        submittedAt: Date.now() - 5 * 24 * 60 * 60 * 1000,
+        category: 'Vacation',
+        requestedInAdvance: true
+      }
+    ]
   },
   {
     id: 'u3',
@@ -110,7 +144,19 @@ export const DEFAULT_USERS: User[] = [
     recurringUnavailability: [],
     dateUnavailability: [],
     lateDays: 1,
-    correctionNotes: ''
+    correctionNotes: '',
+    timeOffRequests: [
+      {
+        id: 'tor-u3-1',
+        startDate: '2026-06-05',
+        endDate: '2026-06-05',
+        status: 'Approved',
+        reason: 'Car issues',
+        submittedAt: Date.now() - 20 * 24 * 60 * 60 * 1000,
+        category: 'Unpaid',
+        requestedInAdvance: false
+      }
+    ]
   },
   {
     id: 'u4',
@@ -129,7 +175,19 @@ export const DEFAULT_USERS: User[] = [
     ],
     dateUnavailability: [],
     lateDays: 0,
-    correctionNotes: ''
+    correctionNotes: '',
+    timeOffRequests: [
+      {
+        id: 'tor-u4-1',
+        startDate: '2026-05-15',
+        endDate: '2026-05-18',
+        status: 'Approved',
+        reason: 'Family funeral',
+        submittedAt: Date.now() - 45 * 24 * 60 * 60 * 1000,
+        category: 'Bereavement',
+        requestedInAdvance: true
+      }
+    ]
   },
 ];
 

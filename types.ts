@@ -41,6 +41,8 @@ export interface TimeOffRequest {
   status: 'Pending' | 'Approved' | 'Denied';
   reason: string;
   submittedAt: number;
+  category?: 'Vacation' | 'Sick' | 'Unpaid' | 'Bereavement' | 'Other';
+  requestedInAdvance?: boolean;
 }
 
 export interface User {
@@ -100,6 +102,12 @@ export interface DailyTimeCard {
   clockInDepartment?: string;
   isUnscheduled?: boolean;
   managerNotes?: string;
+  minutesLate?: number;
+  tardyShiftTitle?: string;
+  sickDocumentationProvided?: boolean;
+  coveredByUserId?: string;
+  coveredByUserName?: string;
+  missedShiftTitle?: string;
 }
 
 // App Configuration

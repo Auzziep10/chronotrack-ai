@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, User as UserIcon, Phone, Mail, MapPin, Briefcase, Clock, AlertTriangle, AlertCircle, Save, MessageSquare, Lock, Check, FileText, Download, ChevronDown, ChevronUp, ChevronRight, Shield, Target, Key, DollarSign, ClipboardCheck, Calendar } from 'lucide-react';
+import { X, User as UserIcon, Phone, Mail, MapPin, Briefcase, Clock, AlertTriangle, AlertCircle, Save, MessageSquare, Lock, Check, FileText, Download, ChevronDown, ChevronUp, ChevronRight, Shield, Target, Key, DollarSign, ClipboardCheck, Calendar, ArrowUp, ArrowDown } from 'lucide-react';
 import { User, DayOfWeek, DailyAvailability, Department } from '../types';
 import { AVAILABLE_PERMISSIONS } from '../constants';
 
@@ -11,7 +11,26 @@ interface Props {
   isViewerAdmin?: boolean;
   viewerUser?: User | null;
   timeCards?: any[];
+  users?: User[];
 }
+
+const RELIABILITY_CONFIG = {
+  // Score deduction weights (base 100)
+  weights: {
+    noCallShow: 25,
+    sickNoDoc: 8,
+    sickWithDoc: 2,
+    tardyPer5Min: 1, // max 10 deduction per tardy (50 mins late)
+    unplannedTimeOff: 3,
+    weekendHolidaySickPenalty: 5, // extra penalty for undocumented sick near weekend/holidays
+  },
+  // Warnings Banner thresholds (assessed over the active date range)
+  thresholds: {
+    noCallShows: 1,
+    tardys: 3,
+    undocumentedSick: 2,
+  }
+};
 
 const ORDERED_DAYS: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -73,13 +92,74 @@ const formatPhoneNumber = (value: string) => {
   return `(${match.slice(0, 3)})${match.slice(3, 6)}-${match.slice(6)}`;
 };
 
-export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSave, isViewerAdmin = false, viewerUser = null, timeCards = [] }) => {
+export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSave, isViewerAdmin = false, viewerUser = null, timeCards = [], users = [] }) => {
   const [formData, setFormData] = useState<User | null>(null);
   const [showPermsDropdown, setShowPermsDropdown] = useState(false);
   const [showSchedulingDropdown, setShowSchedulingDropdown] = useState(false);
   const [showReviewDropdown, setShowReviewDropdown] = useState(false);
   const [reviewRange, setReviewRange] = useState<'30' | '60' | '90' | 'yearly' | 'complete'>('30');
+  const [localTimeCards, setLocalTimeCards] = useState<any[]>(timeCards || []);
+  const [activeDrilldown, setActiveDrilldown] = useState<'sick' | 'timeOff' | 'noCall' | 'tardy' | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (timeCards && timeCards.length > 0) {
+      setLocalTimeCards(timeCards);
+    } else {
+      const loadTimeCards = async () => {
+        try {
+          const { storageService } = await import('../services/storageService');
+          const localData = storageService.getAllData();
+          let cards = localData.timeCards;
+          
+          const { firebaseGetTimeCards, isFirebaseConfigured } = await import('../services/firebaseService');
+          if (isFirebaseConfigured()) {
+            const remoteCards = await firebaseGetTimeCards().catch(() => []);
+            if (remoteCards && remoteCards.length > 0) {
+              cards = remoteCards;
+            }
+          }
+          setLocalTimeCards(cards);
+        } catch (e) {
+          console.warn("Failed to load timecards in UserProfileDialog", e);
+        }
+      };
+      loadTimeCards();
+    }
+  }, [timeCards]);
+
+  const handleToggleSickDoc = (cardId: string) => {
+    const updatedCards = localTimeCards.map(c => {
+      if (c.id === cardId) {
+        const updated = { ...c, sickDocumentationProvided: !c.sickDocumentationProvided };
+        import('../services/storageService').then(mod => {
+          mod.storageService.saveTimeCard(updated);
+        });
+        return updated;
+      }
+      return c;
+    });
+    setLocalTimeCards(updatedCards);
+  };
+
+  const handleUpdateNoCallCover = (cardId: string, coverUserId: string) => {
+    const coverUser = users.find(u => u.id === coverUserId);
+    const updatedCards = localTimeCards.map(c => {
+      if (c.id === cardId) {
+        const updated = {
+          ...c,
+          coveredByUserId: coverUserId || undefined,
+          coveredByUserName: coverUser ? coverUser.name : undefined
+        };
+        import('../services/storageService').then(mod => {
+          mod.storageService.saveTimeCard(updated);
+        });
+        return updated;
+      }
+      return c;
+    });
+    setLocalTimeCards(updatedCards);
+  };
 
   const [newDateBlock, setNewDateBlock] = useState({
     date: '',
@@ -734,44 +814,239 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
               {/* Review Section */}
               {(() => {
-                const metrics = (() => {
-                  if (!formData) return { sick: 0, timeOff: 0, noCall: 0, tardy: 0 };
+                // Proximity helper
+                const isNearWeekendOrHoliday = (timestamp: number) => {
+                  const d = new Date(timestamp);
+                  const day = d.getDay();
+                  // 0 = Sun, 1 = Mon, 5 = Fri, 6 = Sat
+                  if (day === 0 || day === 1 || day === 5 || day === 6) {
+                    const dayNames = ['Sunday', 'Monday', 'Unknown', 'Unknown', 'Unknown', 'Friday', 'Saturday'];
+                    return `Weekend (${dayNames[day]})`;
+                  }
                   
-                  const userCards = (timeCards || []).filter(c => c.userId === formData.id);
-                  const userRequests = formData.timeOffRequests || [];
+                  // Basic holidays in US (simplified check by MM-DD)
+                  const month = d.getMonth() + 1; // 1-12
+                  const date = d.getDate();
+                  const md = `${month.toString().padStart(2, '0')}-${date.toString().padStart(2, '0')}`;
                   
-                  const now = Date.now();
-                  let rangeStart = 0;
-                  if (reviewRange === '30') rangeStart = now - 30 * 24 * 60 * 60 * 1000;
-                  else if (reviewRange === '60') rangeStart = now - 60 * 24 * 60 * 60 * 1000;
-                  else if (reviewRange === '90') rangeStart = now - 90 * 24 * 60 * 60 * 1000;
-                  else if (reviewRange === 'yearly') rangeStart = now - 365 * 24 * 60 * 60 * 1000;
+                  const holidays: Record<string, string> = {
+                    '01-01': "New Year's Day",
+                    '07-04': 'Independence Day',
+                    '11-25': 'Thanksgiving',
+                    '11-26': 'Black Friday',
+                    '12-24': 'Christmas Eve',
+                    '12-25': 'Christmas Day',
+                    '12-31': "New Year's Eve",
+                  };
                   
-                  const sickCount = userCards.filter(c => {
-                    if (reviewRange === 'complete') return c.status === 'Sick';
-                    return c.status === 'Sick' && c.clockIn >= rangeStart;
-                  }).length;
+                  if (holidays[md]) {
+                    return `Holiday (${holidays[md]})`;
+                  }
                   
-                  const noCallCount = userCards.filter(c => {
-                    if (reviewRange === 'complete') return c.status === 'No-Call No-Show';
-                    return c.status === 'No-Call No-Show' && c.clockIn >= rangeStart;
-                  }).length;
+                  // Check day before/after holiday
+                  const tomorrow = new Date(timestamp + 24 * 60 * 60 * 1000);
+                  const tMonth = tomorrow.getMonth() + 1;
+                  const tDate = tomorrow.getDate();
+                  const tMd = `${tMonth.toString().padStart(2, '0')}-${tDate.toString().padStart(2, '0')}`;
+                  if (holidays[tMd]) {
+                    return `Holiday Eve (${holidays[tMd]})`;
+                  }
                   
-                  const timeOffCount = userRequests.filter(req => {
-                    if (reviewRange === 'complete') return true;
-                    const reqTime = req.submittedAt || new Date(req.startDate).getTime();
-                    return reqTime >= rangeStart;
-                  }).length;
-                  
-                  const tardyCount = formData.lateDays || 0;
-                  
+                  return null;
+                };
+
+                if (!formData) return null;
+
+                const userCards = (localTimeCards || []).filter(c => c.userId === formData.id);
+                const userRequests = formData.timeOffRequests || [];
+                
+                const now = Date.now();
+                let rangeDays = 30;
+                if (reviewRange === '60') rangeDays = 60;
+                else if (reviewRange === '90') rangeDays = 90;
+                else if (reviewRange === 'yearly') rangeDays = 365;
+                else if (reviewRange === 'complete') rangeDays = 9999;
+                
+                const rangeStart = rangeDays === 9999 ? 0 : now - rangeDays * 24 * 60 * 60 * 1000;
+                const priorStart = rangeDays === 9999 ? 0 : rangeStart - rangeDays * 24 * 60 * 60 * 1000;
+                const priorEnd = rangeStart;
+                
+                // Active range filters
+                const shiftsWorked = userCards.filter(c => c.status === 'Complete' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                const sickCards = userCards.filter(c => c.status === 'Sick' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
+                const noCallCards = userCards.filter(c => c.status === 'No-Call No-Show' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
+                const tardyCards = userCards.filter(c => c.status === 'Complete' && c.minutesLate && c.minutesLate > 0 && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
+                const timeOffRequests = userRequests.filter(req => {
+                  const t = req.submittedAt || new Date(req.startDate).getTime();
+                  return rangeDays === 9999 ? true : (t >= rangeStart && t < now);
+                });
+
+                // Prior range filters (for trend indicator)
+                const priorShifts = userCards.filter(c => c.status === 'Complete' && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
+                const priorSick = userCards.filter(c => c.status === 'Sick' && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
+                const priorNoCall = userCards.filter(c => c.status === 'No-Call No-Show' && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
+                const priorTardys = userCards.filter(c => c.status === 'Complete' && c.minutesLate && c.minutesLate > 0 && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
+                const priorTimeOff = userRequests.filter(req => {
+                  const t = req.submittedAt || new Date(req.startDate).getTime();
+                  return t >= priorStart && t < priorEnd;
+                }).length;
+
+                // Team calculations
+                const teamStats = (() => {
+                  const teamUserIds = users.length > 0 ? users.map(u => u.id) : Array.from(new Set(localTimeCards.map(c => c.userId)));
+                  let totalShifts = 0;
+                  let totalSick = 0;
+                  let totalNoCall = 0;
+                  let totalTardys = 0;
+                  let totalTimeOff = 0;
+
+                  teamUserIds.forEach(uid => {
+                    const uCards = localTimeCards.filter(c => c.userId === uid);
+                    const uShifts = uCards.filter(c => c.status === 'Complete' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                    const uSick = uCards.filter(c => c.status === 'Sick' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                    const uNoCall = uCards.filter(c => c.status === 'No-Call No-Show' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                    const uTardys = uCards.filter(c => c.status === 'Complete' && c.minutesLate && c.minutesLate > 0 && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+
+                    const uObj = users.find(u => u.id === uid) || (uid === formData.id ? formData : null);
+                    const uRequests = uObj?.timeOffRequests || [];
+                    const uTimeOff = uRequests.filter(req => {
+                      const t = req.submittedAt || new Date(req.startDate).getTime();
+                      return rangeDays === 9999 ? true : (t >= rangeStart && t < now);
+                    }).length;
+
+                    totalShifts += uShifts;
+                    totalSick += uSick;
+                    totalNoCall += uNoCall;
+                    totalTardys += uTardys;
+                    totalTimeOff += uTimeOff;
+                  });
+
                   return {
-                    sick: sickCount,
-                    timeOff: timeOffCount,
-                    noCall: noCallCount,
-                    tardy: tardyCount
+                    sickRate: totalShifts + totalSick > 0 ? totalSick / (totalShifts + totalSick) : 0,
+                    tardyRate: totalShifts > 0 ? totalTardys / totalShifts : 0,
+                    noCallRate: totalShifts + totalNoCall > 0 ? totalNoCall / (totalShifts + totalNoCall) : 0,
+                    timeOffRate: totalShifts + totalTimeOff > 0 ? totalTimeOff / (totalShifts + totalTimeOff) : 0,
                   };
                 })();
+
+                // User rates
+                const userSickRate = shiftsWorked + sickCards.length > 0 ? sickCards.length / (shiftsWorked + sickCards.length) : 0;
+                const userTardyRate = shiftsWorked > 0 ? tardyCards.length / shiftsWorked : 0;
+                const userNoCallRate = shiftsWorked + noCallCards.length > 0 ? noCallCards.length / (shiftsWorked + noCallCards.length) : 0;
+                const userTimeOffRate = shiftsWorked + timeOffRequests.length > 0 ? timeOffRequests.length / (shiftsWorked + timeOffRequests.length) : 0;
+
+                // Reliability calculations
+                const reliabilityCalculations = (() => {
+                  let score = 100;
+                  
+                  const noCallDeduction = noCallCards.length * RELIABILITY_CONFIG.weights.noCallShow;
+                  score -= noCallDeduction;
+
+                  let sickDeduction = 0;
+                  sickCards.forEach(c => {
+                    const isDoc = !!c.sickDocumentationProvided;
+                    if (isDoc) {
+                      sickDeduction += RELIABILITY_CONFIG.weights.sickWithDoc;
+                    } else {
+                      sickDeduction += RELIABILITY_CONFIG.weights.sickNoDoc;
+                      const proxy = isNearWeekendOrHoliday(c.clockIn);
+                      if (proxy) {
+                        sickDeduction += RELIABILITY_CONFIG.weights.weekendHolidaySickPenalty;
+                      }
+                    }
+                  });
+                  score -= sickDeduction;
+
+                  let tardyDeduction = 0;
+                  tardyCards.forEach(c => {
+                    const mins = c.minutesLate || 0;
+                    const pts = Math.min(10, Math.ceil(mins / 5)) * RELIABILITY_CONFIG.weights.tardyPer5Min;
+                    tardyDeduction += pts;
+                  });
+                  score -= tardyDeduction;
+
+                  let timeOffDeduction = 0;
+                  timeOffRequests.forEach(req => {
+                    if (req.requestedInAdvance === false) {
+                      timeOffDeduction += RELIABILITY_CONFIG.weights.unplannedTimeOff;
+                    }
+                  });
+                  score -= timeOffDeduction;
+
+                  const finalScore = Math.max(0, Math.min(100, score));
+
+                  let rating: 'Excellent' | 'Good' | 'Needs Attention' | 'At Risk' = 'Excellent';
+                  let ratingColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+                  if (finalScore >= 90) {
+                    rating = 'Excellent';
+                    ratingColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+                  } else if (finalScore >= 75) {
+                    rating = 'Good';
+                    ratingColor = 'text-teal-700 bg-teal-50 border-teal-200';
+                  } else if (finalScore >= 55) {
+                    rating = 'Needs Attention';
+                    ratingColor = 'text-amber-700 bg-amber-50 border-amber-200';
+                  } else {
+                    rating = 'At Risk';
+                    ratingColor = 'text-rose-700 bg-rose-50 border-rose-200';
+                  }
+
+                  return {
+                    score: finalScore,
+                    rating,
+                    ratingColor,
+                    deductions: {
+                      noCall: noCallDeduction,
+                      sick: sickDeduction,
+                      tardy: tardyDeduction,
+                      timeOff: timeOffDeduction
+                    }
+                  };
+                })();
+
+                // Warnings Banner
+                const warningBanners = (() => {
+                  const banners: string[] = [];
+                  const suffix = rangeDays === 9999 ? 'all-time' : `last ${rangeDays} days`;
+                  
+                  if (noCallCards.length >= RELIABILITY_CONFIG.thresholds.noCallShows) {
+                    banners.push(`⚠ ${noCallCards.length} no-shows in ${suffix} — review before assigning to upcoming events.`);
+                  }
+                  if (tardyCards.length >= RELIABILITY_CONFIG.thresholds.tardys) {
+                    banners.push(`⚠ ${tardyCards.length} tardys in ${suffix} — check shift alignment/punctuality.`);
+                  }
+                  const undocumentedSick = sickCards.filter(c => !c.sickDocumentationProvided).length;
+                  if (undocumentedSick >= RELIABILITY_CONFIG.thresholds.undocumentedSick) {
+                    banners.push(`⚠ ${undocumentedSick} undocumented sick call-ins in ${suffix} — verify documentation policy compliance.`);
+                  }
+                  return banners;
+                })();
+
+                // Helper to calculate trend
+                const getTrendIndicator = (current: number, prior: number) => {
+                  if (rangeDays === 9999) return null; // No trend for complete/all-time
+                  if (prior === 0) {
+                    return current === 0 ? null : { text: `+${current}`, isWorse: true };
+                  }
+                  const pct = Math.round(((current - prior) / prior) * 100);
+                  if (pct === 0) return null;
+                  return {
+                    text: pct > 0 ? `↑ ${pct}%` : `↓ ${Math.abs(pct)}%`,
+                    isWorse: pct > 0 // positive change for absence/lateness is worse
+                  };
+                };
+
+                // Helper to format rate baseline comparison
+                const getBaselineDiffText = (userVal: number, teamVal: number) => {
+                  const diff = (userVal - teamVal) * 100;
+                  if (Math.abs(diff) < 0.1) return 'Matches team average';
+                  const formatted = Math.abs(diff).toFixed(1) + '%';
+                  if (diff > 0) {
+                    return `${formatted} above team average`;
+                  } else {
+                    return `${formatted} below team average`;
+                  }
+                };
 
                 return (
                   <div className="mt-4">
@@ -790,14 +1065,17 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                     </button>
 
                     {showReviewDropdown && (
-                      <div className="mt-4 space-y-4 bg-zinc-50/30 border border-zinc-200 rounded-lg p-4 animate-in slide-in-from-top-2 duration-200">
-                        {/* Segmented Control */}
+                      <div className="mt-4 space-y-5 bg-zinc-50/30 border border-zinc-200 rounded-lg p-4 animate-in slide-in-from-top-2 duration-200">
+                        {/* Header controls: Range Tabs */}
                         <div className="flex border border-zinc-200 rounded-lg overflow-hidden w-fit bg-white shadow-sm">
                           {(['30', '60', '90', 'yearly', 'complete'] as const).map(range => (
                             <button
                               key={range}
                               type="button"
-                              onClick={() => setReviewRange(range)}
+                              onClick={() => {
+                                setReviewRange(range);
+                                setActiveDrilldown(null);
+                              }}
                               className={`px-3 py-1.5 text-[10px] sm:text-xs font-bold transition-colors ${
                                 reviewRange === range
                                   ? 'bg-zinc-900 text-white'
@@ -813,45 +1091,418 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                           ))}
                         </div>
 
-                        {/* Metrics Grid */}
+                        {/* Reliability Score Banner */}
+                        <div className="bg-zinc-900 text-white border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Composite Reliability Score</span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-3xl font-extrabold">{reliabilityCalculations.score}/100</span>
+                              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${reliabilityCalculations.ratingColor.replace('bg-', 'bg-white/10 ').replace('text-', 'text-')}`}>
+                                {reliabilityCalculations.rating}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 max-w-lg pt-1">
+                              Calculated weighted score based on punctuality, undocumented sick absences, and unplanned time off. Authorized vacation time does not count against this score.
+                            </p>
+                          </div>
+                          
+                          {/* Mini breakdown of deductions */}
+                          <div className="flex gap-4 shrink-0 text-center text-xs border-t sm:border-t-0 sm:border-l border-zinc-800 pt-3 sm:pt-0 sm:pl-6">
+                            <div>
+                              <div className="text-[10px] text-zinc-500 font-bold uppercase">No-Show</div>
+                              <div className={`font-semibold ${reliabilityCalculations.deductions.noCall > 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                                -{reliabilityCalculations.deductions.noCall}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-zinc-500 font-bold uppercase">Sick</div>
+                              <div className={`font-semibold ${reliabilityCalculations.deductions.sick > 0 ? 'text-amber-400' : 'text-zinc-500'}`}>
+                                -{reliabilityCalculations.deductions.sick}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-zinc-500 font-bold uppercase">Tardy</div>
+                              <div className={`font-semibold ${reliabilityCalculations.deductions.tardy > 0 ? 'text-indigo-400' : 'text-zinc-500'}`}>
+                                -{reliabilityCalculations.deductions.tardy}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-zinc-500 font-bold uppercase">Time Off</div>
+                              <div className={`font-semibold ${reliabilityCalculations.deductions.timeOff > 0 ? 'text-blue-400' : 'text-zinc-500'}`}>
+                                -{reliabilityCalculations.deductions.timeOff}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Warnings Banner Stack */}
+                        {warningBanners.length > 0 && (
+                          <div className="space-y-2">
+                            {warningBanners.map((banner, index) => (
+                              <div key={index} className="bg-rose-50/80 border border-rose-200/60 rounded-xl p-3 text-xs text-rose-800 flex items-start gap-2.5 animate-in slide-in-from-top-1">
+                                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                <span className="font-semibold leading-normal">{banner}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Metric Grid */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col justify-between min-h-[90px] shadow-sm">
+                          {/* Sick Card */}
+                          <div
+                            onClick={() => setActiveDrilldown(activeDrilldown === 'sick' ? null : 'sick')}
+                            className={`bg-white border rounded-xl p-4 flex flex-col justify-between min-h-[110px] hover:scale-[1.02] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
+                              activeDrilldown === 'sick' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
+                            }`}
+                          >
                             <div className="flex justify-between items-start">
                               <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Sick Call-ins</span>
                               <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
                             </div>
-                            <div className="text-2xl font-bold text-zinc-900 mt-2">{metrics.sick}</div>
+                            <div className="mt-2 flex items-baseline justify-between">
+                              <span className="text-2xl font-black text-zinc-900">{sickCards.length}</span>
+                              {/* Trend Badge */}
+                              {(() => {
+                                const trend = getTrendIndicator(sickCards.length, priorSick);
+                                if (!trend) return null;
+                                return (
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
+                                    trend.isWorse ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+                                  }`}>
+                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                                    {trend.text.replace(/[↑↓\s]/g, '')}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div className="mt-2 text-[10px] text-zinc-500 space-y-0.5 leading-tight">
+                              <div className="font-semibold">{sickCards.length} sick / {shiftsWorked} shifts</div>
+                              <div className={`font-medium ${userSickRate > teamStats.sickRate ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                {getBaselineDiffText(userSickRate, teamStats.sickRate)}
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col justify-between min-h-[90px] shadow-sm">
+                          {/* Time Off Card */}
+                          <div
+                            onClick={() => setActiveDrilldown(activeDrilldown === 'timeOff' ? null : 'timeOff')}
+                            className={`bg-white border rounded-xl p-4 flex flex-col justify-between min-h-[110px] hover:scale-[1.02] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
+                              activeDrilldown === 'timeOff' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
+                            }`}
+                          >
                             <div className="flex justify-between items-start">
                               <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Time Off</span>
                               <Calendar className="w-4 h-4 text-blue-500 shrink-0" />
                             </div>
-                            <div className="text-2xl font-bold text-zinc-900 mt-2">{metrics.timeOff}</div>
+                            <div className="mt-2 flex items-baseline justify-between">
+                              <span className="text-2xl font-black text-zinc-900">{timeOffRequests.length}</span>
+                              {(() => {
+                                const trend = getTrendIndicator(timeOffRequests.length, priorTimeOff);
+                                if (!trend) return null;
+                                return (
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
+                                    trend.isWorse ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+                                  }`}>
+                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                                    {trend.text.replace(/[↑↓\s]/g, '')}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div className="mt-2 text-[10px] text-zinc-500 space-y-0.5 leading-tight">
+                              <div className="font-semibold">{timeOffRequests.length} off / {shiftsWorked} shifts</div>
+                              <div className={`font-medium ${userTimeOffRate > teamStats.timeOffRate ? 'text-zinc-600' : 'text-emerald-600'}`}>
+                                {getBaselineDiffText(userTimeOffRate, teamStats.timeOffRate)}
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col justify-between min-h-[90px] shadow-sm">
+                          {/* No Call Shows Card */}
+                          <div
+                            onClick={() => setActiveDrilldown(activeDrilldown === 'noCall' ? null : 'noCall')}
+                            className={`bg-white border rounded-xl p-4 flex flex-col justify-between min-h-[110px] hover:scale-[1.02] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
+                              activeDrilldown === 'noCall' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
+                            }`}
+                          >
                             <div className="flex justify-between items-start">
                               <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">No Call Shows</span>
                               <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
                             </div>
-                            <div className="text-2xl font-bold text-zinc-900 mt-2">{metrics.noCall}</div>
+                            <div className="mt-2 flex items-baseline justify-between">
+                              <span className="text-2xl font-black text-zinc-900">{noCallCards.length}</span>
+                              {(() => {
+                                const trend = getTrendIndicator(noCallCards.length, priorNoCall);
+                                if (!trend) return null;
+                                return (
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
+                                    trend.isWorse ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+                                  }`}>
+                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                                    {trend.text.replace(/[↑↓\s]/g, '')}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div className="mt-2 text-[10px] text-zinc-500 space-y-0.5 leading-tight">
+                              <div className="font-semibold">{noCallCards.length} missed / {shiftsWorked} shifts</div>
+                              <div className={`font-medium ${userNoCallRate > teamStats.noCallRate ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                {getBaselineDiffText(userNoCallRate, teamStats.noCallRate)}
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col justify-between min-h-[90px] shadow-sm">
+                          {/* Tardys Card */}
+                          <div
+                            onClick={() => setActiveDrilldown(activeDrilldown === 'tardy' ? null : 'tardy')}
+                            className={`bg-white border rounded-xl p-4 flex flex-col justify-between min-h-[110px] hover:scale-[1.02] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
+                              activeDrilldown === 'tardy' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
+                            }`}
+                          >
                             <div className="flex justify-between items-start">
                               <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Tardys</span>
                               <Clock className="w-4 h-4 text-indigo-500 shrink-0" />
                             </div>
-                            <div className="text-2xl font-bold text-zinc-900 mt-2 flex items-baseline">
-                              {metrics.tardy}
-                              {reviewRange !== 'complete' && (
-                                <span className="text-[9px] text-zinc-400 font-medium ml-1 lowercase font-sans">(all-time)</span>
-                              )}
+                            <div className="mt-2 flex items-baseline justify-between">
+                              <span className="text-2xl font-black text-zinc-900">{tardyCards.length}</span>
+                              {(() => {
+                                const trend = getTrendIndicator(tardyCards.length, priorTardys);
+                                if (!trend) return null;
+                                return (
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
+                                    trend.isWorse ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+                                  }`}>
+                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                                    {trend.text.replace(/[↑↓\s]/g, '')}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div className="mt-2 text-[10px] text-zinc-500 space-y-0.5 leading-tight">
+                              <div className="font-semibold">{tardyCards.length} late / {shiftsWorked} shifts</div>
+                              <div className={`font-medium ${userTardyRate > teamStats.tardyRate ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                {getBaselineDiffText(userTardyRate, teamStats.tardyRate)}
+                              </div>
                             </div>
                           </div>
                         </div>
+
+                        {/* Active Drilldown Section */}
+                        {activeDrilldown && (
+                          <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-inner mt-2 space-y-4 animate-in slide-in-from-bottom-2 duration-200">
+                            {/* Sick Call-ins details */}
+                            {activeDrilldown === 'sick' && (
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
+                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Sick Call-ins Logs ({sickCards.length} instances)</h5>
+                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Toggle status or review weekend patterns</span>
+                                </div>
+                                {sickCards.length === 0 ? (
+                                  <p className="text-xs text-zinc-400 italic">No sick call-ins logged for this period.</p>
+                                ) : (
+                                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                    {sickCards.map(card => {
+                                      const proxy = isNearWeekendOrHoliday(card.clockIn);
+                                      return (
+                                        <div key={card.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-150 rounded-lg hover:bg-zinc-100/55 transition-colors">
+                                          <div>
+                                            <div className="text-xs font-bold text-zinc-800">{new Date(card.clockIn).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                                            {card.managerNotes && <div className="text-[10px] text-zinc-500 italic mt-0.5">Note: "{card.managerNotes}"</div>}
+                                          </div>
+                                          
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            {proxy && (
+                                              <span className="text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded flex items-center gap-1 shrink-0">
+                                                ⚠️ {proxy}
+                                              </span>
+                                            )}
+                                            
+                                            {/* Documentation toggle button */}
+                                            <button
+                                              type="button"
+                                              onClick={() => handleToggleSickDoc(card.id)}
+                                              className={`text-[9px] font-bold px-2 py-1 rounded border transition-all ${
+                                                card.sickDocumentationProvided
+                                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/70'
+                                                  : 'bg-zinc-100 border-zinc-300 text-zinc-700 hover:bg-zinc-200/80'
+                                              }`}
+                                            >
+                                              {card.sickDocumentationProvided ? '✓ Document Provided' : '+ Add Documentation'}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Time Off details */}
+                            {activeDrilldown === 'timeOff' && (
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
+                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Time Off Requests Log ({timeOffRequests.length} instances)</h5>
+                                </div>
+                                {timeOffRequests.length === 0 ? (
+                                  <p className="text-xs text-zinc-400 italic">No time off requests recorded for this period.</p>
+                                ) : (
+                                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                    {timeOffRequests.map(req => {
+                                      const isPlanned = req.requestedInAdvance !== false;
+                                      return (
+                                        <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-150 rounded-lg">
+                                          <div>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs font-bold text-zinc-850">
+                                                {new Date(req.startDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                {req.startDate !== req.endDate && ` - ${new Date(req.endDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                                              </span>
+                                              <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-zinc-200 text-zinc-700 tracking-wider">
+                                                {req.category || 'Vacation'}
+                                              </span>
+                                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                                req.status === 'Approved' ? 'bg-emerald-50 text-emerald-700' : req.status === 'Pending' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
+                                              }`}>
+                                                {req.status}
+                                              </span>
+                                            </div>
+                                            <div className="text-[10px] text-zinc-500 mt-1">Reason: "{req.reason || 'None specified'}"</div>
+                                          </div>
+                                          
+                                          <div className="shrink-0">
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                              isPlanned
+                                                ? 'bg-blue-50 border-blue-100 text-blue-700'
+                                                : 'bg-rose-50 border-rose-100 text-rose-700'
+                                            }`}>
+                                              {isPlanned ? 'Notice Provided' : 'Last-Minute Request'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* No Call Shows details */}
+                            {activeDrilldown === 'noCall' && (
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
+                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">No Call Shows Log ({noCallCards.length} instances)</h5>
+                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Log coverage tracking</span>
+                                </div>
+                                {noCallCards.length === 0 ? (
+                                  <p className="text-xs text-zinc-400 italic">No-shows logged for this period.</p>
+                                ) : (
+                                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                    {noCallCards.map(card => (
+                                      <div key={card.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-150 rounded-lg hover:bg-zinc-100/55 transition-colors">
+                                        <div>
+                                          <div className="text-xs font-bold text-zinc-800">{new Date(card.clockIn).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                                          <div className="text-[10px] text-red-500 font-bold mt-0.5">Missed Shift: {card.missedShiftTitle || 'Not specified'}</div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <span className="text-[10px] text-zinc-500 font-semibold">Coverage:</span>
+                                          
+                                          {/* Dropdown select to log coverage */}
+                                          <select
+                                            value={card.coveredByUserId || ''}
+                                            onChange={(e) => handleUpdateNoCallCover(card.id, e.target.value)}
+                                            className="text-[10px] font-medium border-zinc-300 rounded bg-white py-0.5 px-2 focus:ring-zinc-500 focus:border-zinc-300"
+                                          >
+                                            <option value="">No cover logged</option>
+                                            {users.filter(u => u.id !== formData.id).map(u => (
+                                              <option key={u.id} value={u.id}>Covered by {u.name}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Tardys details */}
+                            {activeDrilldown === 'tardy' && (
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
+                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Tardys Log ({tardyCards.length} instances)</h5>
+                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Granular latency tracker</span>
+                                </div>
+                                {tardyCards.length === 0 ? (
+                                  <p className="text-xs text-zinc-400 italic">No tardy clock-ins logged for this period.</p>
+                                ) : (
+                                  <div className="space-y-3">
+                                    {/* Display clustering statistics summary */}
+                                    {(() => {
+                                      const dayCounts: Record<string, number> = {};
+                                      const shiftCounts: Record<string, number> = {};
+                                      
+                                      tardyCards.forEach(c => {
+                                        const dateVal = new Date(c.clockIn);
+                                        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dateVal.getDay()];
+                                        dayCounts[dayName] = (dayCounts[dayName] || 0) + 1;
+                                        
+                                        const shift = c.tardyShiftTitle || 'Default Shift';
+                                        shiftCounts[shift] = (shiftCounts[shift] || 0) + 1;
+                                      });
+                                      
+                                      const peakDays = Object.entries(dayCounts).filter(([_, count]) => count >= 2).map(([day]) => day);
+                                      const peakShifts = Object.entries(shiftCounts).filter(([name, count]) => name !== 'Default Shift' && count >= 2).map(([name]) => name);
+                                      
+                                      if (peakDays.length === 0 && peakShifts.length === 0) return null;
+                                      return (
+                                        <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-lg text-[11px] text-indigo-950 space-y-1">
+                                          <div className="font-bold flex items-center gap-1">
+                                            <AlertCircle className="w-3.5 h-3.5 text-indigo-600" />
+                                            Punctuality Cluster Alert
+                                          </div>
+                                          {peakDays.length > 0 && <div>• Repeated tardiness clustered on: <span className="font-bold">{peakDays.join(', ')}s</span>.</div>}
+                                          {peakShifts.length > 0 && <div>• Repeated tardiness clustered during: <span className="font-bold">{peakShifts.join(', ')}</span>.</div>}
+                                        </div>
+                                      );
+                                    })()}
+                                    
+                                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                                      {tardyCards.map(card => {
+                                        const isHighTardy = (card.minutesLate || 0) > 30;
+                                        const isMidTardy = (card.minutesLate || 0) > 10 && (card.minutesLate || 0) <= 30;
+                                        
+                                        return (
+                                          <div key={card.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-150 rounded-lg">
+                                            <div>
+                                              <div className="text-xs font-bold text-zinc-800">
+                                                {new Date(card.clockIn).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                                              </div>
+                                              <div className="text-[10px] text-zinc-500 mt-0.5">Shift: {card.tardyShiftTitle || 'Not specified'}</div>
+                                            </div>
+                                            
+                                            <div className="shrink-0 flex items-center gap-2">
+                                              <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                                                isHighTardy
+                                                  ? 'bg-rose-50 border-rose-200 text-rose-700 font-extrabold'
+                                                  : isMidTardy
+                                                  ? 'bg-amber-50 border-amber-200 text-amber-700'
+                                                  : 'bg-zinc-100 border-zinc-200 text-zinc-650'
+                                              }`}>
+                                                {card.minutesLate} mins late
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
