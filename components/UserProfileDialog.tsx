@@ -989,9 +989,9 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                           
                           {/* Mini breakdown of deductions & shift count */}
                           <div className="flex gap-4 shrink-0 text-center text-xs border-t sm:border-t-0 sm:border-l border-zinc-800 pt-3 sm:pt-0 sm:pl-6">
-                            <div>
-                              <div className="text-[10px] text-zinc-500 font-bold uppercase cursor-help" title="To show scheduled vs worked shifts (e.g. X of Y), schedule data needs to be passed via props.">Shifts ⓘ</div>
-                              <div className="font-semibold text-zinc-300">
+                            <div className="border-r border-zinc-800 pr-4">
+                              <div className="text-[10px] text-zinc-300 font-bold uppercase cursor-help" title="To show scheduled vs worked shifts (e.g. X of Y), schedule data needs to be passed via props.">Shifts ⓘ</div>
+                              <div className="font-bold text-zinc-300">
                                 {shiftsWorked}
                               </div>
                             </div>

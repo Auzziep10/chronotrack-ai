@@ -953,7 +953,7 @@ const App: React.FC = () => {
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
               >
                 <Users className="w-4 h-4" />
-                Team Activity
+                Team
               </button>
             )}
 
