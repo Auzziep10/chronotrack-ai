@@ -366,7 +366,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                       className="w-full pl-10 text-sm border border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-500"
                     />
                   </div>
-                  <div className="mt-2 text-xs text-zinc-500 bg-zinc-50 rounded-lg p-3 border border-zinc-100">
+                  <div className="mt-4 text-xs text-zinc-500 bg-zinc-50 rounded-lg p-3 border border-zinc-100">
                     <div className="font-bold text-zinc-700 mb-1">How to find your Discord ID on Mobile:</div>
                     <ol className="list-decimal pl-4 space-y-1">
                       <li>Open Discord & tap your profile icon (bottom right).</li>
@@ -455,7 +455,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 </div>
 
                 {/* Documents Section */}
-                <div className="mt-6">
+                <div className="mt-10">
                   <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2 mb-3">
                     <FileText className="w-4 h-4 text-zinc-500" /> Documents
                   </h4>
