@@ -938,43 +938,133 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
                 // Reliability calculations
                 const reliabilityCalculations = (() => {
-                  let score = 100;
-                  
-                  const noCallDeduction = noCallCards.length * RELIABILITY_CONFIG.weights.noCallShow;
-                  score -= noCallDeduction;
+                  // Calculate team totals in selected period
+                  const teamUserIds = users.length > 0 ? users.map(u => u.id) : Array.from(new Set(localTimeCards.map(c => c.userId)));
+                  let teamTotalShifts = 0;
+                  let teamTotalNoCallPoints = 0;
+                  let teamTotalSickPoints = 0;
+                  let teamTotalTardyPoints = 0;
+                  let teamTotalTimeOffPoints = 0;
 
-                  let sickDeduction = 0;
+                  teamUserIds.forEach(uid => {
+                    const uCards = localTimeCards.filter(c => c.userId === uid);
+                    const uShifts = uCards.filter(c => c.status === 'Complete' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                    
+                    // No-shows points
+                    const uNoShowsCount = uCards.filter(c => c.status === 'No-Call No-Show' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                    const uNoShowPoints = uNoShowsCount * RELIABILITY_CONFIG.weights.noCallShow;
+
+                    // Sick points
+                    let uSickPoints = 0;
+                    const uSickCards = uCards.filter(c => c.status === 'Sick' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
+                    uSickCards.forEach(c => {
+                      if (c.sickDocumentationProvided) {
+                        uSickPoints += RELIABILITY_CONFIG.weights.sickWithDoc;
+                      } else {
+                        uSickPoints += RELIABILITY_CONFIG.weights.sickNoDoc;
+                        if (isNearWeekendOrHoliday(c.clockIn)) {
+                          uSickPoints += RELIABILITY_CONFIG.weights.weekendHolidaySickPenalty;
+                        }
+                      }
+                    });
+
+                    // Tardy points
+                    let uTardyPoints = 0;
+                    const uTardyCards = uCards.filter(c => c.status === 'Complete' && c.minutesLate && c.minutesLate > 0 && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
+                    uTardyCards.forEach(c => {
+                      const mins = c.minutesLate || 0;
+                      uTardyPoints += Math.min(10, Math.ceil(mins / 5)) * RELIABILITY_CONFIG.weights.tardyPer5Min;
+                    });
+
+                    // Time off points (unplanned)
+                    const uObj = users.find(u => u.id === uid) || (uid === formData.id ? formData : null);
+                    const uRequests = uObj?.timeOffRequests || [];
+                    const uTimeOffRequests = uRequests.filter(req => {
+                      const t = req.submittedAt || new Date(req.startDate).getTime();
+                      return rangeDays === 9999 ? true : (t >= rangeStart && t < now);
+                    });
+                    let uTimeOffPoints = 0;
+                    uTimeOffRequests.forEach(req => {
+                      if (req.requestedInAdvance === false) {
+                        uTimeOffPoints += RELIABILITY_CONFIG.weights.unplannedTimeOff;
+                      }
+                    });
+
+                    teamTotalShifts += uShifts;
+                    teamTotalNoCallPoints += uNoShowPoints;
+                    teamTotalSickPoints += uSickPoints;
+                    teamTotalTardyPoints += uTardyPoints;
+                    teamTotalTimeOffPoints += uTimeOffPoints;
+                  });
+
+                  // User raw points
+                  const userNoShowRaw = noCallCards.length * RELIABILITY_CONFIG.weights.noCallShow;
+                  
+                  let userSickRaw = 0;
                   sickCards.forEach(c => {
-                    const isDoc = !!c.sickDocumentationProvided;
-                    if (isDoc) {
-                      sickDeduction += RELIABILITY_CONFIG.weights.sickWithDoc;
+                    if (c.sickDocumentationProvided) {
+                      userSickRaw += RELIABILITY_CONFIG.weights.sickWithDoc;
                     } else {
-                      sickDeduction += RELIABILITY_CONFIG.weights.sickNoDoc;
-                      const proxy = isNearWeekendOrHoliday(c.clockIn);
-                      if (proxy) {
-                        sickDeduction += RELIABILITY_CONFIG.weights.weekendHolidaySickPenalty;
+                      userSickRaw += RELIABILITY_CONFIG.weights.sickNoDoc;
+                      if (isNearWeekendOrHoliday(c.clockIn)) {
+                        userSickRaw += RELIABILITY_CONFIG.weights.weekendHolidaySickPenalty;
                       }
                     }
                   });
-                  score -= sickDeduction;
 
-                  let tardyDeduction = 0;
+                  let userTardyRaw = 0;
                   tardyCards.forEach(c => {
                     const mins = c.minutesLate || 0;
-                    const pts = Math.min(10, Math.ceil(mins / 5)) * RELIABILITY_CONFIG.weights.tardyPer5Min;
-                    tardyDeduction += pts;
+                    userTardyRaw += Math.min(10, Math.ceil(mins / 5)) * RELIABILITY_CONFIG.weights.tardyPer5Min;
                   });
-                  score -= tardyDeduction;
 
-                  let timeOffDeduction = 0;
+                  let userTimeOffRaw = 0;
                   timeOffRequests.forEach(req => {
                     if (req.requestedInAdvance === false) {
-                      timeOffDeduction += RELIABILITY_CONFIG.weights.unplannedTimeOff;
+                      userTimeOffRaw += RELIABILITY_CONFIG.weights.unplannedTimeOff;
                     }
                   });
-                  score -= timeOffDeduction;
 
-                  const finalScore = Math.max(0, Math.min(100, score));
+                  // Safe divisions to avoid NaN
+                  const S_user = Math.max(1, shiftsWorked);
+                  const S_team = Math.max(1, teamTotalShifts);
+
+                  const R_user_noshow = userNoShowRaw / S_user;
+                  const R_team_noshow = teamTotalNoCallPoints / S_team;
+
+                  const R_user_sick = userSickRaw / S_user;
+                  const R_team_sick = teamTotalSickPoints / S_team;
+
+                  const R_user_tardy = userTardyRaw / S_user;
+                  const R_team_tardy = teamTotalTardyPoints / S_team;
+
+                  const R_user_timeoff = userTimeOffRaw / S_user;
+                  const R_team_timeoff = teamTotalTimeOffPoints / S_team;
+
+                  // Baseline Damped Comparison Factors
+                  const getComparisonFactor = (userRate: number, teamRate: number) => {
+                    return Math.min(2.0, Math.max(0.5, (userRate + 0.5) / (teamRate + 0.5)));
+                  };
+
+                  const C_noshow = getComparisonFactor(R_user_noshow, R_team_noshow);
+                  const C_sick = getComparisonFactor(R_user_sick, R_team_sick);
+                  const C_tardy = getComparisonFactor(R_user_tardy, R_team_tardy);
+                  const C_timeoff = getComparisonFactor(R_user_timeoff, R_team_timeoff);
+
+                  // Normalized Deductions (using a 10-shift reference baseline)
+                  const noCallDeduction = userNoShowRaw * (10 / S_user) * C_noshow;
+                  const sickDeduction = userSickRaw * (10 / S_user) * C_sick;
+                  const tardyDeduction = userTardyRaw * (10 / S_user) * C_tardy;
+                  const timeOffDeduction = userTimeOffRaw * (10 / S_user) * C_timeoff;
+
+                  // Rounded for layout display
+                  const displayNoCall = Math.round(noCallDeduction * 10) / 10;
+                  const displaySick = Math.round(sickDeduction * 10) / 10;
+                  const displayTardy = Math.round(tardyDeduction * 10) / 10;
+                  const displayTimeOff = Math.round(timeOffDeduction * 10) / 10;
+
+                  const totalDeductions = displayNoCall + displaySick + displayTardy + displayTimeOff;
+                  const finalScore = Math.max(0, Math.min(100, Math.round(100 - totalDeductions)));
 
                   let rating: 'Excellent' | 'Good' | 'Needs Attention' | 'At Risk' = 'Excellent';
                   let ratingColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
@@ -997,10 +1087,10 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                     rating,
                     ratingColor,
                     deductions: {
-                      noCall: noCallDeduction,
-                      sick: sickDeduction,
-                      tardy: tardyDeduction,
-                      timeOff: timeOffDeduction
+                      noCall: displayNoCall,
+                      sick: displaySick,
+                      tardy: displayTardy,
+                      timeOff: displayTimeOff
                     }
                   };
                 })();
