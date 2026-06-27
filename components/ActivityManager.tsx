@@ -951,13 +951,8 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
               <div className="space-y-6 animate-in slide-in-from-bottom-4">
                 <div className="flex flex-col md:flex-row gap-4 justify-between bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
                   <div>
-                    <h3 className="text-xl font-bold text-zinc-800">Team Members</h3>
+                    <h3 className="text-xl font-bold text-zinc-800">{users.length} Active Team Members</h3>
                     <p className="text-zinc-500 text-sm">Select a staff member to view their performance metrics and full profile.</p>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="px-4 py-2 bg-zinc-100 rounded-lg text-sm font-bold text-zinc-700">
-                      {users.length} Active Staff
-                    </div>
                   </div>
                 </div>
 
