@@ -739,42 +739,32 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden min-h-[700px] flex flex-col animate-fade-in">
-      {/* Breadcrumb Header */}
-      <div className="px-6 py-3 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between text-xs text-zinc-500 font-semibold select-none">
-        <div className="flex items-center gap-1.5">
-          <span>Team</span>
-          <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
-          <span className="text-zinc-900 font-bold">Manager Console</span>
+      {/* Enhanced Manager Header */}
+      <div className="bg-zinc-900 text-white p-4 flex flex-col gap-4">
+        <div className="flex items-center gap-2">
+          <div className="bg-zinc-900 p-1.5 rounded-lg">
+            <Briefcase className="w-5 h-5 text-white" />
+          </div>
+          <h2 className="text-xl font-bold tracking-tight">Manager Console</h2>
         </div>
-      </div>
 
-      {/* Console Tab Navigation */}
-      <div className="bg-white border-b border-zinc-200 print:hidden px-6">
-        <nav className="-mb-px flex space-x-6 overflow-x-auto hide-scrollbar" aria-label="Manager Console Tabs">
+        <div className="flex bg-zinc-800 rounded-xl p-1 w-full overflow-x-auto hide-scrollbar">
           {[
             { id: 'users', icon: Users, label: 'Users' },
             { id: 'timecards', icon: Clock, label: 'Time' },
             { id: 'planning', icon: Target, label: 'Planning' },
             { id: 'departments', icon: BarChart3, label: 'Depts' }
-          ].filter(tab => allowedViews.includes(tab.id)).map((tab) => {
-            const isActive = activeView === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveView(tab.id as any)}
-                className={`whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm flex items-center gap-2 transition-all ${
-                  isActive
-                    ? 'border-zinc-900 text-zinc-900'
-                    : 'border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300'
-                }`}
-              >
-                <tab.icon className={`w-4 h-4 ${isActive ? 'text-zinc-900' : 'text-zinc-400'}`} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
+          ].filter(tab => allowedViews.includes(tab.id)).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveView(tab.id as any)}
+              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeView === tab.id ? 'bg-zinc-900 text-white shadow-lg' : 'text-zinc-400 hover:text-white'}`}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="p-6 bg-zinc-50 flex-1 overflow-y-auto">
