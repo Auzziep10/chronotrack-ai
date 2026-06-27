@@ -740,7 +740,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   return (
     <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden min-h-[700px] flex flex-col animate-fade-in">
       {/* Enhanced Manager Header */}
-      <div className="bg-zinc-900 text-white p-4 flex flex-col gap-4">
+      <div className="bg-zinc-900 text-white p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <div className="bg-zinc-900 p-1.5 rounded-lg">
             <Briefcase className="w-5 h-5 text-white" />
@@ -748,7 +748,10 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
           <h2 className="text-xl font-bold tracking-tight">Manager Console</h2>
         </div>
 
-        <div className="flex bg-zinc-800 rounded-xl p-1 w-full overflow-x-auto hide-scrollbar">
+        {/* Divider line to differentiate the tab row */}
+        <div className="border-t border-zinc-800/80 my-1" />
+
+        <div className="flex bg-zinc-850 rounded-xl p-1 w-full overflow-x-auto hide-scrollbar">
           {[
             { id: 'users', icon: Users, label: 'Users' },
             { id: 'timecards', icon: Clock, label: 'Time' },
@@ -758,7 +761,11 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             <button
               key={tab.id}
               onClick={() => setActiveView(tab.id as any)}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeView === tab.id ? 'bg-zinc-900 text-white shadow-lg' : 'text-zinc-400 hover:text-white'}`}
+              className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
+                activeView === tab.id
+                  ? 'bg-white text-zinc-900 shadow-md'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
             >
               <tab.icon className="w-4 h-4" />
               {tab.label}
@@ -951,7 +958,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
               <div className="space-y-6 animate-in slide-in-from-bottom-4">
                 <div className="flex flex-col md:flex-row gap-4 justify-between bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
                   <div>
-                    <h3 className="text-xl font-bold text-zinc-800">{users.length} Active Team Members</h3>
+                    <h3 className="text-xl font-bold text-zinc-800">Active Team Members - {users.length}</h3>
                     <p className="text-zinc-500 text-sm">Select a staff member to view their performance metrics and full profile.</p>
                   </div>
                 </div>
