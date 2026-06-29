@@ -358,7 +358,11 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
       await signInWithPopup(auth, provider);
     } catch (err: any) {
       console.error("Error signing in to Web Dev:", err);
-      alert("Failed to connect: " + err.message);
+      if (err.code === 'auth/unauthorized-domain' || err.message?.includes('auth/unauthorized-domain')) {
+        alert("Domain Unauthorized:\n\nPlease add this domain (" + window.location.host + ") to the 'Authorized Domains' list in the Firebase console -> Authentication -> Settings for the 'web-dev-a59ba' project.");
+      } else {
+        alert("Failed to connect: " + err.message + "\n\nNote: If you see 'The requested action is invalid', please ensure Google Sign-In is enabled and your domain (" + window.location.host + ") is added to the Authorized Domains list in the web-dev-a59ba Firebase Console.");
+      }
     }
   };
 
