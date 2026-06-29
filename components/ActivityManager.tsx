@@ -316,10 +316,12 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
           const db = getFirestore(app);
           setIsWebDevLoading(true);
           const unsubTasks = onSnapshot(collection(db, 'tasks'), (snapshot) => {
-            const tasksList = snapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
+            const tasksList = snapshot.docs
+              .map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              }))
+              .filter((t: any) => t.status === 'active');
             setWebDevTasks(tasksList);
             setIsWebDevLoading(false);
           }, (err) => {
