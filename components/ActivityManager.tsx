@@ -521,6 +521,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
   const filteredLocalTasks = useMemo(() => {
     return shiftBlocks.filter(task => {
+      if (task.isShiftBlock === true || (task.title && task.title.startsWith('[SHIFT]'))) return false;
       if (tackboardProject !== 'All' && task.department !== tackboardProject) return false;
       if (tackboardAssignee !== 'All' && task.assignedTo !== tackboardAssignee) return false;
       if (!tackboardShowArchived && task.status === 'completed') return false;
