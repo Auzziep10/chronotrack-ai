@@ -520,11 +520,26 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   };
 
   const filteredLocalTasks = useMemo(() => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset();
+    const localToday = new Date(now.getTime() - (offset * 60 * 1000));
+    const todayStr = localToday.toISOString().split('T')[0];
+
     return shiftBlocks.filter(task => {
       if (task.isShiftBlock === true || (task.title && task.title.startsWith('[SHIFT]'))) return false;
+
+      let taskDate = task.date;
+      if (!taskDate && task.startTime) {
+        taskDate = task.startTime.split('T')[0];
+      }
+
+      if (!tackboardShowArchived) {
+        if (task.status === 'completed') return false;
+        if (taskDate && taskDate < todayStr) return false;
+      }
+
       if (tackboardProject !== 'All' && task.department !== tackboardProject) return false;
       if (tackboardAssignee !== 'All' && task.assignedTo !== tackboardAssignee) return false;
-      if (!tackboardShowArchived && task.status === 'completed') return false;
       return true;
     });
   }, [shiftBlocks, tackboardProject, tackboardAssignee, tackboardShowArchived]);
@@ -1323,7 +1338,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                         onChange={(e) => setTackboardShowArchived(e.target.checked)}
                         className="rounded border-zinc-300 text-zinc-800 focus:ring-zinc-500 h-4 w-4"
                       />
-                      <span className="text-xs font-bold text-zinc-550">Show Completed</span>
+                      <span className="text-xs font-bold text-zinc-550">Show Archived</span>
                     </label>
                   </div>
 
