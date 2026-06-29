@@ -4,8 +4,12 @@ import { Department, WorkLog, DailyTimeCard, User, AppSettings, UserSession } fr
 import {
   BarChart3, Users, Clock, Calendar, ChevronDown, ChevronRight, Download,
   Briefcase, CalendarRange, Sparkles, Zap, ListTodo, RefreshCw,
-  Target, TrendingUp, AlertCircle, X, Save
+  Target, TrendingUp, AlertCircle, X, Save, Plus, Trash2, Edit3, Filter,
+  CheckSquare, Check, Link, CalendarDays
 } from 'lucide-react';
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore, collection, onSnapshot } from 'firebase/firestore';
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
 import { processExternalPlan } from '../services/geminiService';
 import { UserProfileDialog } from './UserProfileDialog';
 import { LogAbsenceModal } from './LogAbsenceModal';
@@ -255,6 +259,274 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [absenceUser, setAbsenceUser] = useState<User | null>(null);
   const [retroactiveUser, setRetroactiveUser] = useState<User | null>(null);
+
+  // ─── TACKBOARD & WEB DEV INTEGRATION STATE ───
+  const [planningSubView, setPlanningSubView] = useState<'sync' | 'tackboard'>('tackboard');
+  const [shiftBlocks, setShiftBlocks] = useState<any[]>([]);
+  const [webDevTasks, setWebDevTasks] = useState<any[]>([]);
+  const [webDevUser, setWebDevUser] = useState<any>(null);
+  const [isWebDevLoading, setIsWebDevLoading] = useState(false);
+
+  // Tackboard Filter States
+  const [tackboardProject, setTackboardProject] = useState<string>('All');
+  const [tackboardAssignee, setTackboardAssignee] = useState<string>('All');
+  const [tackboardShowArchived, setTackboardShowArchived] = useState<boolean>(false);
+  const [tackboardLayout, setTackboardLayout] = useState<'tackboard' | 'board' | 'list' | 'timeline'>('tackboard');
+
+  // Add/Edit Task Modal States
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<any>(null);
+  const [taskFormTitle, setTaskFormTitle] = useState('');
+  const [taskFormDesc, setTaskFormDesc] = useState('');
+  const [taskFormAssignedTo, setTaskFormAssignedTo] = useState('unassigned');
+  const [taskFormDept, setTaskFormDept] = useState<Department>(Department.Production);
+  const [taskFormPriority, setTaskFormPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
+  const [taskFormStatus, setTaskFormStatus] = useState<'pending' | 'in_progress' | 'completed' | 'delayed'>('pending');
+  const [taskFormStartTime, setTaskFormStartTime] = useState('08:00');
+  const [taskFormEndTime, setTaskFormEndTime] = useState('16:00');
+  const [taskFormDate, setTaskFormDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isSavingTask, setIsSavingTask] = useState(false);
+
+  // Web Dev App Config
+  const webDevConfig = {
+    apiKey: "AIzaSyAlFGBUXesGjZ3wMpjRGl3PNFPznqVSQP8",
+    authDomain: "web-dev-a59ba.firebaseapp.com",
+    projectId: "web-dev-a59ba",
+    storageBucket: "web-dev-a59ba.firebasestorage.app",
+    messagingSenderId: "175210741234",
+    appId: "1:175210741234:web:9f59d9d4be98a8fc9d3f6b"
+  };
+
+  const getWebDevApp = () => {
+    const apps = getApps();
+    const existing = apps.find(a => a.name === 'webDevApp');
+    if (existing) return existing;
+    return initializeApp(webDevConfig, 'webDevApp');
+  };
+
+  // Subscribe to Web Dev App Auth & Tasks
+  React.useEffect(() => {
+    try {
+      const app = getWebDevApp();
+      const auth = getAuth(app);
+      
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        setWebDevUser(user);
+        if (user) {
+          const db = getFirestore(app);
+          setIsWebDevLoading(true);
+          const unsubTasks = onSnapshot(collection(db, 'tasks'), (snapshot) => {
+            const tasksList = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            setWebDevTasks(tasksList);
+            setIsWebDevLoading(false);
+          }, (err) => {
+            console.error("Web Dev tasks fetch error:", err);
+            setIsWebDevLoading(false);
+          });
+          return () => unsubTasks();
+        } else {
+          setWebDevTasks([]);
+        }
+      });
+      return () => unsubscribe();
+    } catch (e) {
+      console.error("Failed to initialize Web Dev App Auth:", e);
+    }
+  }, []);
+
+  // Subscribe to Clockwork's own shiftSchedules
+  React.useEffect(() => {
+    let unsubscribe = () => {};
+    import('../services/firebaseService').then(({ subscribeToShiftBlocks }) => {
+      unsubscribe = subscribeToShiftBlocks((blocks: any[]) => {
+        setShiftBlocks(blocks);
+      });
+    }).catch(err => {
+      console.error("Failed to subscribe to shift blocks:", err);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleConnectWebDev = async () => {
+    try {
+      const app = getWebDevApp();
+      const auth = getAuth(app);
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (err: any) {
+      console.error("Error signing in to Web Dev:", err);
+      alert("Failed to connect: " + err.message);
+    }
+  };
+
+  const handleDisconnectWebDev = async () => {
+    try {
+      const app = getWebDevApp();
+      const auth = getAuth(app);
+      await signOut(auth);
+    } catch (err: any) {
+      console.error("Error signing out:", err);
+    }
+  };
+
+  const handlePullTask = async (user: User, wdTask: any) => {
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      
+      let mappedPriority: 'low' | 'medium' | 'high' | 'urgent' = 'medium';
+      if (wdTask.priority === 'critical') mappedPriority = 'urgent';
+      else if (wdTask.priority === 'high') mappedPriority = 'high';
+      else if (wdTask.priority === 'low') mappedPriority = 'low';
+
+      let mappedDept = user.primaryDepartment || Department.Production;
+      const appName = String(wdTask.app || '').toLowerCase();
+      if (appName.includes('design')) mappedDept = Department.Design;
+      else if (appName.includes('print')) mappedDept = Department.Print;
+      else if (appName.includes('ware') || appName.includes('ship')) mappedDept = Department.Warehousing;
+      else if (appName.includes('facility')) mappedDept = Department.Facility;
+      else if (appName.includes('event')) mappedDept = Department.Event;
+
+      const { firebaseSaveShiftBlock } = await import('../services/firebaseService');
+      
+      await firebaseSaveShiftBlock({
+        assignedTo: user.id,
+        assignedToName: user.name,
+        title: wdTask.title || 'Task',
+        description: wdTask.details || '',
+        department: mappedDept,
+        startTime: `${todayStr}T08:00:00`,
+        endTime: `${todayStr}T16:00:00`,
+        priority: mappedPriority,
+        status: 'pending',
+        isShiftBlock: false
+      });
+      
+      alert(`Successfully pulled task: "${wdTask.title}" onto the planner for ${user.name}!`);
+    } catch (err) {
+      console.error("Error pulling task:", err);
+      alert("Failed to pull task: " + (err as Error).message);
+    }
+  };
+
+  const openTaskModal = (task: any = null, defaultUserId: string = 'unassigned') => {
+    if (task) {
+      setEditingTask(task);
+      setTaskFormTitle(task.title || '');
+      setTaskFormDesc(task.description || '');
+      setTaskFormAssignedTo(task.assignedTo || 'unassigned');
+      setTaskFormDept(task.department || Department.Production);
+      setTaskFormPriority(task.priority || 'medium');
+      setTaskFormStatus(task.status || 'pending');
+      if (task.startTime && task.startTime.includes('T')) {
+        const parts = task.startTime.split('T');
+        setTaskFormDate(parts[0]);
+        setTaskFormStartTime(parts[1].slice(0, 5));
+      } else {
+        setTaskFormStartTime('08:00');
+        setTaskFormDate(new Date().toISOString().split('T')[0]);
+      }
+      if (task.endTime && task.endTime.includes('T')) {
+        const parts = task.endTime.split('T');
+        setTaskFormEndTime(parts[1].slice(0, 5));
+      } else {
+        setTaskFormEndTime('16:00');
+      }
+    } else {
+      setEditingTask(null);
+      setTaskFormTitle('');
+      setTaskFormDesc('');
+      setTaskFormAssignedTo(defaultUserId);
+      setTaskFormDept(Department.Production);
+      setTaskFormPriority('medium');
+      setTaskFormStatus('pending');
+      setTaskFormStartTime('08:00');
+      setTaskFormEndTime('16:00');
+      setTaskFormDate(new Date().toISOString().split('T')[0]);
+    }
+    setTaskModalOpen(true);
+  };
+
+  const handleSaveTask = async () => {
+    if (!taskFormTitle.trim()) {
+      alert("Please enter a task title.");
+      return;
+    }
+    setIsSavingTask(true);
+    try {
+      const { firebaseSaveShiftBlock } = await import('../services/firebaseService');
+      
+      const assignedUser = users.find(u => u.id === taskFormAssignedTo);
+      const assignedToName = assignedUser ? assignedUser.name : 'Unassigned';
+
+      const taskData: any = {
+        title: taskFormTitle.trim(),
+        description: taskFormDesc.trim(),
+        assignedTo: taskFormAssignedTo,
+        assignedToName,
+        department: taskFormDept,
+        priority: taskFormPriority,
+        status: taskFormStatus,
+        startTime: `${taskFormDate}T${taskFormStartTime}:00`,
+        endTime: `${taskFormDate}T${taskFormEndTime}:00`,
+        isShiftBlock: false
+      };
+
+      if (editingTask && editingTask.id) {
+        taskData.id = editingTask.id;
+      }
+
+      await firebaseSaveShiftBlock(taskData);
+      setTaskModalOpen(false);
+    } catch (err: any) {
+      console.error("Error saving task:", err);
+      alert("Failed to save task: " + err.message);
+    } finally {
+      setIsSavingTask(false);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!confirm("Are you sure you want to delete this task?")) return;
+    try {
+      const { firebaseDeleteShiftBlock } = await import('../services/firebaseService');
+      await firebaseDeleteShiftBlock(taskId);
+      setTaskModalOpen(false);
+    } catch (err: any) {
+      console.error("Error deleting task:", err);
+      alert("Failed to delete task: " + err.message);
+    }
+  };
+
+  const getUserColorClass = (name: string) => {
+    const colors = [
+      { bg: 'bg-amber-100 text-amber-800 border-amber-250', dot: 'bg-amber-500' },
+      { bg: 'bg-emerald-100 text-emerald-800 border-emerald-250', dot: 'bg-emerald-500' },
+      { bg: 'bg-purple-100 text-purple-800 border-purple-250', dot: 'bg-purple-500' },
+      { bg: 'bg-blue-100 text-blue-800 border-blue-250', dot: 'bg-blue-500' },
+      { bg: 'bg-indigo-100 text-indigo-800 border-indigo-250', dot: 'bg-indigo-500' },
+      { bg: 'bg-pink-100 text-pink-800 border-pink-250', dot: 'bg-pink-500' },
+      { bg: 'bg-rose-100 text-rose-800 border-rose-250', dot: 'bg-rose-500' },
+      { bg: 'bg-teal-100 text-teal-800 border-teal-250', dot: 'bg-teal-500' }
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const idx = Math.abs(hash) % colors.length;
+    return colors[idx];
+  };
+
+  const filteredLocalTasks = useMemo(() => {
+    return shiftBlocks.filter(task => {
+      if (tackboardProject !== 'All' && task.department !== tackboardProject) return false;
+      if (tackboardAssignee !== 'All' && task.assignedTo !== tackboardAssignee) return false;
+      if (!tackboardShowArchived && task.status === 'completed') return false;
+      return true;
+    });
+  }, [shiftBlocks, tackboardProject, tackboardAssignee, tackboardShowArchived]);
 
   const toggleUserExpanded = (userId: string) => {
     setExpandedUsers(prev => {
@@ -828,125 +1100,626 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         {/* VIEW: PLANNING & SYNC (NEW) */}
         {activeView === 'planning' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-4">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-zinc-200 pb-4">
               <div>
                 <h3 className="text-xl font-bold text-zinc-800 flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-zinc-600" />
-                  Daily Planning & AI Sync
+                  Manager Planning Console
                 </h3>
-                <p className="text-zinc-500 text-sm">Bridge the gap between your external plans and real-time logs.</p>
+                <p className="text-zinc-500 text-sm">Bridge plans, assign tasks, and sync with external systems.</p>
+              </div>
+              <div className="flex bg-zinc-200/60 p-1 rounded-xl shadow-inner border border-zinc-200/20 shrink-0">
+                <button
+                  onClick={() => setPlanningSubView('sync')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    planningSubView === 'sync'
+                      ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200/45'
+                      : 'text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  AI Importer & Sync
+                </button>
+                <button
+                  onClick={() => setPlanningSubView('tackboard')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    planningSubView === 'tackboard'
+                      ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200/45'
+                      : 'text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  Tackboard
+                </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              <div className="lg:col-span-5 space-y-6">
-                <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-bold text-zinc-700">
-                    <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                    Sync Daily Planner Data
+            {planningSubView === 'sync' ? (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div className="lg:col-span-5 space-y-6">
+                  <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-4">
+                    <div className="flex items-center gap-2 text-sm font-bold text-zinc-700">
+                      <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                      Sync Daily Planner Data
+                    </div>
+                    <p className="text-xs text-zinc-500">
+                      Paste content from your Replit Daily Planner or external spreadsheet.
+                      AI will extract departments and tasks.
+                    </p>
+                    <textarea
+                      value={externalPlanRaw}
+                      onChange={(e) => setExternalPlanRaw(e.target.value)}
+                      placeholder="Paste planner data here... e.g. 'Monday: Alex production focus 500 units, Sarah design 2 tech packs...'"
+                      className="w-full h-40 text-sm border-zinc-200 rounded-xl focus:ring-zinc-500 focus:border-zinc-500 p-4 bg-zinc-50 font-mono"
+                    />
+                    <button
+                      onClick={handleSyncPlan}
+                      disabled={isSyncing || !externalPlanRaw.trim()}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-zinc-600 to-zinc-600 text-white font-bold rounded-xl shadow-lg shadow-zinc-100 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      {isSyncing ? 'Processing with AI...' : 'Parse Plan with Gemini'}
+                    </button>
                   </div>
-                  <p className="text-xs text-zinc-500">
-                    Paste content from your Replit Daily Planner or external spreadsheet.
-                    AI will extract departments and tasks.
-                  </p>
-                  <textarea
-                    value={externalPlanRaw}
-                    onChange={(e) => setExternalPlanRaw(e.target.value)}
-                    placeholder="Paste planner data here... e.g. 'Monday: Alex production focus 500 units, Sarah design 2 tech packs...'"
-                    className="w-full h-40 text-sm border-zinc-200 rounded-xl focus:ring-zinc-500 focus:border-zinc-500 p-4 bg-zinc-50 font-mono"
-                  />
-                  <button
-                    onClick={handleSyncPlan}
-                    disabled={isSyncing || !externalPlanRaw.trim()}
-                    className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-zinc-600 to-zinc-600 text-white font-bold rounded-xl shadow-lg shadow-zinc-100 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    {isSyncing ? 'Processing with AI...' : 'Parse Plan with Gemini'}
-                  </button>
+
+                  <div className="bg-zinc-50 border border-zinc-100 p-6 rounded-2xl flex items-start gap-4">
+                    <div className="p-2 bg-zinc-200 rounded-lg">
+                      <AlertCircle className="w-5 h-5 text-zinc-700" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-zinc-900">Pro Tip</h4>
+                      <p className="text-xs text-zinc-700 mt-1 leading-relaxed">
+                        You can also paste JSON output from your Replit app!
+                        Gemini handles messy text, spreadsheets, or structured objects equally well.
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="bg-zinc-50 border border-zinc-100 p-6 rounded-2xl flex items-start gap-4">
-                  <div className="p-2 bg-zinc-200 rounded-lg">
-                    <AlertCircle className="w-5 h-5 text-zinc-700" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-zinc-900">Pro Tip</h4>
-                    <p className="text-xs text-zinc-700 mt-1 leading-relaxed">
-                      You can also paste JSON output from your Replit app!
-                      Gemini handles messy text, spreadsheets, or structured objects equally well.
-                    </p>
+                <div className="lg:col-span-7">
+                  <div className="bg-white min-h-[500px] rounded-2xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
+                    <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
+                      <span className="text-sm font-bold text-zinc-800 flex items-center gap-2">
+                        <ListTodo className="w-4 h-4 text-zinc-900" />
+                        Extracted Shift Goals
+                      </span>
+                      {parsedPlan && (
+                        <div className="flex gap-2">
+                          <span className="text-xs font-medium text-zinc-900 bg-zinc-100 px-2 py-1 rounded-full border border-zinc-200">
+                            AI Processed
+                          </span>
+                          <button
+                            onClick={handleSaveToSchedule}
+                            disabled={isSavingSchedule}
+                            className="text-xs font-bold bg-zinc-900 text-white px-3 py-1 rounded-full hover:bg-zinc-800 transition-colors flex items-center gap-1"
+                          >
+                            {isSavingSchedule ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Calendar className="w-3 h-3" />}
+                            {isSavingSchedule ? 'Saving...' : 'Save to Schedule'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 p-8 overflow-y-auto">
+                      {planError ? (
+                        <div className="text-red-500 bg-red-50 p-4 rounded-xl border border-red-100 text-sm">
+                          {planError}
+                        </div>
+                      ) : parsedPlan ? (
+                        <div className="space-y-4">
+                          {parsedPlan.map((task, idx) => (
+                            <div key={idx} className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 shadow-sm hover:shadow-md transition-all">
+                              <div className="flex justify-between items-start mb-2">
+                                <h4 className="font-bold text-zinc-900">{task.title}</h4>
+                                <span className="text-[10px] font-bold px-2 py-1 bg-zinc-200 text-zinc-700 rounded-full">{task.department}</span>
+                              </div>
+                              <p className="text-sm text-zinc-600 mb-3">{task.description}</p>
+                              <div className="flex justify-between items-center mt-3 pt-3 border-t border-zinc-200/60">
+                                <div className="flex items-center gap-2 text-xs text-zinc-600 font-bold">
+                                  <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-white">
+                                    {task.assignedToName?.charAt(0) || '?'}
+                                  </div>
+                                  {task.assignedToName}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-zinc-500 bg-white px-2 py-1 rounded-md border border-zinc-200">
+                                  <Clock className="w-3 h-3" />
+                                  {task.startTime || '08:00'} - {task.endTime || '16:00'}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
+                          <div className="p-4 bg-zinc-50 rounded-full">
+                            <ListTodo className="w-12 h-12 text-zinc-300" />
+                          </div>
+                          <div>
+                            <p className="text-zinc-500 font-medium">No plan imported yet.</p>
+                            <p className="text-zinc-400 text-xs">Pasted plan data will appear here once synced.</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-
-              <div className="lg:col-span-7">
-                <div className="bg-white min-h-[500px] rounded-2xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
-                    <span className="text-sm font-bold text-zinc-800 flex items-center gap-2">
-                      <ListTodo className="w-4 h-4 text-zinc-900" />
-                      Extracted Shift Goals
-                    </span>
-                    {parsedPlan && (
-                      <div className="flex gap-2">
-                        <span className="text-xs font-medium text-zinc-900 bg-zinc-100 px-2 py-1 rounded-full border border-zinc-200">
-                          AI Processed
-                        </span>
-                        <button
-                          onClick={handleSaveToSchedule}
-                          disabled={isSavingSchedule}
-                          className="text-xs font-bold bg-zinc-900 text-white px-3 py-1 rounded-full hover:bg-zinc-800 transition-colors flex items-center gap-1"
-                        >
-                          {isSavingSchedule ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Calendar className="w-3 h-3" />}
-                          {isSavingSchedule ? 'Saving...' : 'Save to Schedule'}
-                        </button>
-                      </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Connection banner */}
+                <div className="bg-white/80 backdrop-blur-sm border border-zinc-200 p-4 rounded-2xl flex flex-wrap gap-4 items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-zinc-100 rounded-xl border border-zinc-200">
+                      <Link className="w-4 h-4 text-zinc-700" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-zinc-950">Web Dev Task Import Integration</h4>
+                      <p className="text-[11px] text-zinc-500">
+                        {webDevUser 
+                          ? `Connected to web-dev-a59ba as ${webDevUser.email}. Matching assignees can be pulled.` 
+                          : "Connect your Web Dev account via Google Sign-In to pull backlog tasks."}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    {webDevUser ? (
+                      <button
+                        onClick={handleDisconnectWebDev}
+                        className="text-[11px] font-bold bg-zinc-50 hover:bg-zinc-100 text-zinc-600 border border-zinc-200 py-1.5 px-3 rounded-xl transition-colors shadow-sm"
+                      >
+                        Disconnect Web Dev
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleConnectWebDev}
+                        className="text-[11px] font-bold bg-zinc-900 hover:bg-zinc-800 text-white py-1.5 px-3 rounded-xl transition-colors flex items-center gap-1 shadow-sm"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Connect Web Dev Account
+                      </button>
                     )}
                   </div>
+                </div>
 
-                  <div className="flex-1 p-8 overflow-y-auto">
-                    {planError ? (
-                      <div className="text-red-500 bg-red-50 p-4 rounded-xl border border-red-100 text-sm">
-                        {planError}
-                      </div>
-                    ) : parsedPlan ? (
-                      <div className="space-y-4">
-                        {parsedPlan.map((task, idx) => (
-                          <div key={idx} className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 shadow-sm hover:shadow-md transition-all">
-                            <div className="flex justify-between items-start mb-2">
-                              <h4 className="font-bold text-zinc-900">{task.title}</h4>
-                              <span className="text-[10px] font-bold px-2 py-1 bg-zinc-200 text-zinc-700 rounded-full">{task.department}</span>
-                            </div>
-                            <p className="text-sm text-zinc-600 mb-3">{task.description}</p>
-                            <div className="flex justify-between items-center mt-3 pt-3 border-t border-zinc-200/60">
-                              <div className="flex items-center gap-2 text-xs text-zinc-600 font-bold">
-                                <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-white">
-                                  {task.assignedToName?.charAt(0) || '?'}
-                                </div>
-                                {task.assignedToName}
+                {/* Filters Row */}
+                <div className="bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm flex flex-wrap gap-4 items-center justify-between">
+                  <div className="flex flex-wrap gap-4 items-center">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-zinc-400 flex items-center gap-1">
+                        <Filter className="w-3 h-3" />
+                        Project:
+                      </span>
+                      <select
+                        value={tackboardProject}
+                        onChange={(e) => setTackboardProject(e.target.value)}
+                        className="text-xs font-bold bg-zinc-50 border border-zinc-200 rounded-lg py-1 px-2.5 focus:ring-zinc-450 focus:border-zinc-450"
+                      >
+                        <option value="All">All projects</option>
+                        {Object.values(Department).map(dept => (
+                          <option key={dept} value={dept}>{dept}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-zinc-400">Assigned to:</span>
+                      <select
+                        value={tackboardAssignee}
+                        onChange={(e) => setTackboardAssignee(e.target.value)}
+                        className="text-xs font-bold bg-zinc-50 border border-zinc-200 rounded-lg py-1 px-2.5 focus:ring-zinc-450 focus:border-zinc-450"
+                      >
+                        <option value="All">Anyone</option>
+                        {users.map(u => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={tackboardShowArchived}
+                        onChange={(e) => setTackboardShowArchived(e.target.checked)}
+                        className="rounded border-zinc-300 text-zinc-800 focus:ring-zinc-500 h-4 w-4"
+                      />
+                      <span className="text-xs font-bold text-zinc-550">Show Completed</span>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="flex bg-zinc-100 p-0.5 rounded-lg border border-zinc-200">
+                      {(['board', 'list', 'timeline', 'tackboard'] as const).map(layout => (
+                        <button
+                          key={layout}
+                          onClick={() => setTackboardLayout(layout)}
+                          className={`text-[9px] uppercase font-black py-1 px-2 rounded transition-all ${
+                            tackboardLayout === layout
+                              ? 'bg-zinc-800 text-white shadow-sm'
+                              : 'text-zinc-500 hover:text-zinc-800'
+                          }`}
+                        >
+                          {layout}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => openTaskModal(null)}
+                      className="flex items-center gap-1.5 py-1.5 px-3 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      New task
+                    </button>
+                  </div>
+                </div>
+
+                {/* Layout Container */}
+                {isWebDevLoading && (
+                  <div className="flex items-center justify-center p-8 bg-white border border-zinc-200 rounded-2xl shadow-sm text-sm font-bold text-zinc-500 gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin text-zinc-800" />
+                    Fetching Web Dev tasks...
+                  </div>
+                )}
+
+                {tackboardLayout === 'tackboard' && (
+                  <div className="flex gap-6 overflow-x-auto pb-4 items-start select-none">
+                    {/* Render Columns */}
+                    {(tackboardAssignee !== 'All' ? users.filter(u => u.id === tackboardAssignee) : users).map(user => {
+                      const userColor = getUserColorClass(user.name);
+                      const userTasks = filteredLocalTasks.filter(t => t.assignedTo === user.id);
+                      
+                      // Filter matching backlog tasks
+                      const matchingWebDevTasks = webDevTasks.filter(wdTask => {
+                        if (!user.email) return false;
+                        const userEmailLower = user.email.toLowerCase();
+                        const isAssigned = Array.isArray(wdTask.assignees) && 
+                          wdTask.assignees.some((email: any) => String(email).toLowerCase() === userEmailLower);
+                        if (!isAssigned) return false;
+                        if (wdTask.status === 'done' && !tackboardShowArchived) return false;
+                        
+                        // Check if already pulled
+                        const alreadyPulled = shiftBlocks.some(localTask => 
+                          localTask.assignedTo === user.id && 
+                          localTask.title.toLowerCase().trim() === wdTask.title.toLowerCase().trim()
+                        );
+                        return !alreadyPulled;
+                      });
+
+                      return (
+                        <div key={user.id} className="w-[320px] shrink-0 bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm flex flex-col min-h-[450px]">
+                          <div className="flex items-center justify-between pb-3 border-b border-zinc-150 mb-4">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-black text-xs ${userColor.bg} ${userColor.border}`}>
+                                {user.avatarInitials || user.name.split(' ').map(n=>n[0]).join('')}
                               </div>
-                              <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-zinc-500 bg-white px-2 py-1 rounded-md border border-zinc-200">
-                                <Clock className="w-3 h-3" />
-                                {task.startTime || '08:00'} - {task.endTime || '16:00'}
+                              <div>
+                                <h4 className="text-xs font-bold text-zinc-900 leading-tight">{user.name}</h4>
+                                <p className="text-[10px] text-zinc-400 leading-none">{user.role}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] font-bold bg-zinc-100 text-zinc-650 px-2 py-0.5 rounded-full border border-zinc-200">
+                                {userTasks.length}
+                              </span>
+                              <button
+                                onClick={() => openTaskModal(null, user.id)}
+                                className="p-1 hover:bg-zinc-100 rounded text-zinc-400 hover:text-zinc-800 transition-colors"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Task List */}
+                          <div className="space-y-3 flex-1 overflow-y-auto max-h-[350px] mb-4 pr-1">
+                            {userTasks.length === 0 ? (
+                              <div className="text-xs text-zinc-400 italic text-center py-6">No active tasks</div>
+                            ) : (
+                              userTasks.map(task => (
+                                <div
+                                  key={task.id}
+                                  onClick={() => openTaskModal(task)}
+                                  className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-xl hover:shadow-md cursor-pointer transition-all hover:scale-[1.015] group"
+                                >
+                                  <div className="flex justify-between items-start gap-2 mb-1.5">
+                                    <h5 className="text-xs font-bold text-zinc-900 leading-tight flex items-center gap-1.5">
+                                      {task.priority === 'urgent' || task.priority === 'high' ? (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                                      ) : null}
+                                      {task.title}
+                                    </h5>
+                                    {task.department && (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-zinc-200 text-zinc-650 rounded shrink-0 uppercase">
+                                        {task.department}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {task.description && (
+                                    <p className="text-[10px] text-zinc-500 leading-relaxed line-clamp-2 mb-2">{task.description}</p>
+                                  )}
+                                  <div className="flex justify-between items-center text-[9px] text-zinc-450 border-t border-zinc-200/40 pt-2">
+                                    <span className={`px-1.5 py-0.2 rounded font-bold uppercase ${
+                                      task.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
+                                      task.status === 'in_progress' ? 'bg-blue-50 text-blue-700' :
+                                      task.status === 'delayed' ? 'bg-amber-50 text-amber-700' :
+                                      'bg-zinc-100 text-zinc-600'
+                                    }`}>
+                                      {task.status?.replace('_', ' ')}
+                                    </span>
+                                    <span className="font-mono">{task.startTime?.split('T')[1]?.slice(0, 5) || '08:00'} - {task.endTime?.split('T')[1]?.slice(0, 5) || '16:00'}</span>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+
+                          {/* Web Dev Backlog Section */}
+                          {matchingWebDevTasks.length > 0 && (
+                            <div className="mt-auto pt-4 border-t border-dashed border-zinc-200 bg-zinc-50 p-3 rounded-2xl border">
+                              <div className="flex items-center gap-1 mb-2">
+                                <Link className="w-3.5 h-3.5 text-zinc-450" />
+                                <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">Web Dev Backlog</span>
+                                <span className="text-[9px] font-black bg-zinc-200 px-1.5 py-0.2 rounded-full text-zinc-650 ml-auto">
+                                  {matchingWebDevTasks.length}
+                                </span>
+                              </div>
+                              <div className="space-y-2.5 max-h-[180px] overflow-y-auto pr-1">
+                                {matchingWebDevTasks.map(wdTask => (
+                                  <div key={wdTask.id} className="bg-white border border-dashed border-zinc-250 p-2.5 rounded-xl text-xs shadow-sm">
+                                    <div className="flex justify-between items-start gap-1.5">
+                                      <span className="font-bold text-zinc-800 text-[11px] leading-tight">{wdTask.title}</span>
+                                      {wdTask.app && (
+                                        <span className="text-[8px] font-bold px-1 py-0.2 bg-zinc-100 text-zinc-500 border border-zinc-150 rounded shrink-0 uppercase">
+                                          {wdTask.app}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {wdTask.details && (
+                                      <p className="text-[9px] text-zinc-500 line-clamp-2 mt-1 leading-snug">{wdTask.details}</p>
+                                    )}
+                                    <div className="mt-2 flex justify-between items-center">
+                                      <span className={`text-[8px] px-1.5 py-0.2 rounded-full uppercase font-bold ${
+                                        wdTask.priority === 'critical' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                        wdTask.priority === 'high' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                        'bg-blue-50 text-blue-600 border border-blue-100'
+                                      }`}>{wdTask.priority}</span>
+                                      <button
+                                        onClick={() => handlePullTask(user, wdTask)}
+                                        className="text-[9px] font-black bg-zinc-900 hover:bg-zinc-800 text-white py-1 px-2.5 rounded-lg flex items-center gap-0.5 shadow-sm transition-all"
+                                      >
+                                        <Download className="w-3 h-3" />
+                                        Pull to Planner
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Unassigned column */}
+                    {(() => {
+                      const unassignedTasks = filteredLocalTasks.filter(t => !t.assignedTo || t.assignedTo === 'unassigned');
+                      if (unassignedTasks.length === 0 && tackboardAssignee !== 'All') return null;
+                      if (unassignedTasks.length === 0) return null;
+                      return (
+                        <div className="w-[320px] shrink-0 bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm flex flex-col min-h-[450px]">
+                          <div className="flex items-center justify-between pb-3 border-b border-zinc-150 mb-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full border border-dashed border-zinc-300 bg-zinc-50 flex items-center justify-center font-bold text-sm text-zinc-400">
+                                ?
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-bold text-zinc-800 leading-tight">Unassigned Pool</h4>
+                                <p className="text-[10px] text-zinc-400 leading-none">Shared tasks</p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold bg-zinc-100 text-zinc-650 px-2 py-0.5 rounded-full border border-zinc-200">
+                              {unassignedTasks.length}
+                            </span>
+                          </div>
+
+                          <div className="space-y-3 flex-1 overflow-y-auto max-h-[350px] pr-1">
+                            {unassignedTasks.map(task => (
+                              <div
+                                key={task.id}
+                                onClick={() => openTaskModal(task)}
+                                className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-xl hover:shadow-md cursor-pointer transition-all hover:scale-[1.015]"
+                              >
+                                <div className="flex justify-between items-start gap-2 mb-1.5">
+                                  <h5 className="text-xs font-bold text-zinc-900 leading-tight">{task.title}</h5>
+                                  {task.department && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 bg-zinc-200 text-zinc-650 rounded shrink-0 uppercase">{task.department}</span>
+                                  )}
+                                </div>
+                                {task.description && (
+                                  <p className="text-[10px] text-zinc-500 line-clamp-2 mb-2">{task.description}</p>
+                                )}
+                                <div className="flex justify-between items-center text-[9px] text-zinc-450 border-t border-zinc-200/40 pt-2">
+                                  <span className="capitalize">{task.status?.replace('_', ' ')}</span>
+                                  <span>{task.startTime?.split('T')[1]?.slice(0, 5) || '08:00'}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {tackboardLayout === 'board' && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    {(['pending', 'in_progress', 'completed', 'delayed'] as const).map(status => {
+                      const statusTasks = filteredLocalTasks.filter(t => t.status === status);
+                      return (
+                        <div key={status} className="bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm flex flex-col min-h-[450px]">
+                          <div className="flex items-center justify-between pb-3 border-b border-zinc-150 mb-4">
+                            <span className="text-xs font-bold capitalize text-zinc-800 flex items-center gap-2">
+                              <span className={`w-2.5 h-2.5 rounded-full ${
+                                status === 'completed' ? 'bg-emerald-500' :
+                                status === 'in_progress' ? 'bg-blue-500' :
+                                status === 'delayed' ? 'bg-amber-500' : 'bg-zinc-400'
+                              }`} />
+                              {status.replace('_', ' ')}
+                            </span>
+                            <span className="text-[10px] font-bold bg-zinc-100 px-2 py-0.5 rounded-full text-zinc-650 border border-zinc-200">
+                              {statusTasks.length}
+                            </span>
+                          </div>
+                          <div className="flex-1 space-y-3 overflow-y-auto max-h-[400px] pr-1">
+                            {statusTasks.length === 0 ? (
+                              <div className="text-xs text-zinc-450 italic text-center py-6">No tasks</div>
+                            ) : (
+                              statusTasks.map(task => (
+                                <div
+                                  key={task.id}
+                                  onClick={() => openTaskModal(task)}
+                                  className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-xl hover:shadow-md cursor-pointer transition-all hover:scale-[1.015]"
+                                >
+                                  <div className="flex justify-between items-start gap-2 mb-2">
+                                    <h5 className="text-xs font-bold text-zinc-900 leading-tight">
+                                      {task.priority === 'urgent' || task.priority === 'high' ? (
+                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 align-middle" />
+                                      ) : null}
+                                      {task.title}
+                                    </h5>
+                                    {task.department && (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-zinc-200 text-zinc-650 rounded shrink-0 uppercase">
+                                        {task.department}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {task.description && (
+                                    <p className="text-[10px] text-zinc-505 line-clamp-2 leading-relaxed mb-2">{task.description}</p>
+                                  )}
+                                  <div className="mt-2.5 pt-2.5 border-t border-zinc-200/50 flex justify-between items-center text-[9px] text-zinc-450">
+                                    <span className="font-bold text-zinc-700">{task.assignedToName || 'Unassigned'}</span>
+                                    <span>{task.startTime?.split('T')[1]?.slice(0, 5) || '08:00'}</span>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {tackboardLayout === 'list' && (
+                  <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs text-zinc-700">
+                        <thead className="bg-zinc-50 border-b border-zinc-200 font-bold uppercase text-[9px] text-zinc-500 tracking-wider">
+                          <tr>
+                            <th className="px-6 py-3.5">Task Title</th>
+                            <th className="px-6 py-3.5">Assignee</th>
+                            <th className="px-6 py-3.5">Project/Dept</th>
+                            <th className="px-6 py-3.5">Priority</th>
+                            <th className="px-6 py-3.5">Status</th>
+                            <th className="px-6 py-3.5">Scheduled Time</th>
+                            <th className="px-6 py-3.5 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-250">
+                          {filteredLocalTasks.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="px-6 py-8 text-center text-zinc-450 italic">No tasks match selected filters.</td>
+                            </tr>
+                          ) : (
+                            filteredLocalTasks.map(task => (
+                              <tr key={task.id} className="hover:bg-zinc-50/50 transition-colors">
+                                <td className="px-6 py-4 font-bold text-zinc-900 text-xs">{task.title}</td>
+                                <td className="px-6 py-4 font-medium text-zinc-650">{task.assignedToName || 'Unassigned'}</td>
+                                <td className="px-6 py-4">
+                                  <span className="bg-zinc-100 text-zinc-700 py-0.5 px-2 rounded font-bold uppercase text-[8px] border border-zinc-200">{task.department}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className={`capitalize py-0.5 px-2 rounded-full font-bold text-[8px] border ${
+                                    task.priority === 'urgent' ? 'bg-red-50 text-red-700 border-red-100' :
+                                    task.priority === 'high' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                    task.priority === 'medium' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                    'bg-zinc-50 text-zinc-700 border-zinc-200'
+                                  }`}>{task.priority}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="capitalize py-0.5 px-2 bg-zinc-50 text-zinc-700 rounded border border-zinc-200 text-[9px]">{task.status?.replace('_', ' ')}</span>
+                                </td>
+                                <td className="px-6 py-4 font-mono font-bold text-zinc-500">{task.startTime?.split('T')[1]?.slice(0, 5) || '08:00'} - {task.endTime?.split('T')[1]?.slice(0, 5) || '16:00'}</td>
+                                <td className="px-6 py-4 text-right">
+                                  <button
+                                    onClick={() => openTaskModal(task)}
+                                    className="text-zinc-700 hover:text-zinc-950 font-black hover:underline py-1 px-2.5 rounded-lg border border-zinc-200 hover:bg-white bg-zinc-50 shadow-sm"
+                                  >
+                                    Edit
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {tackboardLayout === 'timeline' && (
+                  <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-6">
+                    <div className="flex items-center gap-1.5">
+                      <CalendarDays className="w-4 h-4 text-zinc-700" />
+                      <h4 className="text-xs font-black text-zinc-550 uppercase tracking-wider">Scheduled Tasks Timeline</h4>
+                    </div>
+                    {filteredLocalTasks.length === 0 ? (
+                      <div className="text-zinc-450 italic text-sm text-center py-8">No tasks scheduled.</div>
+                    ) : (
+                      <div className="relative border-l-2 border-zinc-200 pl-6 ml-4 space-y-6">
+                        {[...filteredLocalTasks].sort((a,b) => String(a.startTime).localeCompare(String(b.startTime))).map((task) => (
+                          <div key={task.id} className="relative">
+                            <span className="absolute -left-[32px] top-1.5 w-4 h-4 rounded-full border-4 border-white bg-zinc-800 shadow" />
+                            <div
+                              onClick={() => openTaskModal(task)}
+                              className="p-4 bg-zinc-50 border border-zinc-200 rounded-2xl hover:shadow-md cursor-pointer transition-all hover:scale-[1.005]"
+                            >
+                              <div className="flex justify-between items-start gap-4 mb-2 flex-wrap">
+                                <div>
+                                  <h5 className="font-bold text-zinc-950 text-sm leading-snug">{task.title}</h5>
+                                  <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                                    {task.startTime?.split('T')[1]?.slice(0, 5)} - {task.endTime?.split('T')[1]?.slice(0, 5)} | {task.startTime?.split('T')[0]}
+                                  </p>
+                                </div>
+                                <div className="flex gap-2">
+                                  <span className="text-[8px] font-bold px-2 py-0.5 rounded bg-zinc-200 text-zinc-650 uppercase border border-zinc-300">{task.department}</span>
+                                  <span className={`capitalize text-[9px] px-2 py-0.5 rounded border ${
+                                    task.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                    task.status === 'in_progress' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                    'bg-zinc-100 text-zinc-600 border-zinc-200'
+                                  }`}>{task.status?.replace('_', ' ')}</span>
+                                </div>
+                              </div>
+                              {task.description && (
+                                <p className="text-xs text-zinc-550 leading-relaxed mb-3">{task.description}</p>
+                              )}
+                              <div className="flex items-center gap-2 text-xs">
+                                <span className="font-bold text-zinc-800 flex items-center gap-1.5 bg-white py-1 px-2.5 rounded-lg border border-zinc-250/60 shadow-sm">
+                                  <span className="w-5 h-5 rounded-full bg-zinc-950 text-white flex items-center justify-center text-[9px] font-bold uppercase border border-zinc-800">
+                                    {task.assignedToName?.charAt(0) || '?'}
+                                  </span>
+                                  {task.assignedToName}
+                                </span>
                               </div>
                             </div>
                           </div>
                         ))}
                       </div>
-                    ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
-                        <div className="p-4 bg-zinc-50 rounded-full">
-                          <ListTodo className="w-12 h-12 text-zinc-300" />
-                        </div>
-                        <div>
-                          <p className="text-zinc-500 font-medium">No plan imported yet.</p>
-                          <p className="text-zinc-400 text-xs">Pasted plan data will appear here once synced.</p>
-                        </div>
-                      </div>
                     )}
                   </div>
-                </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -1365,6 +2138,165 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             await handleSaveRetroactiveCard(retroactiveUser, clockInMs, clockOutMs, idleHours, date, notes);
           }}
         />
+      )}
+
+      {taskModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-zinc-200 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in scale-in">
+            <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-150 flex items-center justify-between">
+              <h3 className="font-bold text-zinc-900 text-sm">
+                {editingTask ? "Edit Schedule Task" : "Create New Task"}
+              </h3>
+              <button
+                onClick={() => setTaskModalOpen(false)}
+                className="p-1 hover:bg-zinc-200 rounded-lg text-zinc-500 hover:text-zinc-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Task Title</label>
+                <input
+                  type="text"
+                  value={taskFormTitle}
+                  onChange={(e) => setTaskFormTitle(e.target.value)}
+                  placeholder="Enter task deliverable/title..."
+                  className="w-full text-xs font-bold bg-zinc-50 border-zinc-200 rounded-lg py-2 px-3 focus:ring-zinc-450 focus:border-zinc-450"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Description</label>
+                <textarea
+                  value={taskFormDesc}
+                  onChange={(e) => setTaskFormDesc(e.target.value)}
+                  placeholder="Task details/notes..."
+                  rows={3}
+                  className="w-full text-xs bg-zinc-50 border-zinc-200 rounded-lg py-2 px-3 focus:ring-zinc-450 focus:border-zinc-450"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Assignee</label>
+                  <select
+                    value={taskFormAssignedTo}
+                    onChange={(e) => setTaskFormAssignedTo(e.target.value)}
+                    className="w-full text-xs font-bold bg-zinc-50 border-zinc-200 rounded-lg py-2 px-3 focus:ring-zinc-450 focus:border-zinc-450"
+                  >
+                    <option value="unassigned">Unassigned</option>
+                    {users.map(u => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Project/Dept</label>
+                  <select
+                    value={taskFormDept}
+                    onChange={(e) => setTaskFormDept(e.target.value as Department)}
+                    className="w-full text-xs font-bold bg-zinc-50 border-zinc-200 rounded-lg py-2 px-3 focus:ring-zinc-450 focus:border-zinc-450"
+                  >
+                    {Object.values(Department).map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Priority</label>
+                  <select
+                    value={taskFormPriority}
+                    onChange={(e) => setTaskFormPriority(e.target.value as any)}
+                    className="w-full text-xs font-bold bg-zinc-50 border-zinc-200 rounded-lg py-2 px-3 focus:ring-zinc-450 focus:border-zinc-450"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Status</label>
+                  <select
+                    value={taskFormStatus}
+                    onChange={(e) => setTaskFormStatus(e.target.value as any)}
+                    className="w-full text-xs font-bold bg-zinc-50 border-zinc-200 rounded-lg py-2 px-3 focus:ring-zinc-450 focus:border-zinc-450"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="delayed">Delayed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Date</label>
+                  <input
+                    type="date"
+                    value={taskFormDate}
+                    onChange={(e) => setTaskFormDate(e.target.value)}
+                    className="w-full text-xs font-bold bg-zinc-50 border-zinc-200 rounded-lg py-2 px-2.5 focus:ring-zinc-450 focus:border-zinc-450"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Start Time</label>
+                  <input
+                    type="time"
+                    value={taskFormStartTime}
+                    onChange={(e) => setTaskFormStartTime(e.target.value)}
+                    className="w-full text-xs font-bold bg-zinc-50 border-zinc-200 rounded-lg py-2 px-2.5 focus:ring-zinc-450 focus:border-zinc-450"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">End Time</label>
+                  <input
+                    type="time"
+                    value={taskFormEndTime}
+                    onChange={(e) => setTaskFormEndTime(e.target.value)}
+                    className="w-full text-xs font-bold bg-zinc-50 border-zinc-200 rounded-lg py-2 px-2.5 focus:ring-zinc-450 focus:border-zinc-450"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-150 flex items-center justify-between flex-wrap gap-2">
+              <div>
+                {editingTask && (
+                  <button
+                    onClick={() => handleDeleteTask(editingTask.id)}
+                    className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 py-2 px-4 rounded-xl border border-red-200 transition-colors flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Task
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTaskModalOpen(false)}
+                  className="text-xs font-bold text-zinc-500 hover:text-zinc-800 bg-white border border-zinc-250 py-2 px-4 rounded-xl shadow-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveTask}
+                  disabled={isSavingTask}
+                  className="text-xs font-bold bg-zinc-900 hover:bg-zinc-800 text-white py-2 px-5 rounded-xl shadow transition-all disabled:opacity-50 flex items-center gap-1"
+                >
+                  {isSavingTask ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  {isSavingTask ? 'Saving...' : 'Save Task'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
