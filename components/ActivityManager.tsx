@@ -321,7 +321,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 id: doc.id,
                 ...doc.data()
               }))
-              .filter((t: any) => t.status === 'active');
+              .filter((t: any) => t.status === 'active' && !t.archived);
             setWebDevTasks(tasksList);
             setIsWebDevLoading(false);
           }, (err) => {
@@ -1394,14 +1394,20 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                       const matchingWebDevTasks = webDevTasks.filter(wdTask => {
                         if (!user.email) return false;
                         const userEmailLower = user.email.toLowerCase();
-                        const isAssigned = Array.isArray(wdTask.assignees) && 
-                          wdTask.assignees.some((email: any) => String(email).toLowerCase() === userEmailLower);
+
+                        const parentAssignees = Array.isArray(wdTask.assignees) ? wdTask.assignees : [];
+                        const subtaskAssignees = Array.isArray(wdTask.subtasks)
+                          ? wdTask.subtasks.map((s: any) => s.assignee).filter(Boolean)
+                          : [];
+                        const allAssignees = [...new Set([...parentAssignees, ...subtaskAssignees])];
+
+                        const isAssigned = allAssignees.some((email: any) => String(email).toLowerCase() === userEmailLower);
                         if (!isAssigned) return false;
                         if (wdTask.status === 'done' && !tackboardShowArchived) return false;
-                        
+
                         // Check if already pulled
-                        const alreadyPulled = shiftBlocks.some(localTask => 
-                          localTask.assignedTo === user.id && 
+                        const alreadyPulled = shiftBlocks.some(localTask =>
+                          localTask.assignedTo === user.id &&
                           localTask.title.toLowerCase().trim() === wdTask.title.toLowerCase().trim()
                         );
                         return !alreadyPulled;
