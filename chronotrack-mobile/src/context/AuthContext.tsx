@@ -126,7 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           let targetUserId = dmContent;
           if (dmContent.includes('-')) {
             const parts = dmContent.split('-');
-            targetUserId = parts.find(id => id !== currentUser.id) || dmContent;
+            targetUserId = parts.find((id: string) => id !== currentUser.id) || dmContent;
           }
           const dmUser = users.find(u => u.id === targetUserId);
           if (dmUser?.role?.toLowerCase()?.trim()?.includes('client')) {

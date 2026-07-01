@@ -218,7 +218,7 @@ export default function ChatScreen() {
           if (dmContent.includes('-')) {
             // Private admin-to-admin DM
             const parts = dmContent.split('-');
-            const otherUserId = parts.find(id => id !== currentUser.id);
+            const otherUserId = parts.find((id: string) => id !== currentUser.id);
             recipients = allUsers.filter(u => u.id === otherUserId);
             pushTitle = `Message from ${currentUser.name}`;
           } else {
@@ -367,7 +367,7 @@ export default function ChatScreen() {
       let targetUserId = dmContent;
       if (dmContent.includes('-')) {
         const parts = dmContent.split('-');
-        targetUserId = parts.find(id => id !== currentUser?.id) || dmContent;
+        targetUserId = parts.find((id: string) => id !== currentUser?.id) || dmContent;
       }
       const dmUserObj = users.find(u => u.id === targetUserId);
       headerTitle = dmUserObj ? `DM: ${dmUserObj.name}` : 'Direct Message';
