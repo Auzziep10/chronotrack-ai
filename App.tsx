@@ -31,6 +31,7 @@ import {
   firebaseSaveTimeCard,
   subscribeToRecentMessages
 } from './services/firebaseService';
+import { sendPushNotification } from './services/pushNotificationService';
 
 type Tab = 'station' | 'activity' | 'manager' | 'planner' | 'documents';
 
@@ -379,20 +380,12 @@ const App: React.FC = () => {
 
                 // If this threshold matches the push notification threshold, send the Expo Push Notification!
                 if (thresholdMinutes === pushThresholdMinutes && activePushToken) {
-                   fetch('https://exp.host/--/api/v2/push/send', {
-                       method: 'POST',
-                       headers: {
-                           'Accept': 'application/json',
-                           'Accept-Encoding': 'gzip, deflate',
-                           'Content-Type': 'application/json',
-                       },
-                       body: JSON.stringify({
-                           to: activePushToken,
-                           sound: 'default',
-                           title: 'Auto-Pause Warning ⏱️',
-                           body: `It's been ${intervalHours} hour${intervalHours > 1 ? 's' : ''}. Don't forget to log your activity!`,
-                       }),
-                   }).catch(err => console.error("Failed to send Expo push:", err));
+                    sendPushNotification({
+                        to: activePushToken,
+                        sound: 'default',
+                        title: 'Auto-Pause Warning ⏱️',
+                        body: `It's been ${intervalHours} hour${intervalHours > 1 ? 's' : ''}. Don't forget to log your activity!`,
+                    }).catch(err => console.error("Failed to send Expo push:", err));
                 }
 
                 // Send Discord Warning! (Only if they actually wanted this threshold via Discord)

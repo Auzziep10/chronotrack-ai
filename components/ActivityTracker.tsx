@@ -9,6 +9,7 @@ import { LayoutDashboard, Clock, User as UserIcon, LogOut, Lock, CheckCircle2, C
 
 import { DiscordSetupModal } from './DiscordSetupModal';
 import { TimeOffRequestModal } from './TimeOffRequestModal';
+import { sendPushNotification } from '../services/pushNotificationService';
 
 interface Props {
   activeSessions: Record<string, UserSession>;
@@ -414,29 +415,21 @@ export const ActivityTracker: React.FC<Props> = ({
                             alert(`${currentUserDoc.name} has not registered for push notifications on their mobile device yet.`);
                             return;
                           }
-                          fetch('https://exp.host/--/api/v2/push/send', {
-                            method: 'POST',
-                            headers: {
-                              'Accept': 'application/json',
-                              'Accept-Encoding': 'gzip, deflate',
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                              to: currentUserDoc.expoPushToken,
-                              sound: 'default',
-                              title: 'Test Push 🔔',
-                              body: `Hello ${currentUserDoc.name}, this is a test notification!`,
-                            }),
-                          }).then(res => res.json()).then(data => {
-                            if (data.data && Array.isArray(data.data) ? data.data[0]?.status === 'ok' : data.data?.status === 'ok') {
-                              alert(`Test push sent to ${currentUserDoc.name}!`);
-                            } else {
-                              alert(`Expo Push Error: ${JSON.stringify(data)}`);
-                            }
-                          }).catch(err => {
-                            console.error("Push error:", err);
-                            alert("Error sending push notification.");
-                          });
+                          sendPushNotification({
+                             to: currentUserDoc.expoPushToken,
+                             sound: 'default',
+                             title: 'Test Push 🔔',
+                             body: `Hello ${currentUserDoc.name}, this is a test notification!`,
+                           }).then(data => {
+                             if (data.data && Array.isArray(data.data) ? data.data[0]?.status === 'ok' : data.data?.status === 'ok') {
+                               alert(`Test push sent to ${currentUserDoc.name}!`);
+                             } else {
+                               alert(`Expo Push Error: ${JSON.stringify(data)}`);
+                             }
+                           }).catch(err => {
+                             console.error("Push error:", err);
+                             alert("Error sending push notification.");
+                           });
                         }}
                         className="flex-1 bg-white hover:bg-zinc-50 text-zinc-700 border border-zinc-200 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
                         title="Test iOS Push Notification"

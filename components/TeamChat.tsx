@@ -35,6 +35,7 @@ import {
   firebaseDeleteChatMessage,
   firebaseToggleReaction
 } from '../services/firebaseService';
+import { sendPushNotification } from '../services/pushNotificationService';
 
 interface Props {
   isOpen: boolean;
@@ -311,14 +312,8 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
             }));
 
           if (notifications.length > 0) {
-            await fetch('https://exp.host/--/api/v2/push/send', {
-              method: 'POST',
-              headers: {
-                'Accept': 'application/json',
-                'Accept-Encoding': 'gzip, deflate',
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(notifications),
+            await sendPushNotification(notifications).catch(err => {
+              console.error("Failed to send push notifications via Firebase:", err);
             });
           }
         }
