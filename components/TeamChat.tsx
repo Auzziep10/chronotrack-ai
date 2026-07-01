@@ -73,6 +73,19 @@ const AVATAR_COLORS = [
   'bg-zinc-100 text-zinc-800 border-zinc-200'
 ];
 
+const getDmChannelId = (userA: { id: string; role?: string }, userB: { id: string; role?: string }) => {
+  const isUserAAdminOrManager = userA.role?.toLowerCase() === 'admin' || userA.role?.toLowerCase() === 'manager';
+  const isUserBAdminOrManager = userB.role?.toLowerCase() === 'admin' || userB.role?.toLowerCase() === 'manager';
+  
+  if (isUserAAdminOrManager && isUserBAdminOrManager) {
+    const sortedIds = [userA.id, userB.id].sort();
+    return `dm-${sortedIds[0]}-${sortedIds[1]}`;
+  } else {
+    const staffId = !isUserAAdminOrManager ? userA.id : userB.id;
+    return `dm-${staffId}`;
+  }
+};
+
 export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, activeSessions, users }) => {
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [activeChannel, setActiveChannel] = useState('general');
@@ -235,8 +248,17 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
       recentMsgs.forEach(msg => {
         if (msg.channel === activeChannel || msg.senderId === currentUser.id) return;
         if (msg.channel.startsWith('dm-')) {
-          const dmUserId = msg.channel.substring(3);
-          if (isAdminOrManager || dmUserId === currentUser.id) {
+          const dmContent = msg.channel.substring(3);
+          let shouldCount = false;
+          
+          if (dmContent.includes('-')) {
+            const participants = dmContent.split('-');
+            shouldCount = participants.includes(currentUser.id);
+          } else {
+            shouldCount = isAdminOrManager || dmContent === currentUser.id;
+          }
+          
+          if (shouldCount) {
             const lastViewedKey = `chrono_last_viewed_${msg.channel}`;
             const lastViewed = Number(localStorage.getItem(lastViewedKey) || '0');
             if (msg.timestamp > lastViewed) {
@@ -299,15 +321,44 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
       try {
         await firebaseSendMessage(newMessage);
         
-        // Trigger Push Notifications to other non-muted channel users
-        if (currentChannelObj?.notificationsEnabled !== false) {
+        // Trigger Push Notifications
+        let shouldSendPush = false;
+        let recipients: User[] = [];
+        let pushTitle = '';
+
+        if (isDM) {
+          shouldSendPush = true;
+          const dmContent = activeChannel.substring(3);
           const allUsers = await firebaseGetUsers();
-          const notifications = allUsers
-            .filter(u => u.id !== currentUser.id && u.expoPushToken && !u.mutedChannels?.includes(activeChannel))
+
+          if (dmContent.includes('-')) {
+            const parts = dmContent.split('-');
+            const otherUserId = parts.find(id => id !== currentUser.id);
+            recipients = allUsers.filter(u => u.id === otherUserId);
+            pushTitle = `Message from ${currentUser.name}`;
+          } else {
+            if (isAdminOrManager) {
+              recipients = allUsers.filter(u => u.id === dmContent);
+              pushTitle = `Message from Admin - ${currentUser.name}`;
+            } else {
+              recipients = allUsers.filter(u => u.role?.toLowerCase() === 'admin' || u.role?.toLowerCase() === 'manager');
+              pushTitle = `Staff Message - ${currentUser.name}`;
+            }
+          }
+        } else if (currentChannelObj?.notificationsEnabled !== false) {
+          shouldSendPush = true;
+          const allUsers = await firebaseGetUsers();
+          recipients = allUsers.filter(u => u.id !== currentUser.id && !u.mutedChannels?.includes(activeChannel));
+          pushTitle = `#${activeChannel} - ${currentUser.name}`;
+        }
+
+        if (shouldSendPush && recipients.length > 0) {
+          const notifications = recipients
+            .filter(u => u.expoPushToken)
             .map(u => ({
               to: u.expoPushToken,
               sound: 'default',
-              title: `#${activeChannel} - ${currentUser.name}`,
+              title: pushTitle,
               body: text || 'Sent an image'
             }));
 
@@ -713,16 +764,14 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                       );
                     })()
                   ) : (
-                    // For admins/managers: list all general staff members
+                    // For admins/managers: list all general staff members and other admins/managers
                     users
                       .filter(u => 
-                        u.role?.toLowerCase() !== 'admin' && 
-                        u.role?.toLowerCase() !== 'manager' && 
                         u.role?.toLowerCase() !== 'terminal' &&
                         u.id !== currentUser?.id
                       )
                       .map(member => {
-                        const dmChannelId = `dm-${member.id}`;
+                        const dmChannelId = getDmChannelId(currentUser, member);
                         const isActive = activeChannel === dmChannelId;
                         const hasUnread = unreadDMs.has(dmChannelId);
                         const isClockedIn = Object.keys(activeSessions).includes(member.id);
@@ -791,12 +840,17 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
             let headerDesc = currentChannelObj?.desc || '';
 
             if (isDM) {
-              const dmUserId = activeChannel.substring(3);
+              const dmContent = activeChannel.substring(3);
               if (!isAdminOrManager) {
                 headerTitle = 'Message Admins';
                 headerDesc = 'Private helpline to Admins and Managers';
               } else {
-                const dmUserObj = users.find(u => u.id === dmUserId);
+                let targetUserId = dmContent;
+                if (dmContent.includes('-')) {
+                  const parts = dmContent.split('-');
+                  targetUserId = parts.find(id => id !== currentUser?.id) || dmContent;
+                }
+                const dmUserObj = users.find(u => u.id === targetUserId);
                 headerTitle = dmUserObj ? `DM: ${dmUserObj.name}` : 'Direct Message';
                 headerDesc = dmUserObj ? `Private conversation with ${dmUserObj.name} (${dmUserObj.role})` : 'Private conversation';
               }

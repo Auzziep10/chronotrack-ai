@@ -108,13 +108,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (msg.senderId === currentUser.id) return;
 
         if (msg.channel.startsWith('dm-')) {
-          const dmUserId = msg.channel.substring(3);
-          if (!isAdminOrManager && dmUserId !== currentUser.id) {
+          const dmContent = msg.channel.substring(3);
+          let shouldCount = false;
+          
+          if (dmContent.includes('-')) {
+            const participants = dmContent.split('-');
+            shouldCount = participants.includes(currentUser.id);
+          } else {
+            shouldCount = isAdminOrManager || dmContent === currentUser.id;
+          }
+          
+          if (!shouldCount) {
             return;
           }
           
           // Exclude direct messages involving clients from unread count
-          const dmUser = users.find(u => u.id === dmUserId);
+          let targetUserId = dmContent;
+          if (dmContent.includes('-')) {
+            const parts = dmContent.split('-');
+            targetUserId = parts.find(id => id !== currentUser.id) || dmContent;
+          }
+          const dmUser = users.find(u => u.id === targetUserId);
           if (dmUser?.role?.toLowerCase()?.trim()?.includes('client')) {
             return;
           }

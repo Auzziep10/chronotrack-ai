@@ -59,6 +59,19 @@ const AVATAR_COLORS = [
   { bg: '#f4f4f5', text: '#27272a', border: '#e4e4e7' }  // zinc
 ];
 
+const getDmChannelId = (userA: { id: string; role?: string }, userB: { id: string; role?: string }) => {
+  const isUserAAdminOrManager = userA.role?.toLowerCase() === 'admin' || userA.role?.toLowerCase() === 'manager';
+  const isUserBAdminOrManager = userB.role?.toLowerCase() === 'admin' || userB.role?.toLowerCase() === 'manager';
+  
+  if (isUserAAdminOrManager && isUserBAdminOrManager) {
+    const sortedIds = [userA.id, userB.id].sort();
+    return `dm-${sortedIds[0]}-${sortedIds[1]}`;
+  } else {
+    const staffId = !isUserAAdminOrManager ? userA.id : userB.id;
+    return `dm-${staffId}`;
+  }
+};
+
 export default function ChatScreen() {
   const { currentUser, users, unreadCounts, markChannelAsRead } = useAuth();
   const [channels, setChannels] = useState<ChatChannel[]>([]);
@@ -199,17 +212,26 @@ export default function ChatScreen() {
 
         if (isDM) {
           shouldSendPush = true;
-          const dmUserId = activeChannel.substring(3);
+          const dmContent = activeChannel.substring(3);
           const allUsers = await firebaseGetUsers();
           
-          if (isAdminOrManager) {
-            // Sender is Admin/Manager, recipient is the specific staff member (dmUserId)
-            recipients = allUsers.filter(u => u.id === dmUserId);
-            pushTitle = `Message from Admin - ${currentUser.name}`;
+          if (dmContent.includes('-')) {
+            // Private admin-to-admin DM
+            const parts = dmContent.split('-');
+            const otherUserId = parts.find(id => id !== currentUser.id);
+            recipients = allUsers.filter(u => u.id === otherUserId);
+            pushTitle = `Message from ${currentUser.name}`;
           } else {
-            // Sender is Staff member, recipient is all Admins/Managers
-            recipients = allUsers.filter(u => u.role?.toLowerCase() === 'admin' || u.role?.toLowerCase() === 'manager');
-            pushTitle = `Staff Message - ${currentUser.name}`;
+            // Staff helpline DM
+            if (isAdminOrManager) {
+              // Sender is Admin/Manager, recipient is the specific staff member (dmContent)
+              recipients = allUsers.filter(u => u.id === dmContent);
+              pushTitle = `Message from Admin - ${currentUser.name}`;
+            } else {
+              // Sender is Staff member, recipient is all Admins/Managers
+              recipients = allUsers.filter(u => u.role?.toLowerCase() === 'admin' || u.role?.toLowerCase() === 'manager');
+              pushTitle = `Staff Message - ${currentUser.name}`;
+            }
           }
         } else if (currentChannelObj?.notificationsEnabled !== false) {
           shouldSendPush = true;
@@ -337,12 +359,17 @@ export default function ChatScreen() {
   let headerDesc = currentChannelObj?.desc || '';
 
   if (isDM) {
-    const dmUserId = activeChannel.substring(3);
+    const dmContent = activeChannel.substring(3);
     if (!isAdminOrManager) {
       headerTitle = 'Message Admins';
       headerDesc = 'Private helpline to Admins and Managers';
     } else {
-      const dmUserObj = users.find(u => u.id === dmUserId);
+      let targetUserId = dmContent;
+      if (dmContent.includes('-')) {
+        const parts = dmContent.split('-');
+        targetUserId = parts.find(id => id !== currentUser?.id) || dmContent;
+      }
+      const dmUserObj = users.find(u => u.id === targetUserId);
       headerTitle = dmUserObj ? `DM: ${dmUserObj.name}` : 'Direct Message';
       headerDesc = dmUserObj ? `Private conversation with ${dmUserObj.name} (${dmUserObj.role})` : 'Private conversation';
     }
@@ -559,17 +586,15 @@ export default function ChatScreen() {
                         );
                       })()
                     ) : (
-                      // For admins/managers: list all general staff members
+                      // For admins/managers: list all general staff members and other admins/managers
                       users
                         .filter(u => 
-                          u.role?.toLowerCase() !== 'admin' && 
-                          u.role?.toLowerCase() !== 'manager' && 
                           u.role?.toLowerCase() !== 'terminal' &&
                           !u.role?.toLowerCase()?.trim()?.includes('client') &&
                           u.id !== currentUser?.id
                         )
                         .map(member => {
-                          const dmChannelId = `dm-${member.id}`;
+                          const dmChannelId = getDmChannelId(currentUser, member);
                           const isActive = activeChannel === dmChannelId;
                           const initials = member.avatarInitials || '??';
                           const avatarColors = getAvatarStyle(member.name);
