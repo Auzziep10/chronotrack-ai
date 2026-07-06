@@ -529,8 +529,6 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         isShiftBlock: false,
         webDevTaskId: wdTask.id
       });
-      
-      alert(`Successfully pulled task: "${wdTask.title}" onto the planner for ${user.name}!`);
     } catch (err) {
       console.error("Error pulling task:", err);
       alert("Failed to pull task: " + (err as Error).message);
@@ -1537,7 +1535,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                         <div key={user.id} className="w-[320px] shrink-0 bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm flex flex-col min-h-[450px]">
                           <div className="flex items-center justify-between pb-3 border-b border-zinc-150 mb-4">
                             <div className="flex items-center gap-2">
-                              <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-black text-xs ${userColor.bg} ${userColor.border}`}>
+                              <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-black text-xs ${userColor.bg}`}>
                                 {user.avatarInitials || user.name.split(' ').map(n=>n[0]).join('')}
                               </div>
                               <div>
