@@ -148,6 +148,8 @@ export interface ScheduleBlock {
   }>;
   isShiftBlock?: boolean; // Flag to differentiate shift schedules from task blocks
   webDevTaskId?: string; // Original Web Dev task ID
+  isWebDevSubtask?: boolean;
+  webDevSubtaskIndex?: number;
 }
 
 export interface DailySchedule {

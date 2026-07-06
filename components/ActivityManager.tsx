@@ -409,68 +409,124 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             : null;
           const localProgress = latestCheckIn?.progress ?? (latestCheckIn as any)?.progressPercent ?? 0;
 
-          // Map Chronotrack status to Web Dev status
-          let mappedStatus = null;
-          if (block.status === 'completed') {
-            mappedStatus = 'complete';
-          } else if (block.status === 'in_progress') {
-            mappedStatus = 'active';
-          } else if (block.status === 'delayed') {
-            mappedStatus = 'active';
-          }
+          if (block.isWebDevSubtask && block.webDevSubtaskIndex !== undefined) {
+            const idx = block.webDevSubtaskIndex;
+            if (wdTask.subtasks && idx >= 0 && idx < wdTask.subtasks.length) {
+              const subtask = wdTask.subtasks[idx];
+              const localCompleted = block.status === 'completed';
+              const subtaskDiff = subtask.completed !== localCompleted;
 
-          const statusDiff = mappedStatus && wdTask.status !== mappedStatus;
-          const progressDiff = Number(wdTask.progress ?? 0) !== Number(localProgress);
+              if (subtaskDiff) {
+                // Mark as syncing
+                syncingTasksRef.current.add(block.id);
 
-          if (statusDiff || progressDiff) {
-            // Mark as syncing to prevent concurrent triggers
-            syncingTasksRef.current.add(block.id);
+                const subtasks = [...wdTask.subtasks];
+                subtasks[idx] = { ...subtasks[idx], completed: localCompleted };
 
-            const updates: any = {};
-            const logParts: string[] = [];
+                const completedCount = subtasks.filter((s: any) => s.completed).length;
+                const parentProgress = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
 
-            if (statusDiff) {
-              updates.status = mappedStatus;
-              logParts.push(`status to '${mappedStatus}'`);
-            }
-            if (progressDiff) {
-              updates.progress = localProgress;
-              logParts.push(`progress to ${localProgress}%`);
-            }
+                let logActionText = `[Clockwork Sync] Subtask "${subtask.title}" marked as ${localCompleted ? 'Completed' : 'Incomplete'}`;
+                if (latestCheckIn?.notes) {
+                  let cleanNotes = latestCheckIn.notes
+                    .replace(/^\[\d+%\s*Complete\]\s*/i, '')
+                    .replace(/^Progress:\s*\d+%\s*/i, '')
+                    .trim();
+                  if (cleanNotes) {
+                    logActionText += ` - Notes: "${cleanNotes}"`;
+                  }
+                }
 
-            let logActionText = `[Clockwork Sync] Changed ${logParts.join(' and ')}`;
-            if (latestCheckIn?.notes) {
-              let cleanNotes = latestCheckIn.notes
-                .replace(/^\[\d+%\s*Complete\]\s*/i, '')
-                .replace(/^Progress:\s*\d+%\s*/i, '')
-                .trim();
-              if (cleanNotes) {
-                logActionText += ` - Notes: "${cleanNotes}"`;
+                const activityLog = Array.isArray(wdTask.activityLog) ? [...wdTask.activityLog] : [];
+                activityLog.push({
+                  user: webDevUser.email || 'Clockwork Sync',
+                  timestamp: new Date().toISOString(),
+                  action: logActionText
+                });
+                if (activityLog.length > 100) {
+                  activityLog.shift();
+                }
+
+                const updates = {
+                  subtasks,
+                  progress: parentProgress,
+                  activityLog
+                };
+
+                try {
+                  await updateDoc(doc(webDevDb, 'tasks', wdTask.id), updates);
+                  console.log(`Successfully synced Chronotrack subtask "${block.title}" to Web Dev task ${wdTask.id}`);
+                } catch (err) {
+                  console.error("Failed to update Web Dev task subtask:", wdTask.id, err);
+                } finally {
+                  syncingTasksRef.current.delete(block.id);
+                }
               }
             }
-
-            // Append to Web Dev activity log
-            const activityLog = Array.isArray(wdTask.activityLog) ? [...wdTask.activityLog] : [];
-            activityLog.push({
-              user: webDevUser.email || 'Clockwork Sync',
-              timestamp: new Date().toISOString(),
-              action: logActionText
-            });
-
-            if (activityLog.length > 100) {
-              activityLog.shift();
+          } else {
+            // Map Chronotrack status to Web Dev status
+            let mappedStatus = null;
+            if (block.status === 'completed') {
+              mappedStatus = 'complete';
+            } else if (block.status === 'in_progress') {
+              mappedStatus = 'active';
+            } else if (block.status === 'delayed') {
+              mappedStatus = 'active';
             }
 
-            updates.activityLog = activityLog;
+            const statusDiff = mappedStatus && wdTask.status !== mappedStatus;
+            const progressDiff = Number(wdTask.progress ?? 0) !== Number(localProgress);
 
-            try {
-              await updateDoc(doc(webDevDb, 'tasks', wdTask.id), updates);
-              console.log(`Successfully synced Chronotrack task "${block.title}" status/progress to Web Dev task ${wdTask.id}`);
-            } catch (err) {
-              console.error("Failed to update Web Dev task document:", wdTask.id, err);
-            } finally {
-              // Remove from syncing set
-              syncingTasksRef.current.delete(block.id);
+            if (statusDiff || progressDiff) {
+              // Mark as syncing to prevent concurrent triggers
+              syncingTasksRef.current.add(block.id);
+
+              const updates: any = {};
+              const logParts: string[] = [];
+
+              if (statusDiff) {
+                updates.status = mappedStatus;
+                logParts.push(`status to '${mappedStatus}'`);
+              }
+              if (progressDiff) {
+                updates.progress = localProgress;
+                logParts.push(`progress to ${localProgress}%`);
+              }
+
+              let logActionText = `[Clockwork Sync] Changed ${logParts.join(' and ')}`;
+              if (latestCheckIn?.notes) {
+                let cleanNotes = latestCheckIn.notes
+                  .replace(/^\[\d+%\s*Complete\]\s*/i, '')
+                  .replace(/^Progress:\s*\d+%\s*/i, '')
+                  .trim();
+                if (cleanNotes) {
+                  logActionText += ` - Notes: "${cleanNotes}"`;
+                }
+              }
+
+              // Append to Web Dev activity log
+              const activityLog = Array.isArray(wdTask.activityLog) ? [...wdTask.activityLog] : [];
+              activityLog.push({
+                user: webDevUser.email || 'Clockwork Sync',
+                timestamp: new Date().toISOString(),
+                action: logActionText
+              });
+
+              if (activityLog.length > 100) {
+                activityLog.shift();
+              }
+
+              updates.activityLog = activityLog;
+
+              try {
+                await updateDoc(doc(webDevDb, 'tasks', wdTask.id), updates);
+                console.log(`Successfully synced Chronotrack task "${block.title}" status/progress to Web Dev task ${wdTask.id}`);
+              } catch (err) {
+                console.error("Failed to update Web Dev task document:", wdTask.id, err);
+              } finally {
+                // Remove from syncing set
+                syncingTasksRef.current.delete(block.id);
+              }
             }
           }
         }
@@ -536,7 +592,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         priority: mappedPriority,
         status: 'pending',
         isShiftBlock: false,
-        webDevTaskId: wdTask.id
+        webDevTaskId: wdTask.webDevTaskId,
+        isWebDevSubtask: wdTask.isSubtask || false,
+        webDevSubtaskIndex: wdTask.subtaskIndex !== undefined ? wdTask.subtaskIndex : null
       });
     } catch (err) {
       console.error("Error pulling task:", err);
@@ -1517,39 +1575,76 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                       const userColor = getUserColorClass(user.name);
                       const userTasks = filteredLocalTasks.filter(t => t.assignedTo === user.id);
                       
-                      // Filter matching backlog tasks
-                      const matchingWebDevTasks = webDevTasks.filter(wdTask => {
-                        const parentAssignees = Array.isArray(wdTask.assignees) ? wdTask.assignees : [];
-                        const subtaskAssignees = Array.isArray(wdTask.subtasks)
-                          ? wdTask.subtasks.map((s: any) => s.assignee).filter(Boolean)
-                          : [];
-                        const allAssignees = [...new Set([...parentAssignees, ...subtaskAssignees])];
+                      // Filter matching backlog tasks and subtasks
+                      const matchingWebDevTasks: any[] = [];
+                      
+                      webDevTasks.forEach(wdTask => {
+                        if (wdTask.status === 'done' && !tackboardShowArchived) return;
 
-                        const isAssigned = allAssignees.some((email: any) => {
+                        const isAssignedToUser = (email: string) => {
                           const emailStr = String(email).toLowerCase();
                           const emailPrefix = emailStr.split('@')[0];
                           
                           if (user.email) {
                             const userEmailLower = user.email.toLowerCase();
                             if (emailStr === userEmailLower) return true;
-                            
                             const localPrefix = userEmailLower.split('@')[0];
                             if (emailPrefix === localPrefix) return true;
                           }
                           
-                          // Fallback: match name words to email prefix (e.g., malena -> malena@wovnapparel.com)
                           const nameParts = user.name.toLowerCase().split(/\s+/).filter(Boolean);
                           return nameParts.some(part => part === emailPrefix);
-                        });
-                        if (!isAssigned) return false;
-                        if (wdTask.status === 'done' && !tackboardShowArchived) return false;
+                        };
 
-                        // Check if already pulled
-                        const alreadyPulled = shiftBlocks.some(localTask =>
-                          localTask.assignedTo === user.id &&
-                          localTask.title.toLowerCase().trim() === wdTask.title.toLowerCase().trim()
-                        );
-                        return !alreadyPulled;
+                        // 1. Parent task assignment
+                        const parentAssignees = Array.isArray(wdTask.assignees) ? wdTask.assignees : [];
+                        const isParentAssigned = parentAssignees.some(isAssignedToUser);
+                        
+                        if (isParentAssigned) {
+                          const alreadyPulled = shiftBlocks.some(localTask =>
+                            localTask.assignedTo === user.id &&
+                            localTask.webDevTaskId === wdTask.id &&
+                            !localTask.isWebDevSubtask
+                          );
+                          if (!alreadyPulled) {
+                            matchingWebDevTasks.push({
+                              id: wdTask.id,
+                              webDevTaskId: wdTask.id,
+                              title: wdTask.title,
+                              details: wdTask.details || '',
+                              priority: wdTask.priority,
+                              app: wdTask.app,
+                              isSubtask: false
+                            });
+                          }
+                        }
+
+                        // 2. Subtasks assignment
+                        if (Array.isArray(wdTask.subtasks)) {
+                          wdTask.subtasks.forEach((subtask: any, idx: number) => {
+                            if (subtask.completed) return;
+                            if (subtask.assignee && isAssignedToUser(subtask.assignee)) {
+                              const alreadyPulled = shiftBlocks.some(localTask =>
+                                localTask.assignedTo === user.id &&
+                                localTask.webDevTaskId === wdTask.id &&
+                                localTask.isWebDevSubtask &&
+                                localTask.webDevSubtaskIndex === idx
+                              );
+                              if (!alreadyPulled) {
+                                matchingWebDevTasks.push({
+                                  id: `${wdTask.id}-sub-${idx}`,
+                                  webDevTaskId: wdTask.id,
+                                  title: subtask.title,
+                                  details: subtask.notes || `Subtask of: ${wdTask.title}`,
+                                  priority: wdTask.priority,
+                                  app: wdTask.app,
+                                  isSubtask: true,
+                                  subtaskIndex: idx
+                                });
+                              }
+                            }
+                          });
+                        }
                       });
 
                       return (
@@ -1645,11 +1740,16 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                       <p className="text-[9px] text-zinc-500 line-clamp-2 mt-1 leading-snug">{wdTask.details}</p>
                                     )}
                                     <div className="mt-2 flex justify-between items-center">
-                                      <span className={`text-[8px] px-1.5 py-0.2 rounded-full uppercase font-bold ${
-                                        wdTask.priority === 'critical' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                        wdTask.priority === 'high' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                        'bg-blue-50 text-blue-600 border border-blue-100'
-                                      }`}>{wdTask.priority}</span>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={`text-[8px] px-1.5 py-0.2 rounded-full uppercase font-bold ${
+                                          wdTask.priority === 'critical' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                          wdTask.priority === 'high' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                          'bg-blue-50 text-blue-600 border border-blue-100'
+                                        }`}>{wdTask.priority}</span>
+                                        {wdTask.isSubtask && (
+                                          <span className="text-[8px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-600 border border-purple-100 uppercase font-bold">Subtask</span>
+                                        )}
+                                      </div>
                                       <button
                                         onClick={() => handlePullTask(user, wdTask)}
                                         className="text-[9px] font-black bg-zinc-900 hover:bg-zinc-800 text-white py-1 px-2.5 rounded-lg flex items-center gap-0.5 shadow-sm transition-all"
