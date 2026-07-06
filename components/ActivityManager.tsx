@@ -322,7 +322,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 id: doc.id,
                 ...doc.data()
               }))
-              .filter((t: any) => t.status === 'active' && !t.archived);
+              .filter((t: any) => (t.status === 'active' || t.status === 'backlog') && !t.archived);
             setWebDevTasks(tasksList);
             setIsWebDevLoading(false);
           }, (err) => {
@@ -1519,16 +1519,28 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                       
                       // Filter matching backlog tasks
                       const matchingWebDevTasks = webDevTasks.filter(wdTask => {
-                        if (!user.email) return false;
-                        const userEmailLower = user.email.toLowerCase();
-
                         const parentAssignees = Array.isArray(wdTask.assignees) ? wdTask.assignees : [];
                         const subtaskAssignees = Array.isArray(wdTask.subtasks)
                           ? wdTask.subtasks.map((s: any) => s.assignee).filter(Boolean)
                           : [];
                         const allAssignees = [...new Set([...parentAssignees, ...subtaskAssignees])];
 
-                        const isAssigned = allAssignees.some((email: any) => String(email).toLowerCase() === userEmailLower);
+                        const isAssigned = allAssignees.some((email: any) => {
+                          const emailStr = String(email).toLowerCase();
+                          const emailPrefix = emailStr.split('@')[0];
+                          
+                          if (user.email) {
+                            const userEmailLower = user.email.toLowerCase();
+                            if (emailStr === userEmailLower) return true;
+                            
+                            const localPrefix = userEmailLower.split('@')[0];
+                            if (emailPrefix === localPrefix) return true;
+                          }
+                          
+                          // Fallback: match name words to email prefix (e.g., malena -> malena@wovnapparel.com)
+                          const nameParts = user.name.toLowerCase().split(/\s+/).filter(Boolean);
+                          return nameParts.some(part => part === emailPrefix);
+                        });
                         if (!isAssigned) return false;
                         if (wdTask.status === 'done' && !tackboardShowArchived) return false;
 
