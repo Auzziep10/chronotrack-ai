@@ -8,7 +8,7 @@ import {
   CheckSquare, Check, Link, CalendarDays
 } from 'lucide-react';
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, collection, onSnapshot } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, getDoc, doc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
 import { processExternalPlan } from '../services/geminiService';
 import { UserProfileDialog } from './UserProfileDialog';
@@ -266,6 +266,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [webDevTasks, setWebDevTasks] = useState<any[]>([]);
   const [webDevUser, setWebDevUser] = useState<any>(null);
   const [isWebDevLoading, setIsWebDevLoading] = useState(false);
+  const syncingTasksRef = React.useRef<Set<string>>(new Set());
 
   // Tackboard Filter States
   const [tackboardProject, setTackboardProject] = useState<string>('All');
@@ -352,6 +353,124 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     return () => unsubscribe();
   }, []);
 
+  // Real-time synchronization from Chronotrack to Web Dev
+  React.useEffect(() => {
+    if (!webDevUser) return;
+
+    const syncTasksToWebDev = async () => {
+      const app = getWebDevApp();
+      const webDevDb = getFirestore(app);
+
+      for (const block of shiftBlocks) {
+        if (block.isShiftBlock) continue;
+
+        // Skip if this task is already in the process of syncing to avoid concurrent writes
+        if (syncingTasksRef.current.has(block.id)) continue;
+
+        let wdTaskId = block.webDevTaskId;
+        let wdTask = null;
+
+        // 1. Try to find the Web Dev task by ID
+        if (wdTaskId) {
+          try {
+            const docSnap = await getDoc(doc(webDevDb, 'tasks', wdTaskId));
+            if (docSnap.exists()) {
+              wdTask = { id: docSnap.id, ...docSnap.data() };
+            }
+          } catch (err) {
+            console.error("Failed to fetch Web Dev task by ID:", wdTaskId, err);
+          }
+        }
+
+        // 2. Fallback: Try to find by title match in the loaded active list or query Firestore
+        if (!wdTask && block.title) {
+          const cleanTitle = block.title.toLowerCase().trim();
+          wdTask = webDevTasks.find(t => (t.title || '').toLowerCase().trim() === cleanTitle);
+
+          if (!wdTask) {
+            try {
+              const q = query(collection(webDevDb, 'tasks'), where('title', '==', block.title.trim()));
+              const querySnap = await getDocs(q);
+              if (!querySnap.empty) {
+                const docSnap = querySnap.docs[0];
+                wdTask = { id: docSnap.id, ...docSnap.data() };
+              }
+            } catch (err) {
+              console.error("Failed to query Web Dev task by title:", block.title, err);
+            }
+          }
+        }
+
+        // 3. If a matching Web Dev task is found, determine if we need to update it
+        if (wdTask) {
+          // Get local progress from latest check-in
+          const latestCheckIn = block.checkIns && block.checkIns.length > 0
+            ? [...block.checkIns].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0]
+            : null;
+          const localProgress = latestCheckIn?.progress ?? (latestCheckIn as any)?.progressPercent ?? 0;
+
+          // Map Chronotrack status to Web Dev status
+          let mappedStatus = null;
+          if (block.status === 'completed') {
+            mappedStatus = 'complete';
+          } else if (block.status === 'in_progress') {
+            mappedStatus = 'active';
+          } else if (block.status === 'delayed') {
+            mappedStatus = 'active';
+          }
+
+          const statusDiff = mappedStatus && wdTask.status !== mappedStatus;
+          const progressDiff = Number(wdTask.progress ?? 0) !== Number(localProgress);
+
+          if (statusDiff || progressDiff) {
+            // Mark as syncing to prevent concurrent triggers
+            syncingTasksRef.current.add(block.id);
+
+            const updates: any = {};
+            const logParts: string[] = [];
+
+            if (statusDiff) {
+              updates.status = mappedStatus;
+              logParts.push(`status to '${mappedStatus}'`);
+            }
+            if (progressDiff) {
+              updates.progress = localProgress;
+              logParts.push(`progress to ${localProgress}%`);
+            }
+
+            const logActionText = `[Clockwork Sync] Changed ${logParts.join(' and ')}`;
+
+            // Append to Web Dev activity log
+            const activityLog = Array.isArray(wdTask.activityLog) ? [...wdTask.activityLog] : [];
+            activityLog.push({
+              user: webDevUser.email || 'Clockwork Sync',
+              timestamp: new Date().toISOString(),
+              action: logActionText
+            });
+
+            if (activityLog.length > 100) {
+              activityLog.shift();
+            }
+
+            updates.activityLog = activityLog;
+
+            try {
+              await updateDoc(doc(webDevDb, 'tasks', wdTask.id), updates);
+              console.log(`Successfully synced Chronotrack task "${block.title}" status/progress to Web Dev task ${wdTask.id}`);
+            } catch (err) {
+              console.error("Failed to update Web Dev task document:", wdTask.id, err);
+            } finally {
+              // Remove from syncing set
+              syncingTasksRef.current.delete(block.id);
+            }
+          }
+        }
+      }
+    };
+
+    syncTasksToWebDev();
+  }, [shiftBlocks, webDevUser, webDevTasks]);
+
   const handleConnectWebDev = async () => {
     try {
       const app = getWebDevApp();
@@ -407,7 +526,8 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         endTime: `${todayStr}T16:00:00`,
         priority: mappedPriority,
         status: 'pending',
-        isShiftBlock: false
+        isShiftBlock: false,
+        webDevTaskId: wdTask.id
       });
       
       alert(`Successfully pulled task: "${wdTask.title}" onto the planner for ${user.name}!`);
