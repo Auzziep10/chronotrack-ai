@@ -440,7 +440,10 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
             let logActionText = `[Clockwork Sync] Changed ${logParts.join(' and ')}`;
             if (latestCheckIn?.notes) {
-              const cleanNotes = latestCheckIn.notes.replace(/^\[\d+%\s*Complete\]\s*/i, '');
+              let cleanNotes = latestCheckIn.notes
+                .replace(/^\[\d+%\s*Complete\]\s*/i, '')
+                .replace(/^Progress:\s*\d+%\s*/i, '')
+                .trim();
               if (cleanNotes) {
                 logActionText += ` - Notes: "${cleanNotes}"`;
               }
