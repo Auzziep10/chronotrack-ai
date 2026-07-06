@@ -25,7 +25,7 @@ interface Props {
   onClockIn?: (user: any) => void;
   onClockOut?: (user: any) => void;
   onUpdateUser?: (updatedUser: any) => void;
-  onUpdateTaskStatus?: (taskId: string, status: string, taskTitle: string, user: any) => void;
+  onUpdateTaskStatus?: (taskId: string, status: string, taskTitle: string, user: any, progress?: number, notes?: string) => void;
   appSettings?: AppSettings;
 }
 
@@ -81,7 +81,7 @@ export const ActivityTracker: React.FC<Props> = ({
 
     if (onUpdateTaskStatus) {
        const status = pct === 100 ? 'completed' : 'in_progress';
-       onUpdateTaskStatus(task.id, status, task.title, session.user);
+        onUpdateTaskStatus(task.id, status, task.title, session.user, pct, taskNotes);
     }
     setExpandedTaskId(null);
     setTaskNotes('');

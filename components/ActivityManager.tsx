@@ -438,7 +438,13 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
               logParts.push(`progress to ${localProgress}%`);
             }
 
-            const logActionText = `[Clockwork Sync] Changed ${logParts.join(' and ')}`;
+            let logActionText = `[Clockwork Sync] Changed ${logParts.join(' and ')}`;
+            if (latestCheckIn?.notes) {
+              const cleanNotes = latestCheckIn.notes.replace(/^\[\d+%\s*Complete\]\s*/i, '');
+              if (cleanNotes) {
+                logActionText += ` - Notes: "${cleanNotes}"`;
+              }
+            }
 
             // Append to Web Dev activity log
             const activityLog = Array.isArray(wdTask.activityLog) ? [...wdTask.activityLog] : [];

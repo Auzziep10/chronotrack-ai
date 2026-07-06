@@ -788,14 +788,35 @@ const App: React.FC = () => {
     });
   };
 
-  const handleUpdateTaskStatus = async (taskId: string, status: string, taskTitle: string, user: User) => {
+  const handleUpdateTaskStatus = async (
+    taskId: string, 
+    status: string, 
+    taskTitle: string, 
+    user: User,
+    progress?: number,
+    notes?: string
+  ) => {
     if (isFirebaseConfigured()) {
       const task = shiftBlocks.find(b => b.id === taskId);
       if (task) {
+        const checkIns = Array.isArray(task.checkIns) ? [...task.checkIns] : [];
+        if (progress !== undefined) {
+          checkIns.push({
+            id: `ci-${Date.now()}`,
+            timestamp: Date.now(),
+            notes: notes || `Progress: ${progress}%`,
+            status: status,
+            progressPercent: progress,
+            progress: progress,
+            userName: user.name
+          });
+        }
+
         import('./services/firebaseService').then(({ firebaseSaveShiftBlock }) => {
           firebaseSaveShiftBlock({
             ...task,
-            status: status
+            status: status,
+            checkIns: checkIns
           }).catch(err => console.error('Failed to update task status in Firebase', err));
         });
       }
