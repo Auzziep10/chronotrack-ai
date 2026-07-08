@@ -332,7 +332,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 }
                 return t;
               })
-              .filter((t: any) => (t.status === 'active' || t.status === 'backlog') && !t.archived);
+              .filter((t: any) => t.status === 'active' && !t.archived);
             setWebDevTasks(tasksList);
             setIsWebDevLoading(false);
           }, (err) => {
