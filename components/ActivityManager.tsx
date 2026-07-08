@@ -752,7 +752,6 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
       if (!tackboardShowArchived) {
         if (task.status === 'completed') return false;
-        if (taskDate && taskDate < todayStr) return false;
       }
 
       if (tackboardProject !== 'All' && task.department !== tackboardProject) return false;
