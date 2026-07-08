@@ -318,10 +318,19 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
           setIsWebDevLoading(true);
           const unsubTasks = onSnapshot(collection(db, 'tasks'), (snapshot) => {
             const tasksList = snapshot.docs
-              .map(doc => ({
-                id: doc.id,
-                ...doc.data()
-              }))
+              .map(doc => {
+                const data = doc.data() as any;
+                const t = { id: doc.id, ...data };
+                // Map legacy status strings to the new 5-status schema
+                if (t.status === 'todo') {
+                  t.status = 'backlog';
+                } else if (t.status === 'progress') {
+                  t.status = 'active';
+                } else if (t.status === 'done') {
+                  t.status = (t.progress === 100) ? 'complete' : 'review';
+                }
+                return t;
+              })
               .filter((t: any) => (t.status === 'active' || t.status === 'backlog') && !t.archived);
             setWebDevTasks(tasksList);
             setIsWebDevLoading(false);
