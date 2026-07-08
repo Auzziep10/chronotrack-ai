@@ -681,6 +681,18 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
       if (editingTask && editingTask.id) {
         taskData.id = editingTask.id;
+        if (editingTask.webDevTaskId) {
+          taskData.webDevTaskId = editingTask.webDevTaskId;
+        }
+        if (editingTask.isWebDevSubtask !== undefined) {
+          taskData.isWebDevSubtask = editingTask.isWebDevSubtask;
+        }
+        if (editingTask.webDevSubtaskIndex !== undefined) {
+          taskData.webDevSubtaskIndex = editingTask.webDevSubtaskIndex;
+        }
+        if (editingTask.checkIns) {
+          taskData.checkIns = editingTask.checkIns;
+        }
       }
 
       await firebaseSaveShiftBlock(taskData);

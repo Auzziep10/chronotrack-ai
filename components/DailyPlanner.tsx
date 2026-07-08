@@ -708,7 +708,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             const [eh, em] = editEnd.split(':').map(Number);
             bEnd.setHours(eh, em, 0, 0);
 
-            const blockData = {
+            const blockData: any = {
                 title: editTitle,
                 description: editNotes,
                 department: editDepartment || undefined,
@@ -718,6 +718,19 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 status: editingBlock.status,
                 priority: editingBlock.priority || 'medium'
             };
+
+            if (editingBlock.webDevTaskId) {
+                blockData.webDevTaskId = editingBlock.webDevTaskId;
+            }
+            if (editingBlock.isWebDevSubtask !== undefined) {
+                blockData.isWebDevSubtask = editingBlock.isWebDevSubtask;
+            }
+            if (editingBlock.webDevSubtaskIndex !== undefined) {
+                blockData.webDevSubtaskIndex = editingBlock.webDevSubtaskIndex;
+            }
+            if (editingBlock.checkIns) {
+                blockData.checkIns = editingBlock.checkIns;
+            }
 
             await firebaseSaveShiftBlock({ ...blockData, id: editingBlock.id });
             setEditingBlock(null);
