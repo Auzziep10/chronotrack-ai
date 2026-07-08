@@ -267,6 +267,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [webDevUser, setWebDevUser] = useState<any>(null);
   const [isWebDevLoading, setIsWebDevLoading] = useState(false);
   const syncingTasksRef = React.useRef<Set<string>>(new Set());
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   // Tackboard Filter States
   const [tackboardProject, setTackboardProject] = useState<string>('All');
@@ -465,8 +466,10 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 try {
                   await updateDoc(doc(webDevDb, 'tasks', wdTask.id), updates);
                   console.log(`Successfully synced Chronotrack subtask "${block.title}" to Web Dev task ${wdTask.id}`);
-                } catch (err) {
+                  setSyncError(null);
+                } catch (err: any) {
                   console.error("Failed to update Web Dev task subtask:", wdTask.id, err);
+                  setSyncError(`Failed to sync subtask "${block.title}": ${err.message || err}`);
                 } finally {
                   syncingTasksRef.current.delete(block.id);
                 }
@@ -530,8 +533,10 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
               try {
                 await updateDoc(doc(webDevDb, 'tasks', wdTask.id), updates);
                 console.log(`Successfully synced Chronotrack task "${block.title}" status/progress to Web Dev task ${wdTask.id}`);
-              } catch (err) {
+                setSyncError(null);
+              } catch (err: any) {
                 console.error("Failed to update Web Dev task document:", wdTask.id, err);
+                setSyncError(`Failed to sync task "${block.title}": ${err.message || err}`);
               } finally {
                 // Remove from syncing set
                 syncingTasksRef.current.delete(block.id);
@@ -1723,6 +1728,14 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                               ))
                             )}
                           </div>
+
+                          {/* Sync Error Banner */}
+                          {syncError && (
+                            <div className="mt-2 bg-red-50 border border-dashed border-red-200 text-red-700 p-2.5 rounded-xl text-[10px] flex justify-between items-start gap-2 shadow-sm font-medium">
+                              <span>⚠️ {syncError}</span>
+                              <button onClick={() => setSyncError(null)} className="font-bold hover:text-red-950 shrink-0">✕</button>
+                            </div>
+                          )}
 
                           {/* Web Dev Backlog Section */}
                           {matchingWebDevTasks.length > 0 && (
