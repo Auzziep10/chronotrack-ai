@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy, Zap, MapPin, Search, ShoppingBag } from 'lucide-react';
-import { User, DailySchedule, ScheduleBlock, Department, QuickTask } from '../types';
-import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock, subscribeToQuickTasks, firebaseSaveQuickTask, firebaseDeleteQuickTask, subscribeToProductionOrders, subscribeToCustomers } from '../services/firebaseService';
+import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy, Zap, MapPin, Search, ShoppingBag, Printer, Camera, Image as ImageIcon } from 'lucide-react';
+import { User, DailySchedule, ScheduleBlock, Department, QuickTask, PrintRoomTask } from '../types';
+import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock, subscribeToQuickTasks, firebaseSaveQuickTask, firebaseDeleteQuickTask, subscribeToProductionOrders, subscribeToCustomers, subscribeToPrintRoomTasks, firebaseSavePrintRoomTask, firebaseDeletePrintRoomTask } from '../services/firebaseService';
 import { processExternalPlan } from '../services/geminiService';
 import { ShiftCalendarViews } from './ShiftCalendarViews';
 
@@ -121,6 +121,28 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         return () => unsubscribe();
     }, []);
 
+    // Print Room Tasks State
+    const [showPrintRoomTasks, setShowPrintRoomTasks] = useState(false);
+    const [printRoomTasks, setPrintRoomTasks] = useState<PrintRoomTask[]>([]);
+    const [prNewTitle, setPrNewTitle] = useState('');
+    const [prNewDuration, setPrNewDuration] = useState('30');
+    const [prNewLocation, setPrNewLocation] = useState('');
+    const [prNewRequiresPhoto, setPrNewRequiresPhoto] = useState(true);
+    const [prNewInstructions, setPrNewInstructions] = useState('');
+    const [prLocationFilter, setPrLocationFilter] = useState<string | null>(null);
+    const [prSelectedTask, setPrSelectedTask] = useState<string | null>(null);
+    const [prSelectedUsers, setPrSelectedUsers] = useState<string[]>([]);
+    const [prStartTime, setPrStartTime] = useState('09:00');
+    const [prSearchQuery, setPrSearchQuery] = useState('');
+    const [viewingProofPhoto, setViewingProofPhoto] = useState<{ url: string; title: string; userName?: string; timestamp?: any } | null>(null);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToPrintRoomTasks((tasks) => {
+            setPrintRoomTasks(tasks);
+        });
+        return () => unsubscribe();
+    }, []);
+
     // Orders Integration State
     const [showOrdersDialog, setShowOrdersDialog] = useState(false);
     const [productionOrders, setProductionOrders] = useState<any[]>([]);
@@ -235,6 +257,77 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             setQtSearchQuery('');
         } catch (err) {
             alert("Failed to assign quick tasks");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const prUniqueLocations = Array.from(new Set(printRoomTasks.flatMap(t => t.locations || []).filter(Boolean))) as string[];
+    const filteredPrintRoomTasks = prLocationFilter ? printRoomTasks.filter(t => {
+        const locs = t.locations || [];
+        return locs.includes(prLocationFilter);
+    }) : printRoomTasks;
+
+    const handleAddPrintRoomTaskDef = async () => {
+        if (!prNewTitle.trim()) return;
+        const newLocs = prNewLocation.trim() ? prNewLocation.split(',').map(s => s.trim()).filter(Boolean) : [];
+        await firebaseSavePrintRoomTask({
+            id: `pr-${Date.now()}`,
+            title: prNewTitle.trim(),
+            duration: parseInt(prNewDuration) || 30,
+            locations: newLocs,
+            requiresPhoto: prNewRequiresPhoto,
+            instructions: prNewInstructions.trim() || undefined
+        });
+        setPrNewTitle('');
+        setPrNewInstructions('');
+    };
+
+    const handleDeletePrintRoomTaskDef = async (id: string) => {
+        await firebaseDeletePrintRoomTask(id);
+        if (prSelectedTask === id) setPrSelectedTask(null);
+    };
+
+    const handleAssignPrintRoomTask = async () => {
+        const taskDef = printRoomTasks.find(t => t.id === prSelectedTask);
+        if (!taskDef || prSelectedUsers.length === 0) return;
+
+        try {
+            setLoading(true);
+            for (const userId of prSelectedUsers) {
+                const startDateTime = new Date(currentDate);
+                const [sh, sm] = prStartTime.split(':').map(Number);
+                startDateTime.setHours(sh, sm, 0, 0);
+
+                const endDateTime = new Date(startDateTime.getTime() + taskDef.duration * 60000);
+
+                const locs = taskDef.locations || [];
+                let desc = '🖨️ Print Room Task';
+                if (locs.length > 0) desc += `\nEquipment / Station: ${locs.join(', ')}`;
+                if (taskDef.instructions) desc += `\nInstructions: ${taskDef.instructions}`;
+                if (taskDef.requiresPhoto) desc += `\n📸 Photo verification required upon completion`;
+
+                await firebaseSaveShiftBlock({
+                    id: `pr-task-${Date.now()}-${userId}-${Math.random().toString(36).substring(2, 7)}`,
+                    title: taskDef.title,
+                    description: desc,
+                    startTime: startDateTime.toISOString(),
+                    endTime: endDateTime.toISOString(),
+                    assignedTo: userId,
+                    status: 'pending',
+                    priority: 'medium',
+                    department: Department.Print,
+                    requiresPhoto: taskDef.requiresPhoto ?? true,
+                    isPrintRoomTask: true,
+                    location: locs[0] || 'Print Room'
+                });
+            }
+            setShowPrintRoomTasks(false);
+            setPrSelectedTask(null);
+            setPrSelectedUsers([]);
+            setPrSearchQuery('');
+        } catch (err) {
+            alert("Failed to assign print room tasks");
         } finally {
             setLoading(false);
         }
@@ -987,6 +1080,13 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         Quick Tasks
                                     </button>
                                     <button
+                                        onClick={() => setShowPrintRoomTasks(true)}
+                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-blue-50 hover:border-blue-400 shrink-0"
+                                    >
+                                        <Printer className="w-4 h-4 text-blue-600" />
+                                        Print Room
+                                    </button>
+                                    <button
                                         onClick={() => setShowOrdersDialog(true)}
                                         className="relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
                                     >
@@ -1393,7 +1493,30 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                     className={styles.className + " group " + (isAdminOrManager ? "cursor-pointer" : "") + (isDragged ? " opacity-70 scale-105 z-50 shadow-xl" : "")}
                                                     title={`${block.title} (${new Date(block.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${new Date(block.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`}
                                                 >
-                                                    {block.title}
+                                                    <div className="flex items-center gap-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                                                        <span className="truncate">{block.title}</span>
+                                                        {block.proofPhotoUrl ? (
+                                                            <span 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setViewingProofPhoto({
+                                                                        url: block.proofPhotoUrl!,
+                                                                        title: block.title,
+                                                                        userName: block.assignedToName,
+                                                                        timestamp: block.endTime
+                                                                    });
+                                                                }}
+                                                                className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold shadow-sm shrink-0 cursor-pointer"
+                                                                title="Verified with Photo Proof - Click to View"
+                                                            >
+                                                                <Camera className="w-2.5 h-2.5" /> Photo
+                                                            </span>
+                                                        ) : block.requiresPhoto ? (
+                                                            <span className="inline-flex items-center text-[10px] text-amber-300 shrink-0" title="Photo proof required upon completion">
+                                                                <Camera className="w-3 h-3" />
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
                                                     {isAdminOrManager && (
                                                         <div className="absolute top-0 right-0 bottom-0 w-6 cursor-e-resize hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100" title="Drag to resize">
                                                             <div className="w-1 h-3 border-l border-r border-white/50"></div>
@@ -1449,6 +1572,24 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                                         <div key={i}>{line}</div>
                                                                     ))}
                                                                 </div>
+                                                            )}
+
+                                                            {block.proofPhotoUrl && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setViewingProofPhoto({
+                                                                            url: block.proofPhotoUrl!,
+                                                                            title: block.title,
+                                                                            userName: block.assignedToName,
+                                                                            timestamp: block.endTime
+                                                                        });
+                                                                    }}
+                                                                    className="mt-2 w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-xs font-bold transition-colors shadow-sm"
+                                                                >
+                                                                    <Camera className="w-3.5 h-3.5" />
+                                                                    <span>View Photo Proof</span>
+                                                                </button>
                                                             )}
 
                                                             <div className="mt-1 pt-1.5 border-t border-zinc-700 flex items-center justify-between">
@@ -1571,6 +1712,47 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                     className="w-full h-24 p-2 border border-zinc-300 rounded resize-none text-sm focus:ring-2 focus:ring-zinc-500 outline-none"
                                 ></textarea>
                             </div>
+
+                            {editingBlock.proofPhotoUrl && (
+                                <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-3">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                                            <Camera className="w-4 h-4 text-emerald-600" />
+                                            Verified Completion Photo
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setViewingProofPhoto({
+                                                url: editingBlock.proofPhotoUrl!,
+                                                title: editingBlock.title,
+                                                userName: editingBlock.assignedToName,
+                                                timestamp: editingBlock.endTime
+                                            })}
+                                            className="text-xs font-bold text-emerald-700 hover:underline"
+                                        >
+                                            View Full Size
+                                        </button>
+                                    </div>
+                                    <div 
+                                        className="cursor-pointer group relative rounded-lg overflow-hidden border border-emerald-200 h-36 flex items-center justify-center bg-black"
+                                        onClick={() => setViewingProofPhoto({
+                                            url: editingBlock.proofPhotoUrl!,
+                                            title: editingBlock.title,
+                                            userName: editingBlock.assignedToName,
+                                            timestamp: editingBlock.endTime
+                                        })}
+                                    >
+                                        <img 
+                                            src={editingBlock.proofPhotoUrl} 
+                                            alt="Proof of work" 
+                                            className="w-full h-full object-cover group-hover:opacity-85 transition-opacity"
+                                        />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-opacity">
+                                            Click to Zoom
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex justify-between items-center gap-2">
                             {!shiftBlocks.some(b => b.id === editingBlock.id) ? (
@@ -1863,6 +2045,245 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 </div>
             )}
 
+            {/* Print Room Tasks Dialog */}
+            {showPrintRoomTasks && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl border border-zinc-200 w-[95vw] max-w-[1600px] h-[90vh] overflow-hidden animate-fade-in flex flex-col">
+                        <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex justify-between items-center shrink-0">
+                            <h3 className="font-bold text-zinc-800 flex items-center gap-2">
+                                <Printer className="w-5 h-5 text-blue-600" />
+                                Print Room Predefined Tasks
+                                <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                                    <Camera className="w-3 h-3 text-blue-600" /> Photo Verification Required
+                                </span>
+                            </h3>
+                            <button onClick={() => setShowPrintRoomTasks(false)} className="p-1 hover:bg-zinc-200 rounded text-zinc-500 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 flex overflow-hidden">
+                            {/* Left Panel: Manage Print Room Tasks */}
+                            <div className="w-1/2 border-r border-zinc-200 flex flex-col bg-zinc-50/50">
+                                <div className="p-3 border-b border-zinc-200 bg-white">
+                                    <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider flex items-center justify-between">
+                                        <span>Create Predefined Task</span>
+                                        <span className="text-[10px] text-zinc-400 font-normal">Staff must take photo on iOS app to finish</span>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex gap-2">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Task title (e.g. Flush print heads on Venom)..." 
+                                                value={prNewTitle}
+                                                onChange={e => setPrNewTitle(e.target.value)}
+                                                className="flex-1 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="text"
+                                                list="pr-locations"
+                                                placeholder="Machine / Station..."
+                                                value={prNewLocation}
+                                                onChange={e => setPrNewLocation(e.target.value)}
+                                                className="w-44 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <datalist id="pr-locations">
+                                                {prUniqueLocations.map(loc => <option key={loc} value={loc} />)}
+                                                <option value="Venom" />
+                                                <option value="Coldesi" />
+                                                <option value="DTG" />
+                                                <option value="Pre-treat" />
+                                                <option value="Shopify Station" />
+                                                <option value="Waste Station" />
+                                            </datalist>
+                                            <input 
+                                                type="number" 
+                                                placeholder="Mins" 
+                                                value={prNewDuration}
+                                                onChange={e => setPrNewDuration(e.target.value)}
+                                                className="w-16 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <button 
+                                                onClick={handleAddPrintRoomTaskDef}
+                                                disabled={!prNewTitle.trim()}
+                                                className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 shrink-0 font-bold flex items-center gap-1"
+                                            >
+                                                <Plus className="w-4 h-4" /> Add
+                                            </button>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Instructions / Checklist notes (optional)..." 
+                                                value={prNewInstructions}
+                                                onChange={e => setPrNewInstructions(e.target.value)}
+                                                className="flex-1 text-xs p-1.5 border border-zinc-200 rounded outline-none focus:ring-2 focus:ring-blue-500 text-zinc-600"
+                                            />
+                                            <label className="flex items-center gap-1.5 text-xs text-zinc-700 cursor-pointer select-none shrink-0 font-medium">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={prNewRequiresPhoto} 
+                                                    onChange={e => setPrNewRequiresPhoto(e.target.checked)} 
+                                                    className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <Camera className="w-3.5 h-3.5 text-blue-600" />
+                                                Requires Photo
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {prUniqueLocations.length > 0 && (
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            <button 
+                                                onClick={() => setPrLocationFilter(null)}
+                                                className={`text-[10px] px-2 py-1 rounded-full font-bold transition-colors ${!prLocationFilter ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}
+                                            >
+                                                All Machines ({printRoomTasks.length})
+                                            </button>
+                                            {prUniqueLocations.map(loc => (
+                                                <button 
+                                                    key={loc} 
+                                                    onClick={() => setPrLocationFilter(loc)}
+                                                    className={`text-[10px] px-2 py-1 rounded-full font-bold transition-colors ${prLocationFilter === loc ? 'bg-blue-600 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}
+                                                >
+                                                    {loc}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                    {filteredPrintRoomTasks.length === 0 ? (
+                                        <div className="text-xs text-zinc-400 text-center mt-4">No tasks found. Create one above.</div>
+                                    ) : (
+                                        filteredPrintRoomTasks.map(t => (
+                                            <div 
+                                                key={t.id} 
+                                                onClick={() => setPrSelectedTask(t.id)}
+                                                className={`group flex items-center justify-between p-2.5 rounded-lg cursor-pointer border transition-all ${prSelectedTask === t.id ? 'bg-blue-50/70 border-blue-400 shadow-sm ring-1 ring-blue-300' : 'bg-white border-zinc-200 hover:border-blue-200'}`}
+                                            >
+                                                <div className="min-w-0 flex-1 flex flex-col justify-center">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-bold text-zinc-800 truncate">{t.title}</span>
+                                                        {t.requiresPhoto && (
+                                                            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded shrink-0" title="Photo proof required">
+                                                                <Camera className="w-3 h-3 text-amber-600" /> Photo Req.
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {t.instructions && (
+                                                        <p className="text-[11px] text-zinc-500 italic mt-0.5 line-clamp-1">{t.instructions}</p>
+                                                    )}
+                                                    <div className="text-[10px] text-zinc-500 flex gap-2 flex-wrap items-center mt-1">
+                                                        <span className="font-semibold text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded">{t.duration} mins</span>
+                                                        {(t.locations || []).map(loc => (
+                                                            <span key={loc} className="bg-blue-50 border border-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                                                                {loc}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); handleDeletePrintRoomTaskDef(t.id); }}
+                                                    className="p-1 text-zinc-400 hover:text-red-500 rounded hover:bg-red-50 ml-2 shrink-0"
+                                                    title="Delete task template"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right Panel: Assign to Team Members */}
+                            <div className="w-1/2 flex flex-col bg-white">
+                                <div className="p-4 flex-1 flex flex-col overflow-hidden">
+                                    {!prSelectedTask ? (
+                                        <div className="h-full flex flex-col items-center justify-center text-sm text-zinc-400 text-center px-4 gap-2">
+                                            <Printer className="w-10 h-10 text-zinc-300" />
+                                            <p className="font-medium text-zinc-500">Select a print room task from the left</p>
+                                            <p className="text-xs text-zinc-400">Choose a task template to assign it to staff members with a scheduled start time.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-4 flex-1 min-h-0">
+                                            <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg shrink-0">
+                                                <div className="text-xs font-bold text-blue-900 uppercase">Selected Task</div>
+                                                <div className="text-base font-bold text-zinc-800 mt-0.5">
+                                                    {printRoomTasks.find(t => t.id === prSelectedTask)?.title}
+                                                </div>
+                                                <div className="text-xs text-zinc-600 mt-1 flex items-center gap-2">
+                                                    <span>Duration: <strong>{printRoomTasks.find(t => t.id === prSelectedTask)?.duration}m</strong></span>
+                                                    <span>•</span>
+                                                    <span className="flex items-center gap-1 text-amber-700 font-medium">
+                                                        <Camera className="w-3.5 h-3.5" /> Staff must take photo on iOS companion app to complete
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="shrink-0">
+                                                <div className="text-xs font-bold text-zinc-600 mb-1.5 uppercase tracking-wider">1. Start Time</div>
+                                                <input 
+                                                    type="time" 
+                                                    value={prStartTime}
+                                                    onChange={e => setPrStartTime(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                            </div>
+
+                                            <div className="flex flex-col flex-1 min-h-0">
+                                                <div className="text-xs font-bold text-zinc-600 mb-1.5 uppercase tracking-wider shrink-0">2. Select Staff Members</div>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search team members..."
+                                                    value={prSearchQuery}
+                                                    onChange={e => setPrSearchQuery(e.target.value)}
+                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-blue-500 mb-2 shrink-0"
+                                                />
+                                                <div className="space-y-1 flex-1 overflow-y-auto border border-zinc-200 rounded-lg p-1 min-h-0">
+                                                    {teamMembers
+                                                        .filter(u => u.name.toLowerCase().includes(prSearchQuery.toLowerCase()))
+                                                        .sort((a, b) => a.name.localeCompare(b.name))
+                                                        .map(u => (
+                                                        <label key={u.id} className="flex items-center gap-2.5 p-2 hover:bg-zinc-50 rounded-md cursor-pointer transition-colors">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={prSelectedUsers.includes(u.id)}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) setPrSelectedUsers([...prSelectedUsers, u.id]);
+                                                                    else setPrSelectedUsers(prSelectedUsers.filter(id => id !== u.id));
+                                                                }}
+                                                                className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                                                            />
+                                                            <div className="flex-1 flex items-center justify-between">
+                                                                <span className="text-sm font-medium text-zinc-800">{u.name}</span>
+                                                                {u.primaryDepartment === Department.Print && (
+                                                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">Print Staff</span>
+                                                                )}
+                                                            </div>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-4 border-t border-zinc-100 bg-zinc-50 shrink-0">
+                                    <button
+                                        onClick={handleAssignPrintRoomTask}
+                                        disabled={!prSelectedTask || prSelectedUsers.length === 0}
+                                        className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-colors text-sm"
+                                    >
+                                        <Plus className="w-4 h-4" /> Add Print Room Tasks ({prSelectedUsers.length} staff)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Orders Dialog */}
             {showOrdersDialog && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
@@ -2011,6 +2432,51 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                     </button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Photo Proof Lightbox Modal */}
+            {viewingProofPhoto && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[250] flex items-center justify-center p-4 animate-fade-in" onClick={() => setViewingProofPhoto(null)}>
+                    <div className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl animate-scale-up" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50">
+                            <div>
+                                <div className="font-bold text-zinc-900 text-base flex items-center gap-2">
+                                    <Camera className="w-4 h-4 text-blue-600" />
+                                    Completion Proof: {viewingProofPhoto.title}
+                                </div>
+                                {viewingProofPhoto.userName && (
+                                    <div className="text-xs text-zinc-500 mt-0.5">
+                                        Submitted by <span className="font-semibold text-zinc-700">{viewingProofPhoto.userName}</span>
+                                        {viewingProofPhoto.timestamp ? ` • ${new Date(viewingProofPhoto.timestamp).toLocaleString()}` : ''}
+                                    </div>
+                                )}
+                            </div>
+                            <button onClick={() => setViewingProofPhoto(null)} className="p-1 hover:bg-zinc-200 rounded text-zinc-500 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-4 bg-zinc-950 flex items-center justify-center max-h-[70vh] overflow-hidden">
+                            <img 
+                                src={viewingProofPhoto.url} 
+                                alt="Task completion verification" 
+                                className="max-h-[65vh] w-auto max-w-full object-contain rounded-lg shadow-lg"
+                            />
+                        </div>
+                        <div className="p-3 bg-zinc-50 border-t border-zinc-100 flex justify-between items-center text-xs text-zinc-600">
+                            <span className="text-emerald-600 font-bold flex items-center gap-1">
+                                <CheckCircle className="w-4 h-4" /> Photo Verified on iOS Companion App
+                            </span>
+                            <a 
+                                href={viewingProofPhoto.url} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="text-blue-600 font-medium hover:underline flex items-center gap-1"
+                            >
+                                Open Full Size
+                            </a>
                         </div>
                     </div>
                 </div>

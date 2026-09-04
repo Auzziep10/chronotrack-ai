@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator, Image } from 'react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import { theme } from '../../src/theme';
-import { Play, Square, Pause, PlusCircle, CheckCircle2, Lock } from 'lucide-react-native';
-import { firebaseClockIn, firebaseClockOut, firebaseAddLog, subscribeToShiftBlocks, firebaseResumeSession, firebaseUpdateTaskProgress } from '../../src/services/firebaseService';
+import { Play, Square, Pause, PlusCircle, CheckCircle2, Lock, Camera, Image as ImageIcon, Trash2 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { firebaseClockIn, firebaseClockOut, firebaseAddLog, subscribeToShiftBlocks, firebaseResumeSession, firebaseUpdateTaskProgress, firebaseUploadTaskPhoto } from '../../src/services/firebaseService';
 import { Department } from '../../src/types';
 
 export default function ActivityScreen() {
@@ -16,6 +17,8 @@ export default function ActivityScreen() {
   const [isCustomTask, setIsCustomTask] = useState(true);
   const [progress, setProgress] = useState<number>(0);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [completionPhoto, setCompletionPhoto] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   
   useEffect(() => {
@@ -116,6 +119,48 @@ export default function ActivityScreen() {
     }
   };
 
+  const handleTakePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera permission is required to take photo proof for print room tasks.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.7,
+        base64: true,
+      });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setCompletionPhoto(result.assets[0].base64 || result.assets[0].uri);
+      }
+    } catch (e) {
+      console.error('Camera error:', e);
+      Alert.alert('Error', 'Failed to open camera');
+    }
+  };
+
+  const handlePickPhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Photo library access is required to select photos.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        quality: 0.7,
+        base64: true,
+      });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setCompletionPhoto(result.assets[0].base64 || result.assets[0].uri);
+      }
+    } catch (e) {
+      console.error('Photo library error:', e);
+      Alert.alert('Error', 'Failed to select image from library');
+    }
+  };
+
   const handleLogSubmit = async () => {
     if (!taskName.trim()) {
       Alert.alert('Error', 'Please enter a task name');
@@ -127,12 +172,38 @@ export default function ActivityScreen() {
       return;
     }
 
+    const matchingShift = !isCustomTask ? shifts.find(s => s.title === taskName) : null;
+    const isPhotoRequired = matchingShift?.requiresPhoto || matchingShift?.isPrintRoomTask;
+
+    // Strict Enforcement: If progress is 100% and photo is required, staff MUST provide a photo!
+    if (isPhotoRequired && progress === 100 && !completionPhoto) {
+      Alert.alert(
+        'Photo Proof Required',
+        'Staff must capture or upload a photo to complete this print room task. Please take a photo of the completed work before submitting 100% completion.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const now = Date.now();
       const intervalHours = appSettings?.checkInIntervalHours || 1;
-      const IDLE_THRESHOLD_MS = (intervalHours * 60 * 60 * 1000) + (10 * 60 * 1000); // Interval + 10 mins default grace
+      const IDLE_THRESHOLD_MS = (intervalHours * 60 * 60 * 1000) + (10 * 10 * 1000); // Interval + 10 mins default grace
       const isOverdueForPause = (now - activeSession!.lastLogTime) >= IDLE_THRESHOLD_MS;
+
+      let uploadedPhotoUrl: string | undefined;
+      if (completionPhoto && matchingShift) {
+        setIsUploadingPhoto(true);
+        try {
+          uploadedPhotoUrl = await firebaseUploadTaskPhoto(matchingShift.id, completionPhoto);
+        } catch (uploadErr) {
+          console.warn("Upload task photo failed:", uploadErr);
+          // If offline or storage error, continue gracefully
+        } finally {
+          setIsUploadingPhoto(false);
+        }
+      }
 
       let finalNotes = activeSession!.isPaused 
         ? `${notes || ''} (Resumed from Idle: spent ${Math.round((now - (activeSession!.currentIdleStartTime || now)) / 60000)}m unpaid)`.trim()
@@ -140,6 +211,10 @@ export default function ActivityScreen() {
 
       if (!isCustomTask && progress > 0) {
         finalNotes = `Progress: ${progress}%\n${finalNotes}`.trim();
+      }
+
+      if (uploadedPhotoUrl) {
+        finalNotes = `[Photo Proof Attached]\n${finalNotes}`.trim();
       }
 
       if (activeSession!.isPaused || isOverdueForPause) {
@@ -167,18 +242,14 @@ export default function ActivityScreen() {
         notes: finalNotes.trim() ? finalNotes : undefined,
       });
 
-      // If this was a scheduled task and progress was recorded, sync the check-in to the task itself!
-      if (!isCustomTask && progress > 0) {
-        const matchingShift = shifts.find(s => s.title === taskName);
-        if (matchingShift) {
-           await firebaseUpdateTaskProgress(matchingShift.id, progress, notes, currentUser?.name || '');
-        }
+      // If this was a scheduled task and progress was recorded, sync the check-in and photo to the task itself!
+      if (!isCustomTask && progress > 0 && matchingShift) {
+        await firebaseUpdateTaskProgress(matchingShift.id, progress, notes, currentUser?.name || '', uploadedPhotoUrl);
       }
       
       setIsSubmitting(false);
       setNotes('');
-      // Do not clear taskName or progress so the user doesn't lose their context!
-      // The progress will automatically jump to match what they just submitted via the sync useEffect.
+      setCompletionPhoto(null);
       Alert.alert('Success', 'Log submitted successfully!');
     } catch (e) {
       console.error(e);
@@ -555,6 +626,12 @@ export default function ActivityScreen() {
                                   {task.description}
                                 </Text>
                               ) : null}
+                              {(task.requiresPhoto || task.isPrintRoomTask) && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start', marginTop: 6, gap: 4 }}>
+                                  <Camera size={12} color="#2563EB" />
+                                  <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#1D4ED8' }}>Photo Proof Required to Complete</Text>
+                                </View>
+                              )}
                             </View>
                           </View>
                         </TouchableOpacity>
@@ -598,13 +675,78 @@ export default function ActivityScreen() {
                               value={notes}
                               onChangeText={setNotes}
                             />
-                            
+
+                            {/* Photo Proof Section for Print Room / Photo-required tasks */}
+                            {(task.requiresPhoto || task.isPrintRoomTask) && (
+                              <View style={{ marginTop: 10, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Camera size={16} color={progress === 100 && !completionPhoto ? '#DC2626' : '#2563EB'} />
+                                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: progress === 100 && !completionPhoto ? '#DC2626' : '#1E293B' }}>
+                                      COMPLETION PHOTO {progress === 100 ? '(REQUIRED FOR 100%)' : '(OPTIONAL)'}
+                                    </Text>
+                                  </View>
+                                  {completionPhoto && (
+                                    <TouchableOpacity onPress={() => setCompletionPhoto(null)} style={{ padding: 4 }}>
+                                      <Trash2 size={16} color="#EF4444" />
+                                    </TouchableOpacity>
+                                  )}
+                                </View>
+
+                                {completionPhoto ? (
+                                  <View style={{ alignItems: 'center', gap: 8 }}>
+                                    <Image 
+                                      source={{ uri: completionPhoto.startsWith('data:') ? completionPhoto : `data:image/jpeg;base64,${completionPhoto}` }}
+                                      style={{ width: '100%', height: 160, borderRadius: 6, backgroundColor: '#000' }}
+                                      resizeMode="cover"
+                                    />
+                                    <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
+                                      <TouchableOpacity 
+                                        onPress={handleTakePhoto} 
+                                        style={{ flex: 1, paddingVertical: 8, borderRadius: 6, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center' }}
+                                      >
+                                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155' }}>Retake Photo</Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity 
+                                        onPress={handlePickPhoto} 
+                                        style={{ flex: 1, paddingVertical: 8, borderRadius: 6, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center' }}
+                                      >
+                                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155' }}>Choose Library</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  </View>
+                                ) : (
+                                  <View style={{ gap: 8 }}>
+                                    <Text style={{ fontSize: 11, color: '#64748B' }}>
+                                      Staff must photograph the completed machine or work station to complete this task.
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                      <TouchableOpacity 
+                                        onPress={handleTakePhoto} 
+                                        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 8, backgroundColor: '#2563EB' }}
+                                      >
+                                        <Camera size={16} color="#FFFFFF" />
+                                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>Take Photo</Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity 
+                                        onPress={handlePickPhoto} 
+                                        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1' }}
+                                      >
+                                        <ImageIcon size={16} color="#475569" />
+                                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#475569' }}>Photo Library</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  </View>
+                                )}
+                              </View>
+                            )}
+
                             <TouchableOpacity 
-                              style={[styles.button, styles.submitBtn, { height: 48, marginTop: 8 }]} 
+                              style={[styles.button, styles.submitBtn, { height: 48, marginTop: 10 }]} 
                               onPress={handleLogSubmit}
-                              disabled={isSubmitting}
+                              disabled={isSubmitting || isUploadingPhoto}
                             >
-                              {isSubmitting ? <ActivityIndicator color="#fff" /> : (
+                              {isSubmitting || isUploadingPhoto ? <ActivityIndicator color="#fff" /> : (
                                 <>
                                   <CheckCircle2 color="#fff" size={18} style={{ marginRight: 6 }} />
                                   <Text style={[styles.buttonText, { fontSize: 16 }]}>Submit Log</Text>

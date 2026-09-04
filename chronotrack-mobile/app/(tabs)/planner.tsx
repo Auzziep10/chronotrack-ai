@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, TouchableOpacity } from 'react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import { theme } from '../../src/theme';
-import { Calendar, Clock, MapPin } from 'lucide-react-native';
+import { Calendar, Clock, MapPin, Camera, CheckCircle } from 'lucide-react-native';
 import { subscribeToShiftBlocks } from '../../src/services/firebaseService';
 
 export default function PlannerScreen() {
@@ -87,8 +87,29 @@ export default function PlannerScreen() {
           </View>
         )}
 
+        {(shift.requiresPhoto || shift.isPrintRoomTask) && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start', marginTop: 6, gap: 4 }}>
+            <Camera size={12} color="#2563EB" />
+            <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#1D4ED8' }}>Photo Proof Required to Complete</Text>
+          </View>
+        )}
+
         {shift.description && (
           <Text style={styles.description}>{shift.description}</Text>
+        )}
+
+        {shift.proofPhotoUrl && (
+          <View style={{ marginTop: 8, padding: 8, backgroundColor: '#F0FDF4', borderRadius: 8, borderWidth: 1, borderColor: '#BBF7D0' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+              <CheckCircle size={14} color="#16A34A" />
+              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#15803D' }}>Verified Completion Photo</Text>
+            </View>
+            <Image 
+              source={{ uri: shift.proofPhotoUrl }} 
+              style={{ width: '100%', height: 120, borderRadius: 6, backgroundColor: '#000' }} 
+              resizeMode="cover"
+            />
+          </View>
         )}
       </View>
     );

@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 // @ts-ignore
 import { getAuth, signInAnonymously, initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, UserSession, WorkLog, DailyTimeCard, AppSettings, ChatMessage, ChatChannel } from '../types';
 
@@ -26,12 +27,13 @@ const firebaseConfig = {
     apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || '',
     authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
     projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || '',
-    storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+    storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || 'print-shop-os-f8092.firebasestorage.app',
     messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
     appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || ''
 };
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+export const storage = getStorage(app);
 const db = initializeFirestore(app, {
     experimentalForceLongPolling: true,
     useFetchStreams: false,
@@ -259,11 +261,24 @@ export const subscribeToShiftBlocks = (onUpdate: (blocks: any[]) => void) => {
     });
 };
 
-export const firebaseUpdateTaskProgress = async (taskId: string, progress: number, notes: string, userName: string): Promise<void> => {
+export const firebaseUploadTaskPhoto = async (taskId: string, base64Data: string): Promise<string> => {
+    try {
+        const timestamp = Date.now();
+        const fileRef = ref(storage, `task-proofs/${taskId}_${timestamp}.jpg`);
+        const formattedData = base64Data.startsWith('data:') ? base64Data : `data:image/jpeg;base64,${base64Data}`;
+        await uploadString(fileRef, formattedData, 'data_url');
+        return await getDownloadURL(fileRef);
+    } catch (err) {
+        console.error("Error uploading task verification photo:", err);
+        throw err;
+    }
+};
+
+export const firebaseUpdateTaskProgress = async (taskId: string, progress: number, notes: string, userName: string, photoUrl?: string): Promise<void> => {
     const taskRef = doc(db, SHIFTS_COL, taskId);
     
     // Create a robust check-in object matching the web app schema
-    const checkIn = {
+    const checkIn: any = {
         id: `ci-${Date.now()}`,
         timestamp: Date.now(),
         notes: notes || `Progress: ${progress}%`,
@@ -273,12 +288,22 @@ export const firebaseUpdateTaskProgress = async (taskId: string, progress: numbe
         userName: userName
     };
 
+    if (photoUrl) {
+        checkIn.photoUrl = photoUrl;
+    }
+
+    const updates: any = {
+        checkIns: arrayUnion(checkIn),
+        status: progress === 100 ? 'completed' : 'in_progress',
+        updatedAt: serverTimestamp()
+    };
+
+    if (photoUrl) {
+        updates.proofPhotoUrl = photoUrl;
+    }
+
     try {
-        await updateDoc(taskRef, {
-            checkIns: arrayUnion(checkIn),
-            status: progress === 100 ? 'completed' : 'in_progress',
-            updatedAt: serverTimestamp()
-        });
+        await updateDoc(taskRef, updates);
     } catch (e) {
         console.warn("[Firebase] Failed to update task checkIns:", e);
     }

@@ -19,7 +19,7 @@ import {
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { User, UserSession, WorkLog, DailyTimeCard, AppSettings, QuickTask, ChatMessage, ChatChannel } from '../types';
+import { User, UserSession, WorkLog, DailyTimeCard, AppSettings, QuickTask, PrintRoomTask, ChatMessage, ChatChannel } from '../types';
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
@@ -506,6 +506,110 @@ export const firebaseSaveQuickTask = async (task: QuickTask): Promise<void> => {
 export const firebaseDeleteQuickTask = async (taskId: string): Promise<void> => {
     await deleteDoc(doc(db, QUICK_TASKS_COL, taskId));
 };
+
+// ─── PRINT ROOM TASKS ────────────────────────────────────────────────
+const PRINT_ROOM_TASKS_COL = 'printRoomTasks';
+
+export const DEFAULT_PRINT_ROOM_TASKS: PrintRoomTask[] = [
+    {
+        id: 'pr-clean-coldesi',
+        title: 'Clean Coldesi',
+        duration: 30,
+        locations: ['Coldesi'],
+        requiresPhoto: true,
+        instructions: 'Clean print heads, wiper blades, and cap tops. Photo required of clean station.'
+    },
+    {
+        id: 'pr-flush-venom',
+        title: 'Flush print heads on Venom',
+        duration: 30,
+        locations: ['Venom'],
+        requiresPhoto: true,
+        instructions: 'Perform head flush cycle and wipe carriage underside. Photo required of nozzle check.'
+    },
+    {
+        id: 'pr-pick-shopify',
+        title: 'Pick Shopify',
+        duration: 60,
+        locations: ['Shopify Station', 'Shipping'],
+        requiresPhoto: true,
+        instructions: 'Pick batch of Shopify orders and stage for printing. Photo required of picked orders cart.'
+    },
+    {
+        id: 'pr-clean-dtg',
+        title: 'Clean DTG Print Heads & Capping Station',
+        duration: 30,
+        locations: ['DTG Area'],
+        requiresPhoto: true,
+        instructions: 'Wipe around print heads and suction cap. Photo required of capping station.'
+    },
+    {
+        id: 'pr-daily-shutdown',
+        title: 'Daily Print Room Shutdown',
+        duration: 30,
+        locations: ['Print Room'],
+        requiresPhoto: true,
+        instructions: 'Turn off white ink agitators, park heads, power down dryers. Photo required of shutdown checklist.'
+    },
+    {
+        id: 'pr-pretreat-flush',
+        title: 'Pre-treatment Machine Flush & Wipe',
+        duration: 20,
+        locations: ['Pre-treatment'],
+        requiresPhoto: true,
+        instructions: 'Run DI water through lines and wipe down chamber walls. Photo required of clean chamber.'
+    },
+    {
+        id: 'pr-waste-ink',
+        title: 'Empty Waste Ink Bottles & Reset Counters',
+        duration: 15,
+        locations: ['Waste Station'],
+        requiresPhoto: true,
+        instructions: 'Empty waste tank into disposal container and reset counter. Photo required of empty bottle.'
+    }
+];
+
+export const subscribeToPrintRoomTasks = (onUpdate: (tasks: PrintRoomTask[]) => void) => {
+    return onSnapshot(collection(db, PRINT_ROOM_TASKS_COL), async (snapshot) => {
+        if (snapshot.empty) {
+            // Seed initial defaults so print room tasks are available immediately
+            try {
+                for (const t of DEFAULT_PRINT_ROOM_TASKS) {
+                    await setDoc(doc(db, PRINT_ROOM_TASKS_COL, t.id), {
+                        ...t,
+                        updatedAt: serverTimestamp()
+                    });
+                }
+            } catch (e) {
+                console.warn("Auto-seed default print room tasks:", e);
+            }
+            onUpdate(DEFAULT_PRINT_ROOM_TASKS);
+            return;
+        }
+        const tasks = snapshot.docs.map(d => {
+            const data = d.data();
+            const { updatedAt, ...task } = data;
+            return task as PrintRoomTask;
+        });
+        onUpdate(tasks);
+    });
+};
+
+export const firebaseSavePrintRoomTask = async (task: PrintRoomTask): Promise<void> => {
+    const clean: any = {};
+    Object.entries(task).forEach(([k, v]) => {
+        if (v !== undefined) clean[k] = v;
+    });
+    await setDoc(doc(db, PRINT_ROOM_TASKS_COL, task.id), {
+        ...clean,
+        updatedAt: serverTimestamp()
+    }, { merge: true });
+};
+
+export const firebaseDeletePrintRoomTask = async (taskId: string): Promise<void> => {
+    await deleteDoc(doc(db, PRINT_ROOM_TASKS_COL, taskId));
+};
+
 
 // ─── TEAM DASHBOARD DATABASE INTEGRATION ──────────────────────────────
 const teamDashboardConfig = {

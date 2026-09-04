@@ -145,11 +145,15 @@ export interface ScheduleBlock {
     status?: string;
     progress?: number;
     userName?: string;
+    photoUrl?: string;
   }>;
   isShiftBlock?: boolean; // Flag to differentiate shift schedules from task blocks
   webDevTaskId?: string; // Original Web Dev task ID
   isWebDevSubtask?: boolean;
   webDevSubtaskIndex?: number;
+  requiresPhoto?: boolean; // Whether completing this task requires a photo from staff
+  isPrintRoomTask?: boolean; // Flag for Print Room specific tasks
+  proofPhotoUrl?: string; // Final completion verification photo URL
 }
 
 export interface DailySchedule {
@@ -165,6 +169,15 @@ export interface QuickTask {
   duration: number;
   location?: string;
   locations?: string[];
+}
+
+export interface PrintRoomTask {
+  id: string;
+  title: string;
+  duration: number;
+  locations?: string[];
+  requiresPhoto: boolean;
+  instructions?: string;
 }
 
 export interface ChatMessage {
