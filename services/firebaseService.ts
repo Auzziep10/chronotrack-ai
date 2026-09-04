@@ -613,12 +613,12 @@ export const firebaseDeletePrintRoomTask = async (taskId: string): Promise<void>
 
 // ─── TEAM DASHBOARD DATABASE INTEGRATION ──────────────────────────────
 const teamDashboardConfig = {
-    apiKey: "AIzaSyAGiJrWnwbdY4PrI-YHMf7DWOS9wFlsY3c",
-    authDomain: "print-shop-os-f8092.firebaseapp.com",
-    projectId: "print-shop-os-f8092",
-    storageBucket: "print-shop-os-f8092.firebasestorage.app",
-    messagingSenderId: "637868552650",
-    appId: "1:637868552650:web:473f9f71ad41703ec7df33"
+    apiKey: import.meta.env.VITE_TEAM_DASHBOARD_API_KEY || "",
+    authDomain: import.meta.env.VITE_TEAM_DASHBOARD_AUTH_DOMAIN || "print-shop-os-f8092.firebaseapp.com",
+    projectId: import.meta.env.VITE_TEAM_DASHBOARD_PROJECT_ID || "print-shop-os-f8092",
+    storageBucket: import.meta.env.VITE_TEAM_DASHBOARD_STORAGE_BUCKET || "print-shop-os-f8092.firebasestorage.app",
+    messagingSenderId: import.meta.env.VITE_TEAM_DASHBOARD_MESSAGING_SENDER_ID || "637868552650",
+    appId: import.meta.env.VITE_TEAM_DASHBOARD_APP_ID || "1:637868552650:web:473f9f71ad41703ec7df33"
 };
 
 const teamApps = getApps().filter(app => app.name === 'teamDashboard');
