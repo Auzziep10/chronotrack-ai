@@ -192,12 +192,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
              import('../services/firebaseService').then(({ db }) => {
                 const userRef = doc(db, 'users', currentUser.id);
                 updateDoc(userRef, { expoPushToken: token }).catch(console.error);
-                setCurrentUser(prev => prev ? { ...prev, expoPushToken: token } : null);
-             });
-           });
+                setCurrentUser(prev => (prev && prev.expoPushToken !== token) ? { ...prev, expoPushToken: token } : prev);
+             }).catch(console.error);
+           }).catch(console.error);
         }
-      });
-    });
+      }).catch(err => console.warn("[AuthContext] Push notification registration error:", err));
+    }).catch(err => console.warn("[AuthContext] Failed to load notificationService:", err));
 
     const unsubscribe = subscribeToActiveSessions((sessions) => {
       const mySession = sessions[currentUser.id];

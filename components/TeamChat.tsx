@@ -43,6 +43,7 @@ interface Props {
   currentUser: User | null;
   activeSessions: Record<string, UserSession>;
   users: User[];
+  isEmbedded?: boolean;
 }
 
 const DEFAULT_CHANNELS: ChatChannel[] = [
@@ -86,7 +87,7 @@ const getDmChannelId = (userA: { id: string; role?: string }, userB: { id: strin
   }
 };
 
-export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, activeSessions, users }) => {
+export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, activeSessions, users, isEmbedded }) => {
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [activeChannel, setActiveChannel] = useState('general');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -132,7 +133,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
 
   // 1. Subscribe to Channels List
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen && !isEmbedded) return;
 
     if (isFirebaseConfigured()) {
       const unsubscribe = subscribeToChatChannels((syncedChannels) => {
@@ -167,11 +168,11 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
       window.addEventListener('storage', handleStorageChange);
       return () => window.removeEventListener('storage', handleStorageChange);
     }
-  }, [isOpen]);
+  }, [isOpen, isEmbedded]);
 
   // 2. Subscribe to Messages of Active Channel
   useEffect(() => {
-    if (!isOpen || channels.length === 0) return;
+    if ((!isOpen && !isEmbedded) || channels.length === 0) return;
 
     // Verify current activeChannel still exists, fallback if deleted (exclude DM channels)
     if (!activeChannel.startsWith('dm-') && !channels.some(c => c.id === activeChannel)) {
@@ -201,7 +202,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
       window.addEventListener('storage', handleStorageChange);
       return () => window.removeEventListener('storage', handleStorageChange);
     }
-  }, [activeChannel, channels, isOpen]);
+  }, [activeChannel, channels, isOpen, isEmbedded]);
 
   // 3. Clear unread badge for the current channel/DM when selected
   useEffect(() => {
@@ -223,7 +224,7 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
 
   // 4. Monitor messages for other channels to trigger unread badges
   useEffect(() => {
-    if (!isOpen || !isFirebaseConfigured() || !currentUser || channels.length === 0) return;
+    if ((!isOpen && !isEmbedded) || !isFirebaseConfigured() || !currentUser || channels.length === 0) return;
 
     const unsubscribers = channels.map(ch => {
       if (ch.id === activeChannel) return null;
@@ -277,27 +278,27 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
       unsubscribers.forEach(unsub => unsub());
       unsubRecent();
     };
-  }, [activeChannel, channels, currentUser?.id, isOpen, isAdminOrManager]);
+  }, [activeChannel, channels, currentUser?.id, isOpen, isEmbedded, isAdminOrManager]);
 
   // 5. Update the "last viewed" timestamp when leaving/viewing a channel
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen && !isEmbedded) return;
     const key = `chrono_last_viewed_${activeChannel}`;
     localStorage.setItem(key, String(Date.now()));
-  }, [activeChannel, messages, isOpen]);
+  }, [activeChannel, messages, isOpen, isEmbedded]);
 
   // 6. Scroll to bottom of chat
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen && !isEmbedded) return;
     if (messages.length > prevMessagesLengthRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     } else {
       messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }
     prevMessagesLengthRef.current = messages.length;
-  }, [messages, isOpen]);
+  }, [messages, isOpen, isEmbedded]);
 
-  if (!isOpen) return null;
+  if (!isOpen && !isEmbedded) return null;
 
   // Send a message
   const handleSendMessage = async (text: string, imageUrl?: string) => {
@@ -644,8 +645,8 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
   const activeStaffList = Object.values(activeSessions).map(session => session.user);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in">
-      <div className="bg-white rounded-3xl max-w-6xl w-full h-[90vh] flex flex-col md:flex-row overflow-hidden shadow-2xl relative border border-zinc-200">
+    <div className={isEmbedded ? "w-full h-full flex flex-col md:flex-row overflow-hidden bg-white relative border border-zinc-200 rounded-3xl" : "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in"}>
+      <div className={isEmbedded ? "contents" : "bg-white rounded-3xl max-w-6xl w-full h-[90vh] flex flex-col md:flex-row overflow-hidden shadow-2xl relative border border-zinc-200"}>
         
         {/* 1. Channels Sidebar */}
         <div className="w-full md:w-64 bg-zinc-50 border-b md:border-b-0 md:border-r border-zinc-200 flex flex-col shrink-0">
@@ -826,13 +827,15 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
         <div className="flex-1 flex flex-col min-w-0 bg-white relative">
           
           {/* Close Dialog Button */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 z-20 p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-full transition-all"
-            title="Close Chat"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!isEmbedded && (
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 z-20 p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-full transition-all"
+              title="Close Chat"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
 
           {/* Dynamic header resolution for DMs vs regular channels */}
           {(() => {
