@@ -41,7 +41,7 @@ export interface TimeOffRequest {
   status: 'Pending' | 'Approved' | 'Denied';
   reason: string;
   submittedAt: number;
-  category?: 'Vacation' | 'Sick' | 'Unpaid' | 'Bereavement' | 'Other';
+  category?: 'Retainer Time Off' | 'Unpaid Leave' | 'Sick' | 'Personal' | 'Emergency' | 'Vacation' | 'Bereavement' | 'Other';
   requestedInAdvance?: boolean;
 }
 
@@ -51,6 +51,7 @@ export interface User {
   username?: string; // Mapped from external auth or local auth
   password?: string; // Local auth password
   role: string; // Primary Role
+  compensationType?: 'Hourly' | 'Retainer' | 'Salary';
   permissions?: string[]; // RBAC Permissions
   primaryDepartment?: Department;
   secondaryDepartment?: Department;
@@ -70,6 +71,9 @@ export interface User {
   recurringUnavailability?: Array<{ day: DayOfWeek; allDay: boolean; start?: string; end?: string }>;
   dateUnavailability?: Array<{ date: string; allDay: boolean; start?: string; end?: string }>;
   lateDays?: number;
+  tardyCount30Days?: number;
+  strikeLevel?: 0 | 1 | 2 | 3; // 1: Written Warning (3 tardies), 2: Final Warning (5 tardies), 3: Termination Review (6+ tardies)
+  counselingNotes?: Array<{ date: string; managerName: string; notes: string }>;
   correctionNotes?: string;
   timeOffRequests?: TimeOffRequest[];
   onboardingDocuments?: Array<{ id: string, formType: string, url: string, uploadedAt: string, fileName: string }>;
@@ -107,6 +111,22 @@ export interface DailyTimeCard {
   coveredByUserId?: string;
   coveredByUserName?: string;
   missedShiftTitle?: string;
+}
+
+export interface WeeklyAccountabilityReport {
+  weekStartDate: string;
+  weekEndDate: string;
+  totalActiveStaff: number;
+  totalShiftHoursWorked: number;
+  tardinessCount: number;
+  totalMinutesLate: number;
+  sickDaysCount: number;
+  noCallNoShowCount: number;
+  doctorNotesSubmitted: number;
+  doctorNotesPending: number;
+  pendingTimeOffRequests: number;
+  repeatTardyUsers: Array<{ userId: string; userName: string; tardyCount: number; strikeLevel: number }>;
+  reliabilityScorePercent: number;
 }
 
 // App Configuration

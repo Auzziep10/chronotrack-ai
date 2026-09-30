@@ -521,19 +521,33 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                     />
                   </div>
                   {viewerHasPermission('view_payroll') && (
-                    <div>
-                      <label className="block text-xs font-medium text-zinc-500 mb-1">Hourly Pay Rate</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-zinc-400 font-medium">$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={formData.payRate || ''}
-                          onChange={e => setFormData({ ...formData, payRate: parseFloat(e.target.value) || undefined })}
-                          placeholder="e.g. 15.50"
-                          className="w-full pl-7 text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-zinc-50"
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-500 mb-1">Hourly Pay Rate</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-zinc-400 font-medium">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={formData.payRate || ''}
+                            onChange={e => setFormData({ ...formData, payRate: parseFloat(e.target.value) || undefined })}
+                            placeholder="e.g. 15.50"
+                            className="w-full pl-7 text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-zinc-50"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-500 mb-1">Compensation Type</label>
+                        <select
+                          value={formData.compensationType || 'Hourly'}
+                          onChange={e => setFormData({ ...formData, compensationType: e.target.value as any })}
+                          className="w-full text-sm border-zinc-300 rounded-md focus:ring-zinc-500 focus:border-zinc-300 bg-zinc-50 p-2"
+                        >
+                          <option value="Hourly">Hourly (Unpaid Leave)</option>
+                          <option value="Retainer">Retainer (Retainer Time Off)</option>
+                          <option value="Salary">Salary (Retainer Time Off)</option>
+                        </select>
                       </div>
                     </div>
                   )}

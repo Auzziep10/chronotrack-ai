@@ -15,19 +15,96 @@ export async function sendPushNotification(payload: any): Promise<any> {
       : '/api/push';
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Accept-Encoding': 'gzip, deflate',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (err) {
+    console.warn("Failed to send push notification:", err);
+    return null;
   }
+}
 
-  return response.json();
+/** Broadcast immediate tardy alert to managers */
+export async function notifyManagersOfTardiness(
+  userName: string,
+  minutesLate: number,
+  shiftTitle?: string,
+  managerPushTokens: string[] = []
+): Promise<void> {
+  if (!managerPushTokens || managerPushTokens.length === 0) return;
+  const uniqueTokens = Array.from(new Set(managerPushTokens.filter(Boolean)));
+  const payload = uniqueTokens.map(to => ({
+    to,
+    sound: 'default',
+    title: `⏱️ Tardy Alert: ${userName}`,
+    body: `${userName} clocked in ${minutesLate} min${minutesLate > 1 ? 's' : ''} late for ${shiftTitle || 'scheduled shift'}.`,
+    data: { type: 'tardy_alert', userName, minutesLate }
+  }));
+  try {
+    await sendPushNotification(payload);
+  } catch (e) {
+    console.error("Error broadcasting tardy notification:", e);
+  }
+}
+
+/** Broadcast disciplinary strike alert to executive leadership */
+export async function notifyManagersOfStrike(
+  userName: string,
+  strikeLevel: number,
+  tardyCount: number,
+  managerPushTokens: string[] = []
+): Promise<void> {
+  if (!managerPushTokens || managerPushTokens.length === 0) return;
+  const uniqueTokens = Array.from(new Set(managerPushTokens.filter(Boolean)));
+  const strikeLabels = ['', 'Strike 1: Written Warning', 'Strike 2: Final Warning & PIP', 'Strike 3: Termination Review'];
+  const title = `🚨 Disciplinary ${strikeLabels[strikeLevel] || `Strike ${strikeLevel}`}`;
+  const body = `${userName} has reached ${tardyCount} tardies in the last 30 days. Action required in Manager Console.`;
+  
+  const payload = uniqueTokens.map(to => ({
+    to,
+    sound: 'default',
+    title,
+    body,
+    data: { type: 'disciplinary_strike', userName, strikeLevel, tardyCount }
+  }));
+  try {
+    await sendPushNotification(payload);
+  } catch (e) {
+    console.error("Error broadcasting strike notification:", e);
+  }
+}
+
+/** Broadcast Monday 7:00 AM weekly digest summary */
+export async function notifyManagersOfWeeklyDigest(
+  summaryTitle: string,
+  summaryBody: string,
+  managerPushTokens: string[] = []
+): Promise<void> {
+  if (!managerPushTokens || managerPushTokens.length === 0) return;
+  const uniqueTokens = Array.from(new Set(managerPushTokens.filter(Boolean)));
+  const payload = uniqueTokens.map(to => ({
+    to,
+    sound: 'default',
+    title: summaryTitle,
+    body: summaryBody,
+    data: { type: 'weekly_digest' }
+  }));
+  try {
+    await sendPushNotification(payload);
+  } catch (e) {
+    console.error("Error broadcasting weekly digest push:", e);
+  }
 }

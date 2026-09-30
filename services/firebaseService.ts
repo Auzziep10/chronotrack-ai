@@ -96,6 +96,37 @@ export const subscribeToActiveSessions = (
 /** Clock in — writes/overwrites session document in Firestore */
 export const firebaseClockIn = async (user: User, clockInDepartment?: string, isUnscheduled?: boolean): Promise<void> => {
     const now = Date.now();
+    let minutesLate = 0;
+    let tardyShiftTitle: string | undefined = undefined;
+
+    // Check if user clocked in late against today's shift schedule (zero grace period)
+    try {
+        const todayStr = new Date(now).toISOString().split('T')[0];
+        const shiftsSnap = await getDocs(query(
+            collection(db, SHIFTS_COL),
+            where('assignedTo', '==', user.id)
+        ));
+        
+        const todayShifts = shiftsSnap.docs.map(d => d.data()).filter(s => {
+            const startMs = new Date(s.startTime).getTime();
+            const sDate = s.date || new Date(startMs).toISOString().split('T')[0];
+            return sDate === todayStr;
+        });
+
+        if (todayShifts.length > 0) {
+            const sortedShifts = todayShifts.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+            const firstShift = sortedShifts[0];
+            const scheduledStart = new Date(firstShift.startTime).getTime();
+
+            if (now > scheduledStart) {
+                minutesLate = Math.ceil((now - scheduledStart) / (1000 * 60));
+                tardyShiftTitle = firstShift.title || 'Scheduled Shift';
+            }
+        }
+    } catch (err) {
+        console.warn("[Firebase] Error calculating tardiness on clock-in:", err);
+    }
+
     await setDoc(doc(db, SESSIONS_COL, user.id), {
         userId: user.id,
         userName: user.name,
@@ -111,8 +142,27 @@ export const firebaseClockIn = async (user: User, clockInDepartment?: string, is
         clockedOut: false,
         clockInDepartment: clockInDepartment || null,
         isUnscheduled: isUnscheduled || false,
+        minutesLate: minutesLate || 0,
+        tardyShiftTitle: tardyShiftTitle || null,
         updatedAt: serverTimestamp()
     });
+
+    // If clocked in late, dispatch immediate tardy alert to managers
+    if (minutesLate > 0) {
+        try {
+            const allUsersSnap = await getDocs(collection(db, USERS_COL));
+            const managerTokens = allUsersSnap.docs
+                .map(d => d.data())
+                .filter(u => (u.role?.toLowerCase() === 'admin' || u.role?.toLowerCase() === 'manager') && u.expoPushToken)
+                .map(u => u.expoPushToken as string);
+
+            import('./pushNotificationService').then(({ notifyManagersOfTardiness }) => {
+                notifyManagersOfTardiness(user.name, minutesLate, tardyShiftTitle, managerTokens);
+            }).catch(console.error);
+        } catch (e) {
+            console.warn("Failed to notify managers of tardiness:", e);
+        }
+    }
 };
 
 /** Clock out — marks session clockedOut and saves a time card */
@@ -137,7 +187,9 @@ export const firebaseClockOut = async (userId: string, session: UserSession): Pr
         clockOut: now,
         totalHours: netHours,
         totalIdleHours: totalIdleHours,
-        status: 'Complete'
+        status: 'Complete',
+        minutesLate: (session as any).minutesLate || 0,
+        tardyShiftTitle: (session as any).tardyShiftTitle || undefined
     };
 
     await setDoc(doc(db, SESSIONS_COL, userId), {

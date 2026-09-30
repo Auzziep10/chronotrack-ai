@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { X, AlertOctagon, HeartPulse, ShieldAlert, Save } from 'lucide-react';
+import { X, AlertOctagon, HeartPulse, ShieldAlert, Save, FileText } from 'lucide-react';
 import { User } from '../types';
 
 interface Props {
   user: User | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (type: 'No-Call No-Show' | 'Sick' | 'Emergency', notes: string) => void;
+  onSave: (type: 'No-Call No-Show' | 'Sick' | 'Emergency', notes: string, sickDocumentationProvided?: boolean) => void;
 }
 
 type AbsenceType = 'No-Call No-Show' | 'Sick' | 'Emergency';
@@ -14,15 +14,17 @@ type AbsenceType = 'No-Call No-Show' | 'Sick' | 'Emergency';
 export const LogAbsenceModal: React.FC<Props> = ({ user, isOpen, onClose, onSave }) => {
   const [selectedType, setSelectedType] = useState<AbsenceType | null>(null);
   const [notes, setNotes] = useState('');
+  const [docProvided, setDocProvided] = useState(false);
 
   if (!isOpen || !user) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedType) {
-      onSave(selectedType, notes);
+      onSave(selectedType, notes, selectedType === 'Sick' ? docProvided : undefined);
       setSelectedType(null);
       setNotes('');
+      setDocProvided(false);
       onClose();
     }
   };
@@ -106,6 +108,24 @@ export const LogAbsenceModal: React.FC<Props> = ({ user, isOpen, onClose, onSave
               })}
             </div>
           </div>
+
+          {selectedType === 'Sick' && (
+            <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FileText className="w-5 h-5 text-blue-600 shrink-0" />
+                <div>
+                  <h5 className="text-sm font-bold text-zinc-900">Doctor's Note / Medical Proof Provided</h5>
+                  <p className="text-xs text-zinc-500">Check if employee submitted medical documentation or doctor's note</p>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={docProvided}
+                onChange={(e) => setDocProvided(e.target.checked)}
+                className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 border-zinc-300"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">

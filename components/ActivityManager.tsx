@@ -1168,6 +1168,159 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     });
   };
 
+  const handleExportPDF = () => {
+    const reportWindow = window.open('', '_blank', 'width=900,height=1000');
+    if (!reportWindow) return;
+
+    const startDateStr = exportStartDate || (currentPeriod ? currentPeriod.start.toISOString().split('T')[0] : '');
+    const endDateStr = exportEndDate || (currentPeriod ? currentPeriod.end.toISOString().split('T')[0] : '');
+
+    const cardsInRange = timeCards.filter(c => c.date >= startDateStr && c.date <= endDateStr);
+    const tardyCards = cardsInRange.filter(c => (c.minutesLate || 0) > 0);
+    const totalMinutesLate = tardyCards.reduce((sum, c) => sum + (c.minutesLate || 0), 0);
+    const sickCards = cardsInRange.filter(c => c.status === 'Sick');
+    const docSubmitted = sickCards.filter(c => c.sickDocumentationProvided === true).length;
+    const docPending = sickCards.filter(c => c.sickDocumentationProvided !== true).length;
+    const noShowCards = cardsInRange.filter(c => c.status === 'No-Call No-Show');
+    
+    // Repeat tardy users (3+ tardies in 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+    
+    const tardyByUser: Record<string, number> = {};
+    timeCards.filter(c => c.date >= thirtyDaysAgoStr && (c.minutesLate || 0) > 0).forEach(c => {
+      tardyByUser[c.userId] = (tardyByUser[c.userId] || 0) + 1;
+    });
+
+    const repeatTardyList = Object.entries(tardyByUser)
+      .filter(([_, count]) => count >= 3)
+      .map(([uId, count]) => {
+        const u = users.find(usr => usr.id === uId);
+        const strike = count >= 6 ? 'Strike 3: Termination Review' : count >= 5 ? 'Strike 2: Final Warning & PIP' : 'Strike 1: Written Warning';
+        return { name: u?.name || uId, count, strike };
+      });
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Weekly Accountability Report - ${startDateStr} to ${endDateStr}</title>
+        <style>
+          body { font-family: system-ui, -apple-system, sans-serif; padding: 30px; color: #18181b; background: #fff; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #18181b; padding-bottom: 16px; margin-bottom: 24px; }
+          .title { font-size: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: -0.5px; }
+          .subtitle { font-size: 13px; color: #71717a; margin-top: 4px; }
+          .badge { background: #18181b; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+          .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 30px; }
+          .card { background: #f4f4f5; border: 1px solid #e4e4e7; border-radius: 12px; padding: 16px; }
+          .card-val { font-size: 28px; font-weight: 900; margin-top: 4px; color: #09090b; }
+          .card-lbl { font-size: 11px; font-weight: 700; color: #71717a; text-transform: uppercase; }
+          table { width: 100%; border-collapse: collapse; margin-top: 16px; margin-bottom: 30px; }
+          th { background: #18181b; color: #fff; text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+          td { border-bottom: 1px solid #e4e4e7; padding: 10px 12px; font-size: 13px; font-weight: 500; }
+          .section-head { font-size: 16px; font-weight: 800; border-bottom: 1px solid #18181b; padding-bottom: 6px; margin-top: 24px; text-transform: uppercase; letter-spacing: -0.3px; }
+          .strike-tag { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+          .footer { font-size: 11px; color: #a1a1aa; text-align: center; border-top: 1px solid #e4e4e7; padding-top: 16px; margin-top: 40px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="title">Clockwork Team Accountability Digest</div>
+            <div class="subtitle">Weekly Leadership Attendance & Disciplinary Summary (${startDateStr} to ${endDateStr})</div>
+          </div>
+          <div class="badge">Generated: ${new Date().toLocaleDateString()}</div>
+        </div>
+
+        <div class="grid">
+          <div class="card">
+            <div class="card-lbl">Total Shift Tardies</div>
+            <div class="card-val">${tardyCards.length}</div>
+            <div class="subtitle" style="font-size: 10px;">${totalMinutesLate} total minutes late</div>
+          </div>
+          <div class="card">
+            <div class="card-lbl">Sick Day Callouts</div>
+            <div class="card-val">${sickCards.length}</div>
+            <div class="subtitle" style="font-size: 10px;">Doc notes: ${docSubmitted} verified / ${docPending} pending</div>
+          </div>
+          <div class="card">
+            <div class="card-lbl">No-Call No-Shows</div>
+            <div class="card-val">${noShowCards.length}</div>
+            <div class="subtitle" style="font-size: 10px;">Unexcused shift absences</div>
+          </div>
+          <div class="card">
+            <div class="card-lbl">Disciplinary Warnings</div>
+            <div class="card-val">${repeatTardyList.length}</div>
+            <div class="subtitle" style="font-size: 10px;">Staff with 3+ tardies in 30d</div>
+          </div>
+        </div>
+
+        ${repeatTardyList.length > 0 ? `
+          <div class="section-head" style="color: #dc2626;">🚨 Disciplinary Escalations & Repeat Tardiness Action Required</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Team Member</th>
+                <th>30-Day Tardies</th>
+                <th>Escalation Level</th>
+                <th>Required Management Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${repeatTardyList.map(item => `
+                <tr>
+                  <td><strong>${item.name}</strong></td>
+                  <td>${item.count} late clock-ins</td>
+                  <td><span class="strike-tag">${item.strike}</span></td>
+                  <td>${item.count >= 6 ? 'Schedule Termination Review Meeting' : item.count >= 5 ? 'Conduct Mandatory 1-on-1 Counseling' : 'Issue Written Warning Notice'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : ''}
+
+        <div class="section-head">⏱️ Shift Tardiness Log (${startDateStr} to ${endDateStr})</div>
+        ${tardyCards.length > 0 ? `
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Team Member</th>
+                <th>Shift Title</th>
+                <th>Minutes Late</th>
+                <th>Clock-In Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tardyCards.map(card => {
+                const u = users.find(usr => usr.id === card.userId);
+                return `
+                  <tr>
+                    <td>${card.date}</td>
+                    <td><strong>${u?.name || card.userId}</strong></td>
+                    <td>${card.tardyShiftTitle || 'Scheduled Shift'}</td>
+                    <td style="color: #dc2626; font-weight: bold;">+${card.minutesLate} mins</td>
+                    <td>${new Date(card.clockIn).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        ` : '<p style="font-size: 13px; color: #71717a; margin-top: 10px;">No shift tardies recorded for this period.</p>'}
+
+        <div class="footer">
+          Clockwork Operations Management System &bull; Confidential Leadership & HR Document
+        </div>
+        <script>window.onload = function() { window.print(); }</script>
+      </body>
+      </html>
+    `;
+
+    reportWindow.document.write(htmlContent);
+    reportWindow.document.close();
+  };
+
   const startEditingCard = (card: DailyTimeCard) => {
     setEditingCardId(card.id);
     const offset = new Date().getTimezoneOffset() * 60000;
@@ -2098,9 +2251,15 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                     </div>
                     <button
                       onClick={handleExportCSV}
-                      className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold shadow-lg shadow-zinc-100 hover:bg-zinc-800 transition-all"
+                      className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-100 border border-zinc-200 text-zinc-800 rounded-xl text-xs font-bold hover:bg-zinc-200 transition-all"
                     >
-                      <Download className="w-4 h-4" /> Export Cycle
+                      <Download className="w-4 h-4 text-zinc-600" /> Export CSV
+                    </button>
+                    <button
+                      onClick={handleExportPDF}
+                      className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-900 text-white rounded-xl text-xs font-bold shadow-md hover:bg-zinc-800 transition-all"
+                    >
+                      <FileText className="w-4 h-4" /> Export PDF Report
                     </button>
                   </div>
                 </div>
