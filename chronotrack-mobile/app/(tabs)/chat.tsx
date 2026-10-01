@@ -59,7 +59,8 @@ const AVATAR_COLORS = [
   { bg: '#f4f4f5', text: '#27272a', border: '#e4e4e7' }  // zinc
 ];
 
-const getDmChannelId = (userA: { id: string; role?: string }, userB: { id: string; role?: string }) => {
+const getDmChannelId = (userA?: { id: string; role?: string } | null, userB?: { id: string; role?: string } | null) => {
+  if (!userA || !userB) return 'dm-unknown';
   const isUserAAdminOrManager = userA.role?.toLowerCase() === 'admin' || userA.role?.toLowerCase() === 'manager';
   const isUserBAdminOrManager = userB.role?.toLowerCase() === 'admin' || userB.role?.toLowerCase() === 'manager';
   

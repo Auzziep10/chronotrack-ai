@@ -39,15 +39,18 @@ const db = initializeFirestore(app, {
     useFetchStreams: false,
 } as any);
 
-// Initialize Auth with React Native persistence
+// Initialize Auth cleanly
 let auth: any;
 try {
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage)
-  });
-} catch (e) {
-  // Fallback if already initialized
   auth = getAuth(app);
+} catch (e) {
+  try {
+    auth = initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage)
+    });
+  } catch (e2) {
+    console.warn("[Firebase] Auth initialization fallback:", e2);
+  }
 }
 
 export const isFirebaseConfigured = () => !!firebaseConfig.projectId;
