@@ -5,7 +5,7 @@ import {
   BarChart3, Users, Clock, Calendar, ChevronDown, ChevronRight, Download,
   Briefcase, CalendarRange, Sparkles, Zap, ListTodo, RefreshCw,
   Target, TrendingUp, AlertCircle, X, Save, Plus, Trash2, Edit3, Filter,
-  CheckSquare, Check, Link, CalendarDays
+  CheckSquare, Check, Link, CalendarDays, FileText
 } from 'lucide-react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, collection, onSnapshot, getDoc, doc, updateDoc, query, where, getDocs } from 'firebase/firestore';
