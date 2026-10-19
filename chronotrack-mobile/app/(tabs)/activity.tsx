@@ -179,7 +179,7 @@ export default function ActivityScreen() {
     if (isPhotoRequired && progress === 100 && !completionPhoto) {
       Alert.alert(
         'Photo Proof Required',
-        'Staff must capture or upload a photo to complete this print room task. Please take a photo of the completed work before submitting 100% completion.',
+        'Staff must capture or upload a photo to complete this task. Please take a photo of the completed work before submitting 100% completion.',
         [{ text: 'OK' }]
       );
       return;

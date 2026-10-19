@@ -105,7 +105,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isAdminOrManager = currentUser.role?.toLowerCase() === 'admin' || currentUser.role?.toLowerCase() === 'manager';
 
       recentMsgs.forEach(msg => {
-        if (msg.senderId === currentUser.id) return;
+        if (!msg || msg.senderId === currentUser.id) return;
+        if (typeof msg.channel !== 'string' || !msg.channel) return;
 
         if (msg.channel.startsWith('dm-')) {
           const dmContent = msg.channel.substring(3);

@@ -186,6 +186,7 @@ export interface QuickTask {
   duration: number;
   location?: string;
   locations?: string[];
+  requiresPhoto?: boolean;
 }
 
 export interface PrintRoomTask {

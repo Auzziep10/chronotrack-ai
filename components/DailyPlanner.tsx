@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy, Zap, MapPin, Search, ShoppingBag, Printer, Camera, Image as ImageIcon } from 'lucide-react';
-import { User, DailySchedule, ScheduleBlock, Department, QuickTask, PrintRoomTask } from '../types';
-import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock, subscribeToQuickTasks, firebaseSaveQuickTask, firebaseDeleteQuickTask, subscribeToProductionOrders, subscribeToCustomers, subscribeToPrintRoomTasks, firebaseSavePrintRoomTask, firebaseDeletePrintRoomTask } from '../services/firebaseService';
+import { ChevronLeft, ChevronRight, Calendar, Smartphone, LayoutGrid, Clock, AlertCircle, Wand2, Mic, CheckCircle, Trash2, Plus, Send, X, Users, Save, Copy, Zap, MapPin, Search, ShoppingBag, Camera } from 'lucide-react';
+import { User, DailySchedule, ScheduleBlock, Department, QuickTask } from '../types';
+import { subscribeToShiftBlocks, firebaseSaveShiftBlock, firebaseDeleteShiftBlock, subscribeToQuickTasks, firebaseSaveQuickTask, firebaseDeleteQuickTask, subscribeToProductionOrders, subscribeToCustomers } from '../services/firebaseService';
 import { processExternalPlan } from '../services/geminiService';
 import { ShiftCalendarViews } from './ShiftCalendarViews';
 
@@ -64,6 +64,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [editEnd, setEditEnd] = useState('');
     const [editNotes, setEditNotes] = useState('');
     const [editDepartment, setEditDepartment] = useState<Department | ''>('');
+    const [editRequiresPhoto, setEditRequiresPhoto] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
 
     // Drag & Drop State
@@ -93,9 +94,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         return () => window.removeEventListener('click', handleClick);
     }, []);
 
-    // Quick Tasks State
+    // Tasks State
     const [showQuickTasks, setShowQuickTasks] = useState(false);
     const [quickTasks, setQuickTasks] = useState<QuickTask[]>([]);
+    const [viewingProofPhoto, setViewingProofPhoto] = useState<{ url: string; title: string; userName?: string; timestamp?: any } | null>(null);
 
     useEffect(() => {
         const unsubscribe = subscribeToQuickTasks(async (tasks) => {
@@ -117,28 +119,6 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 }
             }
             setQuickTasks(tasks);
-        });
-        return () => unsubscribe();
-    }, []);
-
-    // Print Room Tasks State
-    const [showPrintRoomTasks, setShowPrintRoomTasks] = useState(false);
-    const [printRoomTasks, setPrintRoomTasks] = useState<PrintRoomTask[]>([]);
-    const [prNewTitle, setPrNewTitle] = useState('');
-    const [prNewDuration, setPrNewDuration] = useState('30');
-    const [prNewLocation, setPrNewLocation] = useState('');
-    const [prNewRequiresPhoto, setPrNewRequiresPhoto] = useState(true);
-    const [prNewInstructions, setPrNewInstructions] = useState('');
-    const [prLocationFilter, setPrLocationFilter] = useState<string | null>(null);
-    const [prSelectedTask, setPrSelectedTask] = useState<string | null>(null);
-    const [prSelectedUsers, setPrSelectedUsers] = useState<string[]>([]);
-    const [prStartTime, setPrStartTime] = useState('09:00');
-    const [prSearchQuery, setPrSearchQuery] = useState('');
-    const [viewingProofPhoto, setViewingProofPhoto] = useState<{ url: string; title: string; userName?: string; timestamp?: any } | null>(null);
-
-    useEffect(() => {
-        const unsubscribe = subscribeToPrintRoomTasks((tasks) => {
-            setPrintRoomTasks(tasks);
         });
         return () => unsubscribe();
     }, []);
@@ -170,6 +150,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
     const [qtNewTitle, setQtNewTitle] = useState('');
     const [qtNewDuration, setQtNewDuration] = useState('60');
     const [qtNewLocation, setQtNewLocation] = useState('');
+    const [qtNewRequiresPhoto, setQtNewRequiresPhoto] = useState(false);
     const [qtLocationFilter, setQtLocationFilter] = useState<string | null>(null);
     const [qtSelectedTask, setQtSelectedTask] = useState<string | null>(null);
     const [qtSelectedUsers, setQtSelectedUsers] = useState<string[]>([]);
@@ -191,9 +172,20 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             id: Date.now().toString(),
             title: qtNewTitle,
             duration: parseInt(qtNewDuration) || 60,
-            locations: newLocs
+            locations: newLocs,
+            requiresPhoto: qtNewRequiresPhoto
         });
         setQtNewTitle('');
+        setQtNewRequiresPhoto(false);
+    };
+
+    const handleToggleQuickTaskPhoto = async (taskId: string) => {
+        const task = quickTasks.find(t => t.id === taskId);
+        if (!task) return;
+        await firebaseSaveQuickTask({
+            ...task,
+            requiresPhoto: !task.requiresPhoto
+        });
     };
 
     const handleAddSpecificLocationToTask = async (taskId: string, newLoc: string) => {
@@ -236,19 +228,27 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 startDateTime.setHours(sh, sm, 0, 0);
 
                 const endDateTime = new Date(startDateTime.getTime() + taskDef.duration * 60000);
+                const locs = taskDef.locations || (taskDef.location ? [taskDef.location] : []);
 
                 await firebaseSaveShiftBlock({
                     id: `task-${Date.now()}-${userId}-${Math.random()}`,
                     title: taskDef.title,
                     description: (() => {
-                        const locs = taskDef.locations || (taskDef.location ? [taskDef.location] : []);
-                        return locs.length > 0 ? `Locations: ${locs.join(', ')}\nQuick Task` : 'Quick Task';
+                        let desc = locs.length > 0 ? `Locations: ${locs.join(', ')}\nTask` : 'Task';
+                        if (taskDef.requiresPhoto) {
+                            desc += '\n📸 Photo verification required upon completion';
+                        } else {
+                            desc += '\n📝 Text update required';
+                        }
+                        return desc;
                     })(),
                     startTime: startDateTime.toISOString(),
                     endTime: endDateTime.toISOString(),
                     assignedTo: userId,
                     status: 'pending',
-                    priority: 'medium'
+                    priority: 'medium',
+                    requiresPhoto: !!taskDef.requiresPhoto,
+                    ...(locs[0] ? { location: locs[0] } : {})
                 });
             }
             setShowQuickTasks(false);
@@ -256,78 +256,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
             setQtSelectedUsers([]);
             setQtSearchQuery('');
         } catch (err) {
-            alert("Failed to assign quick tasks");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const prUniqueLocations = Array.from(new Set(printRoomTasks.flatMap(t => t.locations || []).filter(Boolean))) as string[];
-    const filteredPrintRoomTasks = prLocationFilter ? printRoomTasks.filter(t => {
-        const locs = t.locations || [];
-        return locs.includes(prLocationFilter);
-    }) : printRoomTasks;
-
-    const handleAddPrintRoomTaskDef = async () => {
-        if (!prNewTitle.trim()) return;
-        const newLocs = prNewLocation.trim() ? prNewLocation.split(',').map(s => s.trim()).filter(Boolean) : [];
-        await firebaseSavePrintRoomTask({
-            id: `pr-${Date.now()}`,
-            title: prNewTitle.trim(),
-            duration: parseInt(prNewDuration) || 30,
-            locations: newLocs,
-            requiresPhoto: prNewRequiresPhoto,
-            instructions: prNewInstructions.trim() || undefined
-        });
-        setPrNewTitle('');
-        setPrNewInstructions('');
-    };
-
-    const handleDeletePrintRoomTaskDef = async (id: string) => {
-        await firebaseDeletePrintRoomTask(id);
-        if (prSelectedTask === id) setPrSelectedTask(null);
-    };
-
-    const handleAssignPrintRoomTask = async () => {
-        const taskDef = printRoomTasks.find(t => t.id === prSelectedTask);
-        if (!taskDef || prSelectedUsers.length === 0) return;
-
-        try {
-            setLoading(true);
-            for (const userId of prSelectedUsers) {
-                const startDateTime = new Date(currentDate);
-                const [sh, sm] = prStartTime.split(':').map(Number);
-                startDateTime.setHours(sh, sm, 0, 0);
-
-                const endDateTime = new Date(startDateTime.getTime() + taskDef.duration * 60000);
-
-                const locs = taskDef.locations || [];
-                let desc = '🖨️ Print Room Task';
-                if (locs.length > 0) desc += `\nEquipment / Station: ${locs.join(', ')}`;
-                if (taskDef.instructions) desc += `\nInstructions: ${taskDef.instructions}`;
-                if (taskDef.requiresPhoto) desc += `\n📸 Photo verification required upon completion`;
-
-                await firebaseSaveShiftBlock({
-                    id: `pr-task-${Date.now()}-${userId}-${Math.random().toString(36).substring(2, 7)}`,
-                    title: taskDef.title,
-                    description: desc,
-                    startTime: startDateTime.toISOString(),
-                    endTime: endDateTime.toISOString(),
-                    assignedTo: userId,
-                    status: 'pending',
-                    priority: 'medium',
-                    department: Department.Print,
-                    requiresPhoto: taskDef.requiresPhoto ?? true,
-                    isPrintRoomTask: true,
-                    location: locs[0] || 'Print Room'
-                });
-            }
-            setShowPrintRoomTasks(false);
-            setPrSelectedTask(null);
-            setPrSelectedUsers([]);
-            setPrSearchQuery('');
-        } catch (err) {
-            alert("Failed to assign print room tasks");
+            alert("Failed to assign tasks");
         } finally {
             setLoading(false);
         }
@@ -771,6 +700,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
         setEditEnd(endStr);
         setEditNotes('');
         setEditDepartment('');
+        setEditRequiresPhoto(false);
         setContextMenu(null);
     };
 
@@ -787,6 +717,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
         setEditNotes(block.description || '');
         setEditDepartment(block.department || '');
+        setEditRequiresPhoto(!!(block.requiresPhoto || block.isPrintRoomTask));
     };
 
     const handleSaveEdit = async () => {
@@ -809,9 +740,16 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 endTime: bEnd.toISOString(),
                 assignedTo: editingBlock.assignedTo,
                 status: editingBlock.status,
-                priority: editingBlock.priority || 'medium'
+                priority: editingBlock.priority || 'medium',
+                requiresPhoto: editRequiresPhoto
             };
 
+            if (editingBlock.location) {
+                blockData.location = editingBlock.location;
+            }
+            if (editingBlock.proofPhotoUrl) {
+                blockData.proofPhotoUrl = editingBlock.proofPhotoUrl;
+            }
             if (editingBlock.webDevTaskId) {
                 blockData.webDevTaskId = editingBlock.webDevTaskId;
             }
@@ -1077,14 +1015,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 shrink-0"
                                     >
                                         <Zap className="w-4 h-4 text-orange-500" />
-                                        Quick Tasks
-                                    </button>
-                                    <button
-                                        onClick={() => setShowPrintRoomTasks(true)}
-                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm border whitespace-nowrap bg-white border-zinc-300 text-zinc-700 hover:bg-blue-50 hover:border-blue-400 shrink-0"
-                                    >
-                                        <Printer className="w-4 h-4 text-blue-600" />
-                                        Print Room
+                                        Tasks
                                     </button>
                                     <button
                                         onClick={() => setShowOrdersDialog(true)}
@@ -1708,10 +1639,36 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                 <textarea
                                     value={editNotes}
                                     onChange={(e) => setEditNotes(e.target.value)}
-                                    placeholder="Add any notes relevant to this schedule schedule..."
+                                    placeholder="Add any notes relevant to this schedule..."
                                     className="w-full h-24 p-2 border border-zinc-300 rounded resize-none text-sm focus:ring-2 focus:ring-zinc-500 outline-none"
                                 ></textarea>
                             </div>
+
+                            {!editingBlock.title.startsWith('[SHIFT]') && (
+                                <label className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer select-none transition-colors ${
+                                    editRequiresPhoto 
+                                        ? 'bg-blue-50 border-blue-200 text-blue-800' 
+                                        : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+                                }`}>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={editRequiresPhoto}
+                                            onChange={(e) => setEditRequiresPhoto(e.target.checked)}
+                                            className="rounded border-zinc-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                                        />
+                                        <Camera className={`w-4 h-4 ${editRequiresPhoto ? 'text-blue-600' : 'text-zinc-400'}`} />
+                                        <span className="text-xs font-bold">
+                                            {editRequiresPhoto ? 'Requires Photo Verification' : 'Requires Photo (Unchecked = Text Update Only)'}
+                                        </span>
+                                    </div>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                        editRequiresPhoto ? 'bg-blue-100 text-blue-700' : 'bg-zinc-200 text-zinc-600'
+                                    }`}>
+                                        {editRequiresPhoto ? 'Photo Required' : 'Text Update'}
+                                    </span>
+                                </label>
+                            )}
 
                             {editingBlock.proofPhotoUrl && (
                                 <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-3">
@@ -1806,14 +1763,14 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                 </div>
             )}
 
-            {/* Quick Tasks Dialog */}
+            {/* Tasks Dialog */}
             {showQuickTasks && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl shadow-xl border border-zinc-200 w-[95vw] max-w-[1600px] h-[90vh] overflow-hidden animate-fade-in flex flex-col">
                         <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex justify-between items-center shrink-0">
                             <h3 className="font-bold text-zinc-800 flex items-center gap-2">
                                 <Zap className="w-5 h-5 text-orange-500" />
-                                Quick Tasks
+                                Tasks
                             </h3>
                             <button onClick={() => setShowQuickTasks(false)} className="p-1 hover:bg-zinc-200 rounded text-zinc-500 transition-colors">
                                 <X className="w-5 h-5" />
@@ -1825,13 +1782,13 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                             <div className="w-1/2 border-r border-zinc-200 flex flex-col bg-zinc-50/50">
                                 <div className="p-3 border-b border-zinc-200 bg-white">
                                     <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">Predetermined Tasks</div>
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 items-center">
                                         <input 
                                             type="text" 
                                             placeholder="Task title..." 
                                             value={qtNewTitle}
                                             onChange={e => setQtNewTitle(e.target.value)}
-                                            className="flex-1 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
+                                            className="flex-1 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500 min-w-0"
                                         />
                                         <input
                                             type="text"
@@ -1839,7 +1796,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             placeholder="Location (comma separated)..."
                                             value={qtNewLocation}
                                             onChange={e => setQtNewLocation(e.target.value)}
-                                            className="w-48 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
+                                            className="w-44 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
                                         />
                                         <datalist id="qt-locations">
                                             {uniqueLocations.map(loc => <option key={loc} value={loc} />)}
@@ -1851,6 +1808,23 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             onChange={e => setQtNewDuration(e.target.value)}
                                             className="w-16 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-orange-500"
                                         />
+                                        <label
+                                            className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded text-xs font-medium cursor-pointer select-none transition-colors shrink-0 ${
+                                                qtNewRequiresPhoto
+                                                    ? 'bg-blue-50 border-blue-300 text-blue-700'
+                                                    : 'bg-zinc-50 border-zinc-300 text-zinc-600 hover:bg-zinc-100'
+                                            }`}
+                                            title="Check if this task requires a photo update; leave unchecked for a text update only"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={qtNewRequiresPhoto}
+                                                onChange={e => setQtNewRequiresPhoto(e.target.checked)}
+                                                className="rounded border-zinc-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                                            />
+                                            <Camera className={`w-3.5 h-3.5 ${qtNewRequiresPhoto ? 'text-blue-600' : 'text-zinc-400'}`} />
+                                            <span>{qtNewRequiresPhoto ? 'Requires Photo' : 'Text Update'}</span>
+                                        </label>
                                         <button 
                                             onClick={handleAddQuickTaskDef}
                                             disabled={!qtNewTitle.trim()}
@@ -1881,7 +1855,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
                                     {filteredQuickTasks.length === 0 ? (
-                                        <div className="text-xs text-zinc-400 text-center mt-4">No quick tasks found. Create one above.</div>
+                                        <div className="text-xs text-zinc-400 text-center mt-4">No tasks found. Create one above.</div>
                                     ) : (
                                         filteredQuickTasks.map(t => (
                                             <div 
@@ -1967,12 +1941,32 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); handleDeleteQuickTaskDef(t.id); }}
-                                                    className="p-1 text-zinc-400 hover:text-red-500 rounded hover:bg-red-50 ml-2 shrink-0"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                <div className="flex items-center gap-2 ml-2 shrink-0">
+                                                    <label
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className={`flex items-center gap-1.5 px-2 py-1 rounded border text-[11px] font-medium cursor-pointer select-none transition-colors ${
+                                                            t.requiresPhoto
+                                                                ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+                                                                : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100'
+                                                        }`}
+                                                        title={t.requiresPhoto ? "Checked: Requires a photo upon completion (uncheck for text update only)" : "Unchecked: Requires a text update only (check to require photo proof)"}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!t.requiresPhoto}
+                                                            onChange={() => handleToggleQuickTaskPhoto(t.id)}
+                                                            className="rounded border-zinc-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                                                        />
+                                                        <Camera className={`w-3 h-3 ${t.requiresPhoto ? 'text-blue-600' : 'text-zinc-400'}`} />
+                                                        <span>{t.requiresPhoto ? 'Requires Photo' : 'Text Update'}</span>
+                                                    </label>
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); handleDeleteQuickTaskDef(t.id); }}
+                                                        className="p-1 text-zinc-400 hover:text-red-500 rounded hover:bg-red-50 shrink-0"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))
                                     )}
@@ -1988,6 +1982,38 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         </div>
                                     ) : (
                                         <div className="flex flex-col gap-4 flex-1 min-h-0">
+                                            {(() => {
+                                                const selTask = quickTasks.find(t => t.id === qtSelectedTask);
+                                                if (!selTask) return null;
+                                                return (
+                                                    <div className="p-3 bg-orange-50/50 border border-orange-200 rounded-lg shrink-0 flex items-center justify-between gap-2">
+                                                        <div>
+                                                            <div className="text-xs font-bold text-orange-900 uppercase">Selected Task</div>
+                                                            <div className="text-base font-bold text-zinc-800 mt-0.5">{selTask.title}</div>
+                                                            <div className="text-xs text-zinc-600 mt-0.5">
+                                                                Duration: <strong>{selTask.duration} mins</strong>
+                                                            </div>
+                                                        </div>
+                                                        <label
+                                                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer select-none transition-colors shrink-0 ${
+                                                                selTask.requiresPhoto
+                                                                    ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                                                    : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                                                            }`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!selTask.requiresPhoto}
+                                                                onChange={() => handleToggleQuickTaskPhoto(selTask.id)}
+                                                                className="rounded border-zinc-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                                                            />
+                                                            <Camera className={`w-3.5 h-3.5 ${selTask.requiresPhoto ? 'text-blue-600' : 'text-zinc-400'}`} />
+                                                            <span>{selTask.requiresPhoto ? 'Requires Photo' : 'Text Update Only'}</span>
+                                                        </label>
+                                                    </div>
+                                                );
+                                            })()}
+
                                             <div className="shrink-0">
                                                 <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider">1. Select Time</div>
                                                 <input 
@@ -2037,245 +2063,6 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                         className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
                                     >
                                         <Plus className="w-4 h-4" /> Add to Planners
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Print Room Tasks Dialog */}
-            {showPrintRoomTasks && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl border border-zinc-200 w-[95vw] max-w-[1600px] h-[90vh] overflow-hidden animate-fade-in flex flex-col">
-                        <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex justify-between items-center shrink-0">
-                            <h3 className="font-bold text-zinc-800 flex items-center gap-2">
-                                <Printer className="w-5 h-5 text-blue-600" />
-                                Print Room Predefined Tasks
-                                <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
-                                    <Camera className="w-3 h-3 text-blue-600" /> Photo Verification Required
-                                </span>
-                            </h3>
-                            <button onClick={() => setShowPrintRoomTasks(false)} className="p-1 hover:bg-zinc-200 rounded text-zinc-500 transition-colors">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        
-                        <div className="flex-1 flex overflow-hidden">
-                            {/* Left Panel: Manage Print Room Tasks */}
-                            <div className="w-1/2 border-r border-zinc-200 flex flex-col bg-zinc-50/50">
-                                <div className="p-3 border-b border-zinc-200 bg-white">
-                                    <div className="text-xs font-bold text-zinc-600 mb-2 uppercase tracking-wider flex items-center justify-between">
-                                        <span>Create Predefined Task</span>
-                                        <span className="text-[10px] text-zinc-400 font-normal">Staff must take photo on iOS app to finish</span>
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        <div className="flex gap-2">
-                                            <input 
-                                                type="text" 
-                                                placeholder="Task title (e.g. Flush print heads on Venom)..." 
-                                                value={prNewTitle}
-                                                onChange={e => setPrNewTitle(e.target.value)}
-                                                className="flex-1 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-blue-500"
-                                            />
-                                            <input
-                                                type="text"
-                                                list="pr-locations"
-                                                placeholder="Machine / Station..."
-                                                value={prNewLocation}
-                                                onChange={e => setPrNewLocation(e.target.value)}
-                                                className="w-44 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-blue-500"
-                                            />
-                                            <datalist id="pr-locations">
-                                                {prUniqueLocations.map(loc => <option key={loc} value={loc} />)}
-                                                <option value="Venom" />
-                                                <option value="Coldesi" />
-                                                <option value="DTG" />
-                                                <option value="Pre-treat" />
-                                                <option value="Shopify Station" />
-                                                <option value="Waste Station" />
-                                            </datalist>
-                                            <input 
-                                                type="number" 
-                                                placeholder="Mins" 
-                                                value={prNewDuration}
-                                                onChange={e => setPrNewDuration(e.target.value)}
-                                                className="w-16 text-sm p-1.5 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-blue-500"
-                                            />
-                                            <button 
-                                                onClick={handleAddPrintRoomTaskDef}
-                                                disabled={!prNewTitle.trim()}
-                                                className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 shrink-0 font-bold flex items-center gap-1"
-                                            >
-                                                <Plus className="w-4 h-4" /> Add
-                                            </button>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <input 
-                                                type="text" 
-                                                placeholder="Instructions / Checklist notes (optional)..." 
-                                                value={prNewInstructions}
-                                                onChange={e => setPrNewInstructions(e.target.value)}
-                                                className="flex-1 text-xs p-1.5 border border-zinc-200 rounded outline-none focus:ring-2 focus:ring-blue-500 text-zinc-600"
-                                            />
-                                            <label className="flex items-center gap-1.5 text-xs text-zinc-700 cursor-pointer select-none shrink-0 font-medium">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={prNewRequiresPhoto} 
-                                                    onChange={e => setPrNewRequiresPhoto(e.target.checked)} 
-                                                    className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-                                                />
-                                                <Camera className="w-3.5 h-3.5 text-blue-600" />
-                                                Requires Photo
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    {prUniqueLocations.length > 0 && (
-                                        <div className="mt-3 flex flex-wrap gap-2">
-                                            <button 
-                                                onClick={() => setPrLocationFilter(null)}
-                                                className={`text-[10px] px-2 py-1 rounded-full font-bold transition-colors ${!prLocationFilter ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}
-                                            >
-                                                All Machines ({printRoomTasks.length})
-                                            </button>
-                                            {prUniqueLocations.map(loc => (
-                                                <button 
-                                                    key={loc} 
-                                                    onClick={() => setPrLocationFilter(loc)}
-                                                    className={`text-[10px] px-2 py-1 rounded-full font-bold transition-colors ${prLocationFilter === loc ? 'bg-blue-600 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}
-                                                >
-                                                    {loc}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                                    {filteredPrintRoomTasks.length === 0 ? (
-                                        <div className="text-xs text-zinc-400 text-center mt-4">No tasks found. Create one above.</div>
-                                    ) : (
-                                        filteredPrintRoomTasks.map(t => (
-                                            <div 
-                                                key={t.id} 
-                                                onClick={() => setPrSelectedTask(t.id)}
-                                                className={`group flex items-center justify-between p-2.5 rounded-lg cursor-pointer border transition-all ${prSelectedTask === t.id ? 'bg-blue-50/70 border-blue-400 shadow-sm ring-1 ring-blue-300' : 'bg-white border-zinc-200 hover:border-blue-200'}`}
-                                            >
-                                                <div className="min-w-0 flex-1 flex flex-col justify-center">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm font-bold text-zinc-800 truncate">{t.title}</span>
-                                                        {t.requiresPhoto && (
-                                                            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded shrink-0" title="Photo proof required">
-                                                                <Camera className="w-3 h-3 text-amber-600" /> Photo Req.
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {t.instructions && (
-                                                        <p className="text-[11px] text-zinc-500 italic mt-0.5 line-clamp-1">{t.instructions}</p>
-                                                    )}
-                                                    <div className="text-[10px] text-zinc-500 flex gap-2 flex-wrap items-center mt-1">
-                                                        <span className="font-semibold text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded">{t.duration} mins</span>
-                                                        {(t.locations || []).map(loc => (
-                                                            <span key={loc} className="bg-blue-50 border border-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
-                                                                {loc}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); handleDeletePrintRoomTaskDef(t.id); }}
-                                                    className="p-1 text-zinc-400 hover:text-red-500 rounded hover:bg-red-50 ml-2 shrink-0"
-                                                    title="Delete task template"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Right Panel: Assign to Team Members */}
-                            <div className="w-1/2 flex flex-col bg-white">
-                                <div className="p-4 flex-1 flex flex-col overflow-hidden">
-                                    {!prSelectedTask ? (
-                                        <div className="h-full flex flex-col items-center justify-center text-sm text-zinc-400 text-center px-4 gap-2">
-                                            <Printer className="w-10 h-10 text-zinc-300" />
-                                            <p className="font-medium text-zinc-500">Select a print room task from the left</p>
-                                            <p className="text-xs text-zinc-400">Choose a task template to assign it to staff members with a scheduled start time.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col gap-4 flex-1 min-h-0">
-                                            <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg shrink-0">
-                                                <div className="text-xs font-bold text-blue-900 uppercase">Selected Task</div>
-                                                <div className="text-base font-bold text-zinc-800 mt-0.5">
-                                                    {printRoomTasks.find(t => t.id === prSelectedTask)?.title}
-                                                </div>
-                                                <div className="text-xs text-zinc-600 mt-1 flex items-center gap-2">
-                                                    <span>Duration: <strong>{printRoomTasks.find(t => t.id === prSelectedTask)?.duration}m</strong></span>
-                                                    <span>•</span>
-                                                    <span className="flex items-center gap-1 text-amber-700 font-medium">
-                                                        <Camera className="w-3.5 h-3.5" /> Staff must take photo on iOS companion app to complete
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            <div className="shrink-0">
-                                                <div className="text-xs font-bold text-zinc-600 mb-1.5 uppercase tracking-wider">1. Start Time</div>
-                                                <input 
-                                                    type="time" 
-                                                    value={prStartTime}
-                                                    onChange={e => setPrStartTime(e.target.value)}
-                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                            </div>
-
-                                            <div className="flex flex-col flex-1 min-h-0">
-                                                <div className="text-xs font-bold text-zinc-600 mb-1.5 uppercase tracking-wider shrink-0">2. Select Staff Members</div>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Search team members..."
-                                                    value={prSearchQuery}
-                                                    onChange={e => setPrSearchQuery(e.target.value)}
-                                                    className="w-full text-sm p-2 border border-zinc-300 rounded outline-none focus:ring-2 focus:ring-blue-500 mb-2 shrink-0"
-                                                />
-                                                <div className="space-y-1 flex-1 overflow-y-auto border border-zinc-200 rounded-lg p-1 min-h-0">
-                                                    {teamMembers
-                                                        .filter(u => u.name.toLowerCase().includes(prSearchQuery.toLowerCase()))
-                                                        .sort((a, b) => a.name.localeCompare(b.name))
-                                                        .map(u => (
-                                                        <label key={u.id} className="flex items-center gap-2.5 p-2 hover:bg-zinc-50 rounded-md cursor-pointer transition-colors">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={prSelectedUsers.includes(u.id)}
-                                                                onChange={(e) => {
-                                                                    if (e.target.checked) setPrSelectedUsers([...prSelectedUsers, u.id]);
-                                                                    else setPrSelectedUsers(prSelectedUsers.filter(id => id !== u.id));
-                                                                }}
-                                                                className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-                                                            />
-                                                            <div className="flex-1 flex items-center justify-between">
-                                                                <span className="text-sm font-medium text-zinc-800">{u.name}</span>
-                                                                {u.primaryDepartment === Department.Print && (
-                                                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">Print Staff</span>
-                                                                )}
-                                                            </div>
-                                                        </label>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="p-4 border-t border-zinc-100 bg-zinc-50 shrink-0">
-                                    <button
-                                        onClick={handleAssignPrintRoomTask}
-                                        disabled={!prSelectedTask || prSelectedUsers.length === 0}
-                                        className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-colors text-sm"
-                                    >
-                                        <Plus className="w-4 h-4" /> Add Print Room Tasks ({prSelectedUsers.length} staff)
                                     </button>
                                 </div>
                             </div>

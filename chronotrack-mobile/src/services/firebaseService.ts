@@ -258,9 +258,17 @@ export const subscribeToShiftBlocks = (onUpdate: (blocks: any[]) => void) => {
         const blocks = snapshot.docs.map(d => {
             const data = d.data();
             const { updatedAt, ...block } = data; 
-            return block;
+            // Normalize: web-created blocks may omit title/checkIns; screens call title.startsWith()
+            return {
+                ...block,
+                id: block.id || d.id,
+                title: typeof block.title === 'string' ? block.title : '',
+                checkIns: Array.isArray(block.checkIns) ? block.checkIns : [],
+            };
         });
         onUpdate(blocks);
+    }, (error) => {
+        console.error("Firebase ShiftBlocks Sync Error:", error);
     });
 };
 
@@ -431,6 +439,7 @@ export const subscribeToRecentMessages = (onUpdate: (messages: any[]) => void) =
             return {
                 ...data,
                 id: d.id,
+                channel: typeof data.channel === 'string' ? data.channel : '',
                 timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toMillis() : (data.timestamp || Date.now())
             };
         });
