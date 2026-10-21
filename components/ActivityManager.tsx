@@ -7,13 +7,13 @@ import {
   Target, TrendingUp, AlertCircle, X, Save, Plus, Trash2, Edit3, Filter,
   CheckSquare, Check, Link, CalendarDays, FileText
 } from 'lucide-react';
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, collection, onSnapshot, getDoc, doc, updateDoc, query, where, getDocs } from 'firebase/firestore';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
+import { collection, getDoc, doc, updateDoc } from 'firebase/firestore';
 import { processExternalPlan } from '../services/geminiService';
 import { UserProfileDialog } from './UserProfileDialog';
 import { LogAbsenceModal } from './LogAbsenceModal';
 import { AddRetroactiveCardModal } from './AddRetroactiveCardModal';
+import { ProjectTaskBoard } from './ProjectTaskBoard';
+import { db, isFirebaseConfigured } from '../services/firebaseService';
 
 // Generate more data (60 days) to allow testing different pay periods
 const generateMockData = (users: User[]) => {
@@ -260,20 +260,15 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [absenceUser, setAbsenceUser] = useState<User | null>(null);
   const [retroactiveUser, setRetroactiveUser] = useState<User | null>(null);
 
-  // ─── TACKBOARD & WEB DEV INTEGRATION STATE ───
+  // ─── TACKBOARD & PROJECT TASK BOARD STATE ───
   const [planningSubView, setPlanningSubView] = useState<'sync' | 'tackboard'>('tackboard');
   const [shiftBlocks, setShiftBlocks] = useState<any[]>([]);
-  const [webDevTasks, setWebDevTasks] = useState<any[]>([]);
-  const [webDevUser, setWebDevUser] = useState<any>(null);
-  const [isWebDevLoading, setIsWebDevLoading] = useState(false);
   const syncingTasksRef = React.useRef<Set<string>>(new Set());
-  const [syncError, setSyncError] = useState<string | null>(null);
 
   // Tackboard Filter States
   const [tackboardProject, setTackboardProject] = useState<string>('All');
   const [tackboardAssignee, setTackboardAssignee] = useState<string>('All');
   const [tackboardShowArchived, setTackboardShowArchived] = useState<boolean>(false);
-  const [tackboardLayout, setTackboardLayout] = useState<'tackboard' | 'board' | 'list' | 'timeline'>('tackboard');
 
   // Add/Edit Task Modal States
   const [taskModalOpen, setTaskModalOpen] = useState(false);
@@ -289,67 +284,6 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [taskFormDate, setTaskFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [isSavingTask, setIsSavingTask] = useState(false);
 
-  // Web Dev App Config
-  const webDevConfig = {
-    apiKey: import.meta.env.VITE_WEB_DEV_API_KEY || "",
-    authDomain: import.meta.env.VITE_WEB_DEV_AUTH_DOMAIN || "web-dev-a59ba.firebaseapp.com",
-    projectId: import.meta.env.VITE_WEB_DEV_PROJECT_ID || "web-dev-a59ba",
-    storageBucket: import.meta.env.VITE_WEB_DEV_STORAGE_BUCKET || "web-dev-a59ba.firebasestorage.app",
-    messagingSenderId: import.meta.env.VITE_WEB_DEV_MESSAGING_SENDER_ID || "175210741234",
-    appId: import.meta.env.VITE_WEB_DEV_APP_ID || "1:175210741234:web:9f59d9d4be98a8fc9d3f6b"
-  };
-
-  const getWebDevApp = () => {
-    const apps = getApps();
-    const existing = apps.find(a => a.name === 'webDevApp');
-    if (existing) return existing;
-    return initializeApp(webDevConfig, 'webDevApp');
-  };
-
-  // Subscribe to Web Dev App Auth & Tasks
-  React.useEffect(() => {
-    try {
-      const app = getWebDevApp();
-      const auth = getAuth(app);
-      
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        setWebDevUser(user);
-        if (user) {
-          const db = getFirestore(app);
-          setIsWebDevLoading(true);
-          const unsubTasks = onSnapshot(collection(db, 'tasks'), (snapshot) => {
-            const tasksList = snapshot.docs
-              .map(doc => {
-                const data = doc.data() as any;
-                const t = { id: doc.id, ...data };
-                // Map legacy status strings to the new 5-status schema
-                if (t.status === 'todo') {
-                  t.status = 'backlog';
-                } else if (t.status === 'progress') {
-                  t.status = 'active';
-                } else if (t.status === 'done') {
-                  t.status = (t.progress === 100) ? 'complete' : 'review';
-                }
-                return t;
-              })
-              .filter((t: any) => t.status === 'active' && !t.archived);
-            setWebDevTasks(tasksList);
-            setIsWebDevLoading(false);
-          }, (err) => {
-            console.error("Web Dev tasks fetch error:", err);
-            setIsWebDevLoading(false);
-          });
-          return () => unsubTasks();
-        } else {
-          setWebDevTasks([]);
-        }
-      });
-      return () => unsubscribe();
-    } catch (e) {
-      console.error("Failed to initialize Web Dev App Auth:", e);
-    }
-  }, []);
-
   // Subscribe to Clockwork's own shiftSchedules
   React.useEffect(() => {
     let unsubscribe = () => {};
@@ -363,61 +297,32 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     return () => unsubscribe();
   }, []);
 
-  // Real-time synchronization from Chronotrack to Web Dev
+  // Real-time synchronization from Chronotrack shiftBlocks to native ProjectTaskBoard ('tasks' collection)
   React.useEffect(() => {
-    if (!webDevUser) return;
+    if (!isFirebaseConfigured()) return;
 
-    const syncTasksToWebDev = async () => {
-      const app = getWebDevApp();
-      const webDevDb = getFirestore(app);
-
+    const syncShiftTasksToProjectBoard = async () => {
       for (const block of shiftBlocks) {
         if (block.isShiftBlock) continue;
-
-        // Skip if this task is already in the process of syncing to avoid concurrent writes
+        if (!block.webDevTaskId) continue;
         if (syncingTasksRef.current.has(block.id)) continue;
 
-        let wdTaskId = block.webDevTaskId;
-        let wdTask = null;
-
-        // 1. Try to find the Web Dev task by ID
-        if (wdTaskId) {
-          try {
-            const docSnap = await getDoc(doc(webDevDb, 'tasks', wdTaskId));
-            if (docSnap.exists()) {
-              wdTask = { id: docSnap.id, ...docSnap.data() };
-            }
-          } catch (err) {
-            console.error("Failed to fetch Web Dev task by ID:", wdTaskId, err);
+        let wdTask: any = null;
+        try {
+          const docSnap = await getDoc(doc(db, 'tasks', block.webDevTaskId));
+          if (docSnap.exists()) {
+            wdTask = { id: docSnap.id, ...docSnap.data() };
           }
+        } catch (err) {
+          console.error("Failed to fetch ProjectBoard task by ID:", block.webDevTaskId, err);
         }
 
-        // 2. Fallback: Try to find by title match in the loaded active list or query Firestore
-        if (!wdTask && block.title) {
-          const cleanTitle = block.title.toLowerCase().trim();
-          wdTask = webDevTasks.find(t => (t.title || '').toLowerCase().trim() === cleanTitle);
-
-          if (!wdTask) {
-            try {
-              const q = query(collection(webDevDb, 'tasks'), where('title', '==', block.title.trim()));
-              const querySnap = await getDocs(q);
-              if (!querySnap.empty) {
-                const docSnap = querySnap.docs[0];
-                wdTask = { id: docSnap.id, ...docSnap.data() };
-              }
-            } catch (err) {
-              console.error("Failed to query Web Dev task by title:", block.title, err);
-            }
-          }
-        }
-
-        // 3. If a matching Web Dev task is found, determine if we need to update it
         if (wdTask) {
-          // Get local progress from latest check-in
           const latestCheckIn = block.checkIns && block.checkIns.length > 0
             ? [...block.checkIns].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0]
             : null;
           const localProgress = latestCheckIn?.progress ?? (latestCheckIn as any)?.progressPercent ?? 0;
+          const actorEmail = currentUser?.email || currentUser?.name || 'Clockwork Sync';
 
           if (block.isWebDevSubtask && block.webDevSubtaskIndex !== undefined) {
             const idx = block.webDevSubtaskIndex;
@@ -427,7 +332,6 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
               const subtaskDiff = subtask.completed !== localCompleted;
 
               if (subtaskDiff) {
-                // Mark as syncing
                 syncingTasksRef.current.add(block.id);
 
                 const subtasks = [...wdTask.subtasks];
@@ -436,9 +340,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 const completedCount = subtasks.filter((s: any) => s.completed).length;
                 const parentProgress = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
 
-                let logActionText = `[Clockwork Sync] Subtask "${subtask.title}" marked as ${localCompleted ? 'Completed' : 'Incomplete'}`;
+                let logActionText = `[Shift Sync] Deliverable "${subtask.title}" marked as ${localCompleted ? 'Completed' : 'Incomplete'}`;
                 if (latestCheckIn?.notes) {
-                  let cleanNotes = latestCheckIn.notes
+                  const cleanNotes = latestCheckIn.notes
                     .replace(/^\[\d+%\s*Complete\]\s*/i, '')
                     .replace(/^Progress:\s*\d+%\s*/i, '')
                     .trim();
@@ -449,7 +353,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
                 const activityLog = Array.isArray(wdTask.activityLog) ? [...wdTask.activityLog] : [];
                 activityLog.push({
-                  user: webDevUser.email || 'Clockwork Sync',
+                  user: actorEmail,
                   timestamp: new Date().toISOString(),
                   action: logActionText
                 });
@@ -457,32 +361,24 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                   activityLog.shift();
                 }
 
-                const updates = {
-                  subtasks,
-                  progress: parentProgress,
-                  activityLog
-                };
-
                 try {
-                  await updateDoc(doc(webDevDb, 'tasks', wdTask.id), updates);
-                  console.log(`Successfully synced Chronotrack subtask "${block.title}" to Web Dev task ${wdTask.id}`);
-                  setSyncError(null);
-                } catch (err: any) {
-                  console.error("Failed to update Web Dev task subtask:", wdTask.id, err);
-                  setSyncError(`Failed to sync subtask "${block.title}": ${err.message || err}`);
+                  await updateDoc(doc(db, 'tasks', wdTask.id), {
+                    subtasks,
+                    progress: parentProgress,
+                    activityLog
+                  });
+                } catch (err) {
+                  console.error("Failed to update ProjectBoard task subtask:", wdTask.id, err);
                 } finally {
                   syncingTasksRef.current.delete(block.id);
                 }
               }
             }
           } else {
-            // Map Chronotrack status to Web Dev status
             let mappedStatus = null;
             if (block.status === 'completed') {
               mappedStatus = 'complete';
-            } else if (block.status === 'in_progress') {
-              mappedStatus = 'active';
-            } else if (block.status === 'delayed') {
+            } else if (block.status === 'in_progress' || block.status === 'delayed') {
               mappedStatus = 'active';
             }
 
@@ -490,7 +386,6 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             const progressDiff = Number(wdTask.progress ?? 0) !== Number(localProgress);
 
             if (statusDiff || progressDiff) {
-              // Mark as syncing to prevent concurrent triggers
               syncingTasksRef.current.add(block.id);
 
               const updates: any = {};
@@ -505,9 +400,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 logParts.push(`progress to ${localProgress}%`);
               }
 
-              let logActionText = `[Clockwork Sync] Changed ${logParts.join(' and ')}`;
+              let logActionText = `[Shift Sync] Changed ${logParts.join(' and ')}`;
               if (latestCheckIn?.notes) {
-                let cleanNotes = latestCheckIn.notes
+                const cleanNotes = latestCheckIn.notes
                   .replace(/^\[\d+%\s*Complete\]\s*/i, '')
                   .replace(/^Progress:\s*\d+%\s*/i, '')
                   .trim();
@@ -516,29 +411,22 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 }
               }
 
-              // Append to Web Dev activity log
               const activityLog = Array.isArray(wdTask.activityLog) ? [...wdTask.activityLog] : [];
               activityLog.push({
-                user: webDevUser.email || 'Clockwork Sync',
+                user: actorEmail,
                 timestamp: new Date().toISOString(),
                 action: logActionText
               });
-
               if (activityLog.length > 100) {
                 activityLog.shift();
               }
-
               updates.activityLog = activityLog;
 
               try {
-                await updateDoc(doc(webDevDb, 'tasks', wdTask.id), updates);
-                console.log(`Successfully synced Chronotrack task "${block.title}" status/progress to Web Dev task ${wdTask.id}`);
-                setSyncError(null);
-              } catch (err: any) {
-                console.error("Failed to update Web Dev task document:", wdTask.id, err);
-                setSyncError(`Failed to sync task "${block.title}": ${err.message || err}`);
+                await updateDoc(doc(db, 'tasks', wdTask.id), updates);
+              } catch (err) {
+                console.error("Failed to update ProjectBoard task document:", wdTask.id, err);
               } finally {
-                // Remove from syncing set
                 syncingTasksRef.current.delete(block.id);
               }
             }
@@ -547,74 +435,8 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
       }
     };
 
-    syncTasksToWebDev();
-  }, [shiftBlocks, webDevUser, webDevTasks]);
-
-  const handleConnectWebDev = async () => {
-    try {
-      const app = getWebDevApp();
-      const auth = getAuth(app);
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (err: any) {
-      console.error("Error signing in to Web Dev:", err);
-      if (err.code === 'auth/unauthorized-domain' || err.message?.includes('auth/unauthorized-domain')) {
-        alert("Domain Unauthorized:\n\nPlease add this domain (" + window.location.host + ") to the 'Authorized Domains' list in the Firebase console -> Authentication -> Settings for the 'web-dev-a59ba' project.");
-      } else {
-        alert("Failed to connect: " + err.message + "\n\nNote: If you see 'The requested action is invalid', please ensure Google Sign-In is enabled and your domain (" + window.location.host + ") is added to the Authorized Domains list in the web-dev-a59ba Firebase Console.");
-      }
-    }
-  };
-
-  const handleDisconnectWebDev = async () => {
-    try {
-      const app = getWebDevApp();
-      const auth = getAuth(app);
-      await signOut(auth);
-    } catch (err: any) {
-      console.error("Error signing out:", err);
-    }
-  };
-
-  const handlePullTask = async (user: User, wdTask: any) => {
-    try {
-      const todayStr = new Date().toISOString().split('T')[0];
-      
-      let mappedPriority: 'low' | 'medium' | 'high' | 'urgent' = 'medium';
-      if (wdTask.priority === 'critical') mappedPriority = 'urgent';
-      else if (wdTask.priority === 'high') mappedPriority = 'high';
-      else if (wdTask.priority === 'low') mappedPriority = 'low';
-
-      let mappedDept = user.primaryDepartment || Department.Production;
-      const appName = String(wdTask.app || '').toLowerCase();
-      if (appName.includes('design')) mappedDept = Department.Design;
-      else if (appName.includes('print')) mappedDept = Department.Print;
-      else if (appName.includes('ware') || appName.includes('ship')) mappedDept = Department.Warehousing;
-      else if (appName.includes('facility')) mappedDept = Department.Facility;
-      else if (appName.includes('event')) mappedDept = Department.Event;
-
-      const { firebaseSaveShiftBlock } = await import('../services/firebaseService');
-      
-      await firebaseSaveShiftBlock({
-        assignedTo: user.id,
-        assignedToName: user.name,
-        title: wdTask.title || 'Task',
-        description: wdTask.details || '',
-        department: mappedDept,
-        startTime: `${todayStr}T08:00:00`,
-        endTime: `${todayStr}T16:00:00`,
-        priority: mappedPriority,
-        status: 'pending',
-        isShiftBlock: false,
-        webDevTaskId: wdTask.webDevTaskId,
-        isWebDevSubtask: wdTask.isSubtask || false,
-        webDevSubtaskIndex: wdTask.subtaskIndex !== undefined ? wdTask.subtaskIndex : null
-      });
-    } catch (err) {
-      console.error("Error pulling task:", err);
-      alert("Failed to pull task: " + (err as Error).message);
-    }
-  };
+    syncShiftTasksToProjectBoard();
+  }, [shiftBlocks, currentUser]);
 
   const openTaskModal = (task: any = null, defaultUserId: string = 'unassigned') => {
     if (task) {
@@ -1631,548 +1453,12 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 </div>
               </div>
             ) : (
-              <div className="space-y-6">
-                {/* Connection banner */}
-                <div className="bg-white/80 backdrop-blur-sm border border-zinc-200 p-4 rounded-2xl flex flex-wrap gap-4 items-center justify-between shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-zinc-100 rounded-xl border border-zinc-200">
-                      <Link className="w-4 h-4 text-zinc-700" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-zinc-950">Web Dev Task Import Integration</h4>
-                      <p className="text-[11px] text-zinc-500">
-                        {webDevUser 
-                          ? `Connected to web-dev-a59ba as ${webDevUser.email}. Matching assignees can be pulled.` 
-                          : "Connect your Web Dev account via Google Sign-In to pull backlog tasks."}
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    {webDevUser ? (
-                      <button
-                        onClick={handleDisconnectWebDev}
-                        className="text-[11px] font-bold bg-zinc-50 hover:bg-zinc-100 text-zinc-600 border border-zinc-200 py-1.5 px-3 rounded-xl transition-colors shadow-sm"
-                      >
-                        Disconnect Web Dev
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleConnectWebDev}
-                        className="text-[11px] font-bold bg-zinc-900 hover:bg-zinc-800 text-white py-1.5 px-3 rounded-xl transition-colors flex items-center gap-1 shadow-sm"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Connect Web Dev Account
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Filters Row */}
-                <div className="bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm flex flex-wrap gap-4 items-center justify-between">
-                  <div className="flex flex-wrap gap-4 items-center">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-zinc-400 flex items-center gap-1">
-                        <Filter className="w-3 h-3" />
-                        Project:
-                      </span>
-                      <select
-                        value={tackboardProject}
-                        onChange={(e) => setTackboardProject(e.target.value)}
-                        className="text-xs font-bold bg-zinc-50 border border-zinc-200 rounded-lg py-1 px-2.5 focus:ring-zinc-450 focus:border-zinc-450"
-                      >
-                        <option value="All">All projects</option>
-                        {Object.values(Department).map(dept => (
-                          <option key={dept} value={dept}>{dept}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-zinc-400">Assigned to:</span>
-                      <select
-                        value={tackboardAssignee}
-                        onChange={(e) => setTackboardAssignee(e.target.value)}
-                        className="text-xs font-bold bg-zinc-50 border border-zinc-200 rounded-lg py-1 px-2.5 focus:ring-zinc-450 focus:border-zinc-450"
-                      >
-                        <option value="All">Anyone</option>
-                        {users.map(u => (
-                          <option key={u.id} value={u.id}>{u.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={tackboardShowArchived}
-                        onChange={(e) => setTackboardShowArchived(e.target.checked)}
-                        className="rounded border-zinc-300 text-zinc-800 focus:ring-zinc-500 h-4 w-4"
-                      />
-                      <span className="text-xs font-bold text-zinc-550">Show Archived</span>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="flex bg-zinc-100 p-0.5 rounded-lg border border-zinc-200">
-                      {(['board', 'list', 'timeline', 'tackboard'] as const).map(layout => (
-                        <button
-                          key={layout}
-                          onClick={() => setTackboardLayout(layout)}
-                          className={`text-[9px] uppercase font-black py-1 px-2 rounded transition-all ${
-                            tackboardLayout === layout
-                              ? 'bg-zinc-800 text-white shadow-sm'
-                              : 'text-zinc-500 hover:text-zinc-800'
-                          }`}
-                        >
-                          {layout}
-                        </button>
-                      ))}
-                    </div>
-
-                    <button
-                      onClick={() => openTaskModal(null)}
-                      className="flex items-center gap-1.5 py-1.5 px-3 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      New task
-                    </button>
-                  </div>
-                </div>
-
-                {/* Layout Container */}
-                {isWebDevLoading && (
-                  <div className="flex items-center justify-center p-8 bg-white border border-zinc-200 rounded-2xl shadow-sm text-sm font-bold text-zinc-500 gap-2">
-                    <RefreshCw className="w-4 h-4 animate-spin text-zinc-800" />
-                    Fetching Web Dev tasks...
-                  </div>
-                )}
-
-                {tackboardLayout === 'tackboard' && (
-                  <div className="flex gap-6 overflow-x-auto pb-4 items-start select-none">
-                    {/* Render Columns */}
-                    {(tackboardAssignee !== 'All' ? users.filter(u => u.id === tackboardAssignee) : users).map(user => {
-                      const userColor = getUserColorClass(user.name);
-                      const userTasks = filteredLocalTasks.filter(t => t.assignedTo === user.id);
-                      
-                      // Filter matching backlog tasks and subtasks
-                      const matchingWebDevTasks: any[] = [];
-                      
-                      webDevTasks.forEach(wdTask => {
-                        if (wdTask.status === 'done' && !tackboardShowArchived) return;
-
-                        const isAssignedToUser = (email: string) => {
-                          const emailStr = String(email).toLowerCase();
-                          const emailPrefix = emailStr.split('@')[0];
-                          
-                          if (user.email) {
-                            const userEmailLower = user.email.toLowerCase();
-                            if (emailStr === userEmailLower) return true;
-                            const localPrefix = userEmailLower.split('@')[0];
-                            if (emailPrefix === localPrefix) return true;
-                          }
-                          
-                          const nameParts = user.name.toLowerCase().split(/\s+/).filter(Boolean);
-                          return nameParts.some(part => part === emailPrefix);
-                        };
-
-                        // 1. Parent task assignment
-                        const parentAssignees = Array.isArray(wdTask.assignees) ? wdTask.assignees : [];
-                        const isParentAssigned = parentAssignees.some(isAssignedToUser);
-                        
-                        if (isParentAssigned) {
-                          const alreadyPulled = shiftBlocks.some(localTask =>
-                            localTask.assignedTo === user.id &&
-                            localTask.webDevTaskId === wdTask.id &&
-                            !localTask.isWebDevSubtask
-                          );
-                          if (!alreadyPulled) {
-                            matchingWebDevTasks.push({
-                              id: wdTask.id,
-                              webDevTaskId: wdTask.id,
-                              title: wdTask.title,
-                              details: wdTask.details || '',
-                              priority: wdTask.priority,
-                              app: wdTask.app,
-                              isSubtask: false
-                            });
-                          }
-                        }
-
-                        // 2. Subtasks assignment
-                        if (Array.isArray(wdTask.subtasks)) {
-                          wdTask.subtasks.forEach((subtask: any, idx: number) => {
-                            if (subtask.completed) return;
-                            if (subtask.assignee && isAssignedToUser(subtask.assignee)) {
-                              const alreadyPulled = shiftBlocks.some(localTask =>
-                                localTask.assignedTo === user.id &&
-                                localTask.webDevTaskId === wdTask.id &&
-                                localTask.isWebDevSubtask &&
-                                localTask.webDevSubtaskIndex === idx
-                              );
-                              if (!alreadyPulled) {
-                                matchingWebDevTasks.push({
-                                  id: `${wdTask.id}-sub-${idx}`,
-                                  webDevTaskId: wdTask.id,
-                                  title: subtask.title,
-                                  details: subtask.notes || `Subtask of: ${wdTask.title}`,
-                                  priority: wdTask.priority,
-                                  app: wdTask.app,
-                                  isSubtask: true,
-                                  subtaskIndex: idx
-                                });
-                              }
-                            }
-                          });
-                        }
-                      });
-
-                      return (
-                        <div key={user.id} className="w-[320px] shrink-0 bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm flex flex-col min-h-[450px]">
-                          <div className="flex items-center justify-between pb-3 border-b border-zinc-150 mb-4">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-black text-xs ${userColor.bg}`}>
-                                {user.avatarInitials || user.name.split(' ').map(n=>n[0]).join('')}
-                              </div>
-                              <div>
-                                <h4 className="text-xs font-bold text-zinc-900 leading-tight">{user.name}</h4>
-                                <p className="text-[10px] text-zinc-400 leading-none">{user.role}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-[10px] font-bold bg-zinc-100 text-zinc-650 px-2 py-0.5 rounded-full border border-zinc-200">
-                                {userTasks.length}
-                              </span>
-                              <button
-                                onClick={() => openTaskModal(null, user.id)}
-                                className="p-1 hover:bg-zinc-100 rounded text-zinc-400 hover:text-zinc-800 transition-colors"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Task List */}
-                          <div className="space-y-3 flex-1 overflow-y-auto max-h-[350px] mb-4 pr-1">
-                            {userTasks.length === 0 ? (
-                              <div className="text-xs text-zinc-400 italic text-center py-6">No active tasks</div>
-                            ) : (
-                              userTasks.map(task => (
-                                <div
-                                  key={task.id}
-                                  onClick={() => openTaskModal(task)}
-                                  className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-xl hover:shadow-md cursor-pointer transition-all hover:scale-[1.015] group"
-                                >
-                                  <div className="flex justify-between items-start gap-2 mb-1.5">
-                                    <h5 className="text-xs font-bold text-zinc-900 leading-tight flex items-center gap-1.5">
-                                      {task.priority === 'urgent' || task.priority === 'high' ? (
-                                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                                      ) : null}
-                                      {task.title}
-                                    </h5>
-                                    {task.department && (
-                                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-zinc-200 text-zinc-650 rounded shrink-0 uppercase">
-                                        {task.department}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {task.description && (
-                                    <p className="text-[10px] text-zinc-500 leading-relaxed line-clamp-2 mb-2">{task.description}</p>
-                                  )}
-                                  <div className="flex justify-between items-center text-[9px] text-zinc-450 border-t border-zinc-200/40 pt-2">
-                                    <span className={`px-1.5 py-0.2 rounded font-bold uppercase ${
-                                      task.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
-                                      task.status === 'in_progress' ? 'bg-blue-50 text-blue-700' :
-                                      task.status === 'delayed' ? 'bg-amber-50 text-amber-700' :
-                                      'bg-zinc-100 text-zinc-600'
-                                    }`}>
-                                      {task.status?.replace('_', ' ')}
-                                    </span>
-                                    <span className="font-mono">{task.startTime?.split('T')[1]?.slice(0, 5) || '08:00'} - {task.endTime?.split('T')[1]?.slice(0, 5) || '16:00'}</span>
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </div>
-
-                          {/* Sync Error Banner */}
-                          {syncError && (
-                            <div className="mt-2 bg-red-50 border border-dashed border-red-200 text-red-700 p-2.5 rounded-xl text-[10px] flex justify-between items-start gap-2 shadow-sm font-medium">
-                              <span>⚠️ {syncError}</span>
-                              <button onClick={() => setSyncError(null)} className="font-bold hover:text-red-950 shrink-0">✕</button>
-                            </div>
-                          )}
-
-                          {/* Web Dev Backlog Section */}
-                          {matchingWebDevTasks.length > 0 && (
-                            <div className="mt-auto pt-4 border-t border-dashed border-zinc-200 bg-zinc-50 p-3 rounded-2xl border">
-                              <div className="flex items-center gap-1 mb-2">
-                                <Link className="w-3.5 h-3.5 text-zinc-450" />
-                                <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">Web Dev Backlog</span>
-                                <span className="text-[9px] font-black bg-zinc-200 px-1.5 py-0.2 rounded-full text-zinc-650 ml-auto">
-                                  {matchingWebDevTasks.length}
-                                </span>
-                              </div>
-                              <div className="space-y-2.5 max-h-[180px] overflow-y-auto pr-1">
-                                {matchingWebDevTasks.map(wdTask => (
-                                  <div key={wdTask.id} className="bg-white border border-dashed border-zinc-250 p-2.5 rounded-xl text-xs shadow-sm">
-                                    <div className="flex justify-between items-start gap-1.5">
-                                      <span className="font-bold text-zinc-800 text-[11px] leading-tight">{wdTask.title}</span>
-                                      {wdTask.app && (
-                                        <span className="text-[8px] font-bold px-1 py-0.2 bg-zinc-100 text-zinc-500 border border-zinc-150 rounded shrink-0 uppercase">
-                                          {wdTask.app}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {wdTask.details && (
-                                      <p className="text-[9px] text-zinc-500 line-clamp-2 mt-1 leading-snug">{wdTask.details}</p>
-                                    )}
-                                    <div className="mt-2 flex justify-between items-center">
-                                      <div className="flex items-center gap-1.5">
-                                        <span className={`text-[8px] px-1.5 py-0.2 rounded-full uppercase font-bold ${
-                                          wdTask.priority === 'critical' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                          wdTask.priority === 'high' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                          'bg-blue-50 text-blue-600 border border-blue-100'
-                                        }`}>{wdTask.priority}</span>
-                                        {wdTask.isSubtask && (
-                                          <span className="text-[8px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-600 border border-purple-100 uppercase font-bold">Subtask</span>
-                                        )}
-                                      </div>
-                                      <button
-                                        onClick={() => handlePullTask(user, wdTask)}
-                                        className="text-[9px] font-black bg-zinc-900 hover:bg-zinc-800 text-white py-1 px-2.5 rounded-lg flex items-center gap-0.5 shadow-sm transition-all"
-                                      >
-                                        <Download className="w-3 h-3" />
-                                        Pull to Planner
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {/* Unassigned column */}
-                    {(() => {
-                      const unassignedTasks = filteredLocalTasks.filter(t => !t.assignedTo || t.assignedTo === 'unassigned');
-                      if (unassignedTasks.length === 0 && tackboardAssignee !== 'All') return null;
-                      if (unassignedTasks.length === 0) return null;
-                      return (
-                        <div className="w-[320px] shrink-0 bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm flex flex-col min-h-[450px]">
-                          <div className="flex items-center justify-between pb-3 border-b border-zinc-150 mb-4">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full border border-dashed border-zinc-300 bg-zinc-50 flex items-center justify-center font-bold text-sm text-zinc-400">
-                                ?
-                              </div>
-                              <div>
-                                <h4 className="text-xs font-bold text-zinc-800 leading-tight">Unassigned Pool</h4>
-                                <p className="text-[10px] text-zinc-400 leading-none">Shared tasks</p>
-                              </div>
-                            </div>
-                            <span className="text-[10px] font-bold bg-zinc-100 text-zinc-650 px-2 py-0.5 rounded-full border border-zinc-200">
-                              {unassignedTasks.length}
-                            </span>
-                          </div>
-
-                          <div className="space-y-3 flex-1 overflow-y-auto max-h-[350px] pr-1">
-                            {unassignedTasks.map(task => (
-                              <div
-                                key={task.id}
-                                onClick={() => openTaskModal(task)}
-                                className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-xl hover:shadow-md cursor-pointer transition-all hover:scale-[1.015]"
-                              >
-                                <div className="flex justify-between items-start gap-2 mb-1.5">
-                                  <h5 className="text-xs font-bold text-zinc-900 leading-tight">{task.title}</h5>
-                                  {task.department && (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 bg-zinc-200 text-zinc-650 rounded shrink-0 uppercase">{task.department}</span>
-                                  )}
-                                </div>
-                                {task.description && (
-                                  <p className="text-[10px] text-zinc-500 line-clamp-2 mb-2">{task.description}</p>
-                                )}
-                                <div className="flex justify-between items-center text-[9px] text-zinc-450 border-t border-zinc-200/40 pt-2">
-                                  <span className="capitalize">{task.status?.replace('_', ' ')}</span>
-                                  <span>{task.startTime?.split('T')[1]?.slice(0, 5) || '08:00'}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {tackboardLayout === 'board' && (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    {(['pending', 'in_progress', 'completed', 'delayed'] as const).map(status => {
-                      const statusTasks = filteredLocalTasks.filter(t => t.status === status);
-                      return (
-                        <div key={status} className="bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm flex flex-col min-h-[450px]">
-                          <div className="flex items-center justify-between pb-3 border-b border-zinc-150 mb-4">
-                            <span className="text-xs font-bold capitalize text-zinc-800 flex items-center gap-2">
-                              <span className={`w-2.5 h-2.5 rounded-full ${
-                                status === 'completed' ? 'bg-emerald-500' :
-                                status === 'in_progress' ? 'bg-blue-500' :
-                                status === 'delayed' ? 'bg-amber-500' : 'bg-zinc-400'
-                              }`} />
-                              {status.replace('_', ' ')}
-                            </span>
-                            <span className="text-[10px] font-bold bg-zinc-100 px-2 py-0.5 rounded-full text-zinc-650 border border-zinc-200">
-                              {statusTasks.length}
-                            </span>
-                          </div>
-                          <div className="flex-1 space-y-3 overflow-y-auto max-h-[400px] pr-1">
-                            {statusTasks.length === 0 ? (
-                              <div className="text-xs text-zinc-450 italic text-center py-6">No tasks</div>
-                            ) : (
-                              statusTasks.map(task => (
-                                <div
-                                  key={task.id}
-                                  onClick={() => openTaskModal(task)}
-                                  className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-xl hover:shadow-md cursor-pointer transition-all hover:scale-[1.015]"
-                                >
-                                  <div className="flex justify-between items-start gap-2 mb-2">
-                                    <h5 className="text-xs font-bold text-zinc-900 leading-tight">
-                                      {task.priority === 'urgent' || task.priority === 'high' ? (
-                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 align-middle" />
-                                      ) : null}
-                                      {task.title}
-                                    </h5>
-                                    {task.department && (
-                                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-zinc-200 text-zinc-650 rounded shrink-0 uppercase">
-                                        {task.department}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {task.description && (
-                                    <p className="text-[10px] text-zinc-505 line-clamp-2 leading-relaxed mb-2">{task.description}</p>
-                                  )}
-                                  <div className="mt-2.5 pt-2.5 border-t border-zinc-200/50 flex justify-between items-center text-[9px] text-zinc-450">
-                                    <span className="font-bold text-zinc-700">{task.assignedToName || 'Unassigned'}</span>
-                                    <span>{task.startTime?.split('T')[1]?.slice(0, 5) || '08:00'}</span>
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {tackboardLayout === 'list' && (
-                  <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs text-zinc-700">
-                        <thead className="bg-zinc-50 border-b border-zinc-200 font-bold uppercase text-[9px] text-zinc-500 tracking-wider">
-                          <tr>
-                            <th className="px-6 py-3.5">Task Title</th>
-                            <th className="px-6 py-3.5">Assignee</th>
-                            <th className="px-6 py-3.5">Project/Dept</th>
-                            <th className="px-6 py-3.5">Priority</th>
-                            <th className="px-6 py-3.5">Status</th>
-                            <th className="px-6 py-3.5">Scheduled Time</th>
-                            <th className="px-6 py-3.5 text-right">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-250">
-                          {filteredLocalTasks.length === 0 ? (
-                            <tr>
-                              <td colSpan={7} className="px-6 py-8 text-center text-zinc-450 italic">No tasks match selected filters.</td>
-                            </tr>
-                          ) : (
-                            filteredLocalTasks.map(task => (
-                              <tr key={task.id} className="hover:bg-zinc-50/50 transition-colors">
-                                <td className="px-6 py-4 font-bold text-zinc-900 text-xs">{task.title}</td>
-                                <td className="px-6 py-4 font-medium text-zinc-650">{task.assignedToName || 'Unassigned'}</td>
-                                <td className="px-6 py-4">
-                                  <span className="bg-zinc-100 text-zinc-700 py-0.5 px-2 rounded font-bold uppercase text-[8px] border border-zinc-200">{task.department}</span>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <span className={`capitalize py-0.5 px-2 rounded-full font-bold text-[8px] border ${
-                                    task.priority === 'urgent' ? 'bg-red-50 text-red-700 border-red-100' :
-                                    task.priority === 'high' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                    task.priority === 'medium' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                    'bg-zinc-50 text-zinc-700 border-zinc-200'
-                                  }`}>{task.priority}</span>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <span className="capitalize py-0.5 px-2 bg-zinc-50 text-zinc-700 rounded border border-zinc-200 text-[9px]">{task.status?.replace('_', ' ')}</span>
-                                </td>
-                                <td className="px-6 py-4 font-mono font-bold text-zinc-500">{task.startTime?.split('T')[1]?.slice(0, 5) || '08:00'} - {task.endTime?.split('T')[1]?.slice(0, 5) || '16:00'}</td>
-                                <td className="px-6 py-4 text-right">
-                                  <button
-                                    onClick={() => openTaskModal(task)}
-                                    className="text-zinc-700 hover:text-zinc-950 font-black hover:underline py-1 px-2.5 rounded-lg border border-zinc-200 hover:bg-white bg-zinc-50 shadow-sm"
-                                  >
-                                    Edit
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {tackboardLayout === 'timeline' && (
-                  <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-6">
-                    <div className="flex items-center gap-1.5">
-                      <CalendarDays className="w-4 h-4 text-zinc-700" />
-                      <h4 className="text-xs font-black text-zinc-550 uppercase tracking-wider">Scheduled Tasks Timeline</h4>
-                    </div>
-                    {filteredLocalTasks.length === 0 ? (
-                      <div className="text-zinc-450 italic text-sm text-center py-8">No tasks scheduled.</div>
-                    ) : (
-                      <div className="relative border-l-2 border-zinc-200 pl-6 ml-4 space-y-6">
-                        {[...filteredLocalTasks].sort((a,b) => String(a.startTime).localeCompare(String(b.startTime))).map((task) => (
-                          <div key={task.id} className="relative">
-                            <span className="absolute -left-[32px] top-1.5 w-4 h-4 rounded-full border-4 border-white bg-zinc-800 shadow" />
-                            <div
-                              onClick={() => openTaskModal(task)}
-                              className="p-4 bg-zinc-50 border border-zinc-200 rounded-2xl hover:shadow-md cursor-pointer transition-all hover:scale-[1.005]"
-                            >
-                              <div className="flex justify-between items-start gap-4 mb-2 flex-wrap">
-                                <div>
-                                  <h5 className="font-bold text-zinc-950 text-sm leading-snug">{task.title}</h5>
-                                  <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
-                                    {task.startTime?.split('T')[1]?.slice(0, 5)} - {task.endTime?.split('T')[1]?.slice(0, 5)} | {task.startTime?.split('T')[0]}
-                                  </p>
-                                </div>
-                                <div className="flex gap-2">
-                                  <span className="text-[8px] font-bold px-2 py-0.5 rounded bg-zinc-200 text-zinc-650 uppercase border border-zinc-300">{task.department}</span>
-                                  <span className={`capitalize text-[9px] px-2 py-0.5 rounded border ${
-                                    task.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                                    task.status === 'in_progress' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                    'bg-zinc-100 text-zinc-600 border-zinc-200'
-                                  }`}>{task.status?.replace('_', ' ')}</span>
-                                </div>
-                              </div>
-                              {task.description && (
-                                <p className="text-xs text-zinc-550 leading-relaxed mb-3">{task.description}</p>
-                              )}
-                              <div className="flex items-center gap-2 text-xs">
-                                <span className="font-bold text-zinc-800 flex items-center gap-1.5 bg-white py-1 px-2.5 rounded-lg border border-zinc-250/60 shadow-sm">
-                                  <span className="w-5 h-5 rounded-full bg-zinc-950 text-white flex items-center justify-center text-[9px] font-bold uppercase border border-zinc-800">
-                                    {task.assignedToName?.charAt(0) || '?'}
-                                  </span>
-                                  {task.assignedToName}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <ProjectTaskBoard
+                users={users}
+                currentUser={currentUser}
+                shiftBlocks={shiftBlocks}
+                onOpenShiftTaskModal={openTaskModal}
+              />
             )}
           </div>
         )}
