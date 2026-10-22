@@ -108,3 +108,58 @@ export async function notifyManagersOfWeeklyDigest(
     console.error("Error broadcasting weekly digest push:", e);
   }
 }
+
+/** Send 5-minute unclocked tardy alert directly to the late team member's mobile app */
+export async function notifyTeamMemberFiveMinTardy(
+  userId: string,
+  expoPushToken?: string,
+  shiftTitle?: string
+): Promise<void> {
+  if (!expoPushToken) return;
+  const payload = {
+    to: expoPushToken,
+    sound: 'default',
+    title: '⚠️ Shift Tardy Alert',
+    body: 'You are five minutes late to your shift. You are now tardy. Are you planning on coming to work today?',
+    data: {
+      type: 'five_min_tardy_prompt',
+      channelId: `dm-${userId}`,
+      shiftTitle: shiftTitle || 'Scheduled Shift'
+    }
+  };
+  try {
+    await sendPushNotification(payload);
+  } catch (e) {
+    console.error("Error sending 5-min tardy push to team member:", e);
+  }
+}
+
+/** Send 5-minute unclocked tardy heads-up alert to managers */
+export async function notifyManagersOfUnclockedTardy(
+  userName: string,
+  userId: string,
+  shiftTitle?: string,
+  managerPushTokens: string[] = []
+): Promise<void> {
+  if (!managerPushTokens || managerPushTokens.length === 0) return;
+  const uniqueTokens = Array.from(new Set(managerPushTokens.filter(Boolean)));
+  const cleanTitle = shiftTitle ? shiftTitle.replace('[SHIFT]', '').trim() : 'scheduled shift';
+  const payload = uniqueTokens.map(to => ({
+    to,
+    sound: 'default',
+    title: `🚨 5-Min Unclocked Tardy: ${userName}`,
+    body: `${userName} is 5 minutes late for ${cleanTitle || 'their shift'} and has not clocked in. Automated check-in sent to their DM.`,
+    data: {
+      type: 'manager_unclocked_tardy',
+      userId,
+      userName,
+      channelId: `dm-${userId}`
+    }
+  }));
+  try {
+    await sendPushNotification(payload);
+  } catch (e) {
+    console.error("Error sending unclocked tardy push to managers:", e);
+  }
+}
+

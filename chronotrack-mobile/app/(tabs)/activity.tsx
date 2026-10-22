@@ -66,6 +66,43 @@ export default function ActivityScreen() {
     return () => unsubscribe();
   }, [currentUser]);
 
+  // Schedule or cancel local 5-minute tardy reminder strictly for [SHIFT] blocks
+  useEffect(() => {
+    if (!currentUser) return;
+
+    import('../../src/services/notificationService').then(({ scheduleShiftTardyReminder, cancelShiftTardyReminder }) => {
+      if (activeSession) {
+        cancelShiftTardyReminder();
+        return;
+      }
+
+      const now = Date.now();
+      const today = new Date(now);
+      // Strictly filter ONLY actual shift blocks (title starts with '[SHIFT]'), never assigned tasks
+      const upcomingTodayShift = shifts
+        .filter(s => {
+          if (typeof s.title !== 'string' || !s.title.startsWith('[SHIFT]') || s.fiveMinTardyNotified) return false;
+          const startObj = new Date(s.startTime);
+          const isToday =
+            startObj.getFullYear() === today.getFullYear() &&
+            startObj.getMonth() === today.getMonth() &&
+            startObj.getDate() === today.getDate();
+          return isToday && (startObj.getTime() + 5 * 60 * 1000) > now;
+        })
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
+
+      if (upcomingTodayShift) {
+        scheduleShiftTardyReminder(
+          currentUser.id,
+          new Date(upcomingTodayShift.startTime).getTime(),
+          upcomingTodayShift.title
+        );
+      } else {
+        cancelShiftTardyReminder();
+      }
+    }).catch(err => console.warn('[ActivityScreen] Tardy reminder schedule error:', err));
+  }, [currentUser, activeSession, shifts]);
+
   // Ensure progress state stays in sync with the selected task's true progress when shifts update
   useEffect(() => {
     if (!isCustomTask && taskName) {

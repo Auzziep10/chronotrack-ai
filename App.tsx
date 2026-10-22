@@ -721,6 +721,131 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken, shiftBlocks, activeSessions, currentUser]);
 
+  // ─── 5-MINUTE UNCLOCKED TARDY MONITOR (STRICTLY [SHIFT] BLOCKS ONLY) ──────
+  const notifiedTardyShiftsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!authToken || !isFirebaseConfigured() || !isFirebaseAuthed) return;
+
+    // Run on Master Station (iPad terminal), Admin, or Manager session
+    const roleLower = currentUser?.role?.toLowerCase() || '';
+    const isMonitorEligible =
+      roleLower === 'admin' ||
+      roleLower === 'manager' ||
+      roleLower === 'terminal' ||
+      currentUser?.username?.toLowerCase() === 'warehouse';
+    if (!isMonitorEligible) return;
+
+    const checkFiveMinTardyShifts = async () => {
+      const now = Date.now();
+      const today = new Date(now);
+      const tzOffset = now - today.getTimezoneOffset() * 60000;
+      const todayStr = new Date(tzOffset).toISOString().split('T')[0];
+
+      // Strictly filter ONLY actual shift blocks (title starts with '[SHIFT]'), never assigned tasks
+      const eligibleShifts = shiftBlocks.filter((b: any) => {
+        if (!b || typeof b.title !== 'string' || !b.title.startsWith('[SHIFT]')) return false;
+        if (!b.assignedTo || b.fiveMinTardyNotified || notifiedTardyShiftsRef.current.has(b.id)) return false;
+
+        const startObj = new Date(b.startTime);
+        const isToday =
+          startObj.getFullYear() === today.getFullYear() &&
+          startObj.getMonth() === today.getMonth() &&
+          startObj.getDate() === today.getDate();
+        if (!isToday) return false;
+
+        const startMs = startObj.getTime();
+        const endMs = new Date(b.endTime).getTime();
+        const fiveMinAfterStartMs = startMs + 5 * 60 * 1000;
+        const maxWindowMs = startMs + 60 * 60 * 1000; // Within 5 to 60 mins of shift start
+
+        return now >= fiveMinAfterStartMs && now <= Math.min(endMs, maxWindowMs);
+      });
+
+      if (eligibleShifts.length === 0) return;
+
+      // Fetch today's timecards once to ensure the user didn't already clock in/out or get logged absent today
+      let todayTimeCards: DailyTimeCard[] = [];
+      try {
+        const { firebaseGetTimeCards } = await import('./services/firebaseService');
+        const allCards = await firebaseGetTimeCards();
+        todayTimeCards = allCards.filter(tc => tc.date === todayStr);
+      } catch (e) {
+        console.warn('[FiveMinTardyMonitor] Failed to fetch timeCards:', e);
+      }
+
+      for (const shift of eligibleShifts) {
+        const userId = String(shift.assignedTo);
+
+        // Skip if currently clocked in
+        if (activeSessionsRef.current[userId]) {
+          notifiedTardyShiftsRef.current.add(shift.id);
+          continue;
+        }
+
+        // Skip if user already has a timecard or logged absence for today
+        const hasTimeCardToday = todayTimeCards.some(tc => String(tc.userId) === userId);
+        if (hasTimeCardToday) {
+          notifiedTardyShiftsRef.current.add(shift.id);
+          continue;
+        }
+
+        const targetUser = usersRef.current.find(u => String(u.id) === userId);
+        if (!targetUser) continue;
+
+        // Lock immediately in local ref + Firestore to prevent duplicate notifications
+        notifiedTardyShiftsRef.current.add(shift.id);
+
+        try {
+          const { firebaseSaveShiftBlock, firebaseSendMessage } = await import('./services/firebaseService');
+          const { notifyTeamMemberFiveMinTardy, notifyManagersOfUnclockedTardy } = await import('./services/pushNotificationService');
+
+          await firebaseSaveShiftBlock({
+            ...shift,
+            fiveMinTardyNotified: true
+          });
+
+          const tardyMessageText = 'You are five minutes late to your shift. You are now tardy. Are you planning on coming to work today?';
+
+          // 1. Post automated check-in message in the team member's private Admin DM channel
+          await firebaseSendMessage({
+            id: `msg-tardy-${shift.id}-${Date.now()}`,
+            senderId: 'system-attendance',
+            senderName: 'Clockwork Attendance',
+            senderAvatar: '⏱️',
+            senderRole: 'Admin',
+            content: tardyMessageText,
+            timestamp: Date.now(),
+            channel: `dm-${targetUser.id}`,
+            isTardyPrompt: true,
+            quickReplies: [
+              '✅ Yes, on my way!',
+              '🕒 Running 10-15 mins late',
+              '🤒 Calling out sick today',
+              '🚨 Having an emergency'
+            ]
+          });
+
+          // 2. Send push notification to the late team member's mobile device
+          await notifyTeamMemberFiveMinTardy(targetUser.id, targetUser.expoPushToken, shift.title);
+
+          // 3. Send heads-up push notification to all managers/admins
+          const managerTokens = usersRef.current
+            .filter(u => (u.role?.toLowerCase() === 'admin' || u.role?.toLowerCase() === 'manager') && u.expoPushToken)
+            .map(u => u.expoPushToken as string);
+
+          await notifyManagersOfUnclockedTardy(targetUser.name, targetUser.id, shift.title, managerTokens);
+          console.log(`[FiveMinTardyMonitor] Dispatched 5-min tardy alert & DM prompt for ${targetUser.name}`);
+        } catch (err) {
+          console.error('[FiveMinTardyMonitor] Failed to dispatch 5-minute tardy alert:', err);
+        }
+      }
+    };
+
+    checkFiveMinTardyShifts();
+    const interval = setInterval(checkFiveMinTardyShifts, 15 * 1000); // Check every 15 seconds
+    return () => clearInterval(interval);
+  }, [authToken, isFirebaseAuthed, shiftBlocks, activeSessions, currentUser]);
+
   const handleLogSubmit = (userId: string, logData: Omit<WorkLog, 'id' | 'timestamp' | 'periodStart' | 'periodEnd' | 'userId' | 'userName'>) => {
     const now = Date.now();
 

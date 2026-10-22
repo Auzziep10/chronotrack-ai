@@ -171,6 +171,7 @@ export interface ScheduleBlock {
   requiresPhoto?: boolean;
   isPrintRoomTask?: boolean;
   proofPhotoUrl?: string;
+  fiveMinTardyNotified?: boolean;
 }
 
 export interface DailySchedule {
@@ -208,6 +209,8 @@ export interface ChatMessage {
   timestamp: number;
   channel: string;
   imageUrl?: string;
+  isTardyPrompt?: boolean;
+  quickReplies?: string[];
   reactions?: {
     thumbsUp?: string[];
     heart?: string[];

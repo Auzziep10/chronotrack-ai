@@ -1,5 +1,6 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
+import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { StatusBar } from 'expo-status-bar';
@@ -22,6 +23,23 @@ function RootLayoutNav() {
       router.replace('/(tabs)/activity');
     }
   }, [currentUser, isLoading, segments]);
+
+  // Deep-link into the DM chat when tapping a 5-minute tardy notification
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as any;
+      if (data?.channelId) {
+        router.push({
+          pathname: '/(tabs)/chat',
+          params: { channel: String(data.channelId) }
+        });
+      }
+    });
+
+    return () => subscription.remove();
+  }, [currentUser, router]);
 
   return (
     <>

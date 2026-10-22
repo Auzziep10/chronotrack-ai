@@ -46,3 +46,59 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     return null;
   }
 }
+
+let scheduledTardyNotificationId: string | null = null;
+
+/**
+ * Schedules a local OS notification for 5 minutes after a user's scheduled [SHIFT] start time
+ * in case they haven't clocked in yet. Cancelled automatically when they clock in.
+ */
+export async function scheduleShiftTardyReminder(
+  userId: string,
+  shiftStartMs: number,
+  shiftTitle?: string
+): Promise<void> {
+  try {
+    await cancelShiftTardyReminder();
+
+    const triggerTimeMs = shiftStartMs + 5 * 60 * 1000;
+    const secondsUntilTrigger = Math.floor((triggerTimeMs - Date.now()) / 1000);
+
+    // Only schedule if the 5-minute tardy mark is in the future (within the next 24 hours)
+    if (secondsUntilTrigger <= 0 || secondsUntilTrigger > 86400) {
+      return;
+    }
+
+    scheduledTardyNotificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '⚠️ Shift Tardy Alert',
+        body: 'You are five minutes late to your shift. You are now tardy. Are you planning on coming to work today?',
+        sound: true,
+        data: {
+          type: 'five_min_tardy_prompt',
+          channelId: `dm-${userId}`,
+          shiftTitle: shiftTitle || 'Scheduled Shift'
+        }
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: secondsUntilTrigger,
+        repeats: false,
+      },
+    });
+  } catch (e) {
+    console.warn("Failed to schedule local shift tardy reminder:", e);
+  }
+}
+
+export async function cancelShiftTardyReminder(): Promise<void> {
+  try {
+    if (scheduledTardyNotificationId) {
+      await Notifications.cancelScheduledNotificationAsync(scheduledTardyNotificationId);
+      scheduledTardyNotificationId = null;
+    }
+  } catch (e) {
+    console.warn("Failed to cancel shift tardy reminder:", e);
+  }
+}
+

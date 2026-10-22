@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigation } from 'expo-router';
+import { useNavigation, useLocalSearchParams } from 'expo-router';
 import { 
   View, 
   Text, 
@@ -44,6 +44,13 @@ const QUICK_REPLIES: Record<string, string[]> = {
   'random': ['Haha nice!', 'Interesting...', '☕ Coffee time!', 'Happy Friday! 🎉', 'Lets go!']
 };
 
+const DM_QUICK_REPLIES = [
+  '✅ Yes, on my way!',
+  '🕒 Running 10-15 mins late',
+  '🤒 Calling out sick today',
+  '🚨 Having an emergency'
+];
+
 const DEFAULT_QUICK_REPLIES = ['Got it!', 'Thanks!', 'On it!', 'Awesome!'];
 
 const AVATAR_COLORS = [
@@ -75,6 +82,7 @@ const getDmChannelId = (userA?: { id: string; role?: string } | null, userB?: { 
 
 export default function ChatScreen() {
   const { currentUser, users, unreadCounts, markChannelAsRead } = useAuth();
+  const params = useLocalSearchParams<{ channel?: string }>();
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [activeChannel, setActiveChannel] = useState('general');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -86,6 +94,14 @@ export default function ChatScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const navigation = useNavigation();
+
+  // Switch directly to a specific channel (e.g. dm-{userId}) when opened from a push notification
+  useEffect(() => {
+    if (params?.channel && typeof params.channel === 'string') {
+      setActiveChannel(params.channel);
+      setShowChannelModal(false);
+    }
+  }, [params?.channel]);
 
   useEffect(() => {
     const unsubscribe = (navigation as any).addListener('tabPress', (e: any) => {
@@ -231,7 +247,14 @@ export default function ChatScreen() {
             } else {
               // Sender is Staff member, recipient is all Admins/Managers
               recipients = allUsers.filter(u => u.role?.toLowerCase() === 'admin' || u.role?.toLowerCase() === 'manager');
-              pushTitle = `Staff Message - ${currentUser.name}`;
+              const isCallOutOrTardyReply =
+                text.toLowerCase().includes('calling out') ||
+                text.toLowerCase().includes('emergency') ||
+                text.toLowerCase().includes('on my way') ||
+                text.toLowerCase().includes('mins late');
+              pushTitle = isCallOutOrTardyReply
+                ? `🚨 Attendance Reply - ${currentUser.name}`
+                : `Staff Message - ${currentUser.name}`;
             }
           }
         } else if (currentChannelObj?.notificationsEnabled !== false) {
@@ -281,11 +304,16 @@ export default function ChatScreen() {
     return `${formattedHours}:${minutes} ${ampm}`;
   };
 
-  const activeQuickReplies = QUICK_REPLIES[activeChannel] || DEFAULT_QUICK_REPLIES;
+  const activeQuickReplies = isDM
+    ? DM_QUICK_REPLIES
+    : (QUICK_REPLIES[activeChannel] || DEFAULT_QUICK_REPLIES);
 
   const renderMessageItem = ({ item }: { item: ChatMessage }) => {
     const isOwnMessage = item.senderId === currentUser?.id;
     const avatarColors = getAvatarStyle(item.senderName);
+    const promptReplies = item.isTardyPrompt
+      ? (item.quickReplies && item.quickReplies.length > 0 ? item.quickReplies : DM_QUICK_REPLIES)
+      : [];
 
     return (
       <View style={[styles.messageRow, isOwnMessage && styles.messageRowOwn]}>
@@ -306,7 +334,11 @@ export default function ChatScreen() {
             activeOpacity={0.85}
             onLongPress={() => setSelectedMessageForReaction(item)}
           >
-            <View style={[styles.messageBubble, isOwnMessage ? styles.bubbleOwn : styles.bubbleOther]}>
+            <View style={[
+              styles.messageBubble,
+              isOwnMessage ? styles.bubbleOwn : styles.bubbleOther,
+              item.isTardyPrompt && !isOwnMessage && styles.bubbleTardyPrompt
+            ]}>
               {item.imageUrl && (
                 <Image 
                   source={{ uri: item.imageUrl }} 
@@ -315,10 +347,30 @@ export default function ChatScreen() {
                 />
               )}
               {item.content ? (
-                <Text style={[styles.messageText, isOwnMessage ? styles.textOwn : styles.textOther]}>
+                <Text style={[
+                  styles.messageText,
+                  isOwnMessage ? styles.textOwn : styles.textOther,
+                  item.isTardyPrompt && !isOwnMessage && styles.textTardyPrompt
+                ]}>
                   {item.content}
                 </Text>
               ) : null}
+
+              {/* Interactive Quick-Reply Buttons for 5-Minute Tardy Prompt */}
+              {item.isTardyPrompt && !isOwnMessage && promptReplies.length > 0 && (
+                <View style={styles.tardyPromptButtonsContainer}>
+                  <Text style={styles.tardyPromptActionLabel}>Tap to reply to leadership:</Text>
+                  {promptReplies.map((replyOption) => (
+                    <TouchableOpacity
+                      key={replyOption}
+                      style={styles.tardyPromptReplyBtn}
+                      onPress={() => handleSendMessage(replyOption)}
+                    >
+                      <Text style={styles.tardyPromptReplyBtnText}>{replyOption}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
 
               {/* Reaction Badges Container */}
               {((item.reactions?.thumbsUp && item.reactions.thumbsUp.length > 0) || 
@@ -882,6 +934,11 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.cardBorder,
     borderTopLeftRadius: 2,
   },
+  bubbleTardyPrompt: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#f59e0b',
+    borderWidth: 1.5,
+  },
   messageText: {
     fontSize: 14,
     lineHeight: 20,
@@ -891,6 +948,38 @@ const styles = StyleSheet.create({
   },
   textOther: {
     color: theme.colors.text,
+  },
+  textTardyPrompt: {
+    color: '#92400e',
+    fontWeight: '600',
+  },
+  tardyPromptButtonsContainer: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#fde68a',
+    gap: 6,
+  },
+  tardyPromptActionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#b45309',
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  tardyPromptReplyBtn: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  tardyPromptReplyBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400e',
   },
   inputOuterContainer: {
     backgroundColor: theme.colors.card,

@@ -108,9 +108,14 @@ export const firebaseClockIn = async (user: User, clockInDepartment?: string, is
         ));
         
         const todayShifts = shiftsSnap.docs.map(d => d.data()).filter(s => {
-            const startMs = new Date(s.startTime).getTime();
-            const sDate = s.date || new Date(startMs).toISOString().split('T')[0];
-            return sDate === todayStr;
+            if (typeof s.title !== 'string' || !s.title.startsWith('[SHIFT]')) return false;
+            const startObj = new Date(s.startTime);
+            const nowObj = new Date(now);
+            return (
+                startObj.getFullYear() === nowObj.getFullYear() &&
+                startObj.getMonth() === nowObj.getMonth() &&
+                startObj.getDate() === nowObj.getDate()
+            );
         });
 
         if (todayShifts.length > 0) {

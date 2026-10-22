@@ -174,6 +174,7 @@ export interface ScheduleBlock {
   requiresPhoto?: boolean; // Whether completing this task requires a photo from staff
   isPrintRoomTask?: boolean; // Flag for Print Room specific tasks
   proofPhotoUrl?: string; // Final completion verification photo URL
+  fiveMinTardyNotified?: boolean; // Whether the 5-minute unclocked tardy alert has been sent for this shift
 }
 
 export interface DailySchedule {
@@ -211,6 +212,8 @@ export interface ChatMessage {
   timestamp: number;
   channel: string;
   imageUrl?: string;
+  isTardyPrompt?: boolean;
+  quickReplies?: string[];
   reactions?: {
     thumbsUp?: string[];
     heart?: string[];

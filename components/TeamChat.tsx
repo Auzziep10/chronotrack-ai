@@ -974,6 +974,8 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                         <div className={`p-4 rounded-3xl text-sm border leading-relaxed shadow-sm transition-all break-words w-full relative ${
                           isOwnMessage
                             ? 'bg-zinc-900 text-white border-zinc-900 rounded-tr-none'
+                            : msg.isTardyPrompt
+                            ? 'bg-amber-50 text-amber-950 border-amber-400 rounded-tl-none font-semibold'
                             : 'bg-zinc-50 text-zinc-800 border-zinc-200 rounded-tl-none'
                         }`}>
                           {msg.imageUrl && (
@@ -989,6 +991,23 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
                             </div>
                           )}
                           {msg.content && <p>{msg.content}</p>}
+
+                          {msg.isTardyPrompt && !isOwnMessage && msg.quickReplies && msg.quickReplies.length > 0 && (
+                            <div className="mt-3 pt-2.5 border-t border-amber-200 flex flex-col gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Tap to reply to leadership:</span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {msg.quickReplies.map((replyOpt) => (
+                                  <button
+                                    key={replyOpt}
+                                    onClick={() => handleSendMessage(replyOpt)}
+                                    className="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-400 rounded-xl text-xs font-bold transition-colors shadow-sm"
+                                  >
+                                    {replyOpt}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                           {/* Reaction badges overlapping bottom border */}
                           <div className={`absolute -bottom-2.5 flex items-center gap-1.5 ${
@@ -1044,7 +1063,10 @@ export const TeamChat: React.FC<Props> = ({ isOpen, onClose, currentUser, active
           {canSendMessages && (
             <div className="px-6 py-2 border-t border-zinc-100 bg-zinc-50 flex items-center gap-2 overflow-x-auto hide-scrollbar shrink-0">
               <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest shrink-0">Quick:</span>
-              {(QUICK_REPLIES[activeChannel] || DEFAULT_QUICK_REPLIES).map(reply => (
+              {(isDM
+                ? ['✅ Yes, on my way!', '🕒 Running 10-15 mins late', '🤒 Calling out sick today', '🚨 Having an emergency']
+                : (QUICK_REPLIES[activeChannel] || DEFAULT_QUICK_REPLIES)
+              ).map(reply => (
                 <button
                   key={reply}
                   onClick={() => handleSendMessage(reply)}
