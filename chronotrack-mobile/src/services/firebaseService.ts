@@ -380,6 +380,51 @@ export const firebaseSendMessage = async (message: ChatMessage): Promise<void> =
         ...clean,
         timestamp: serverTimestamp()
     });
+
+    // If a team member replies inside their own private DM channel (dm-{userId}), log their tardy check-in response
+    if (
+        message.senderId &&
+        message.senderId !== 'system-attendance' &&
+        message.channel === `dm-${message.senderId}`
+    ) {
+        try {
+            const now = Date.now();
+            const todayStr = new Date(now - new Date(now).getTimezoneOffset() * 60000).toISOString().split('T')[0];
+            const userRef = doc(db, USERS_COL, message.senderId);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+                const userData = userSnap.data() as User;
+                const auditList = Array.isArray(userData.attendanceAuditLog) ? userData.attendanceAuditLog : [];
+                const recentAlert = auditList.find(
+                    a => a.type === '5_Min_Tardy_Alert' && now - a.timestamp <= 3 * 60 * 60 * 1000
+                );
+                if (recentAlert) {
+                    const alreadyReplied = auditList.some(
+                        a => a.type === 'Tardy_Response' && a.timestamp >= recentAlert.timestamp
+                    );
+                    if (!alreadyReplied) {
+                        const latencyMins = Math.max(0, Math.round((now - recentAlert.timestamp) / 60000));
+                        const responseAudit = {
+                            id: `audit-resp-${now}`,
+                            date: todayStr,
+                            timestamp: now,
+                            type: 'Tardy_Response' as const,
+                            shiftTitle: recentAlert.shiftTitle,
+                            details: `Replied to 5-min tardy check-in after ${latencyMins} min(s): "${message.content}"`,
+                            responseMessage: message.content,
+                            responseLatencyMinutes: latencyMins
+                        };
+                        await updateDoc(userRef, {
+                            attendanceAuditLog: [responseAudit, ...auditList].slice(0, 100),
+                            updatedAt: serverTimestamp()
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('[Firebase Mobile] Failed to log Tardy_Response audit entry:', err);
+        }
+    }
 };
 
 /** Subscribe to chat channels in real-time */

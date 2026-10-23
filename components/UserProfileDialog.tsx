@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, User as UserIcon, Phone, Mail, MapPin, Briefcase, Clock, AlertTriangle, AlertCircle, Save, MessageSquare, Lock, Check, FileText, Download, ChevronDown, ChevronUp, ChevronRight, Shield, Target, Key, DollarSign, ClipboardCheck, Calendar, ArrowUp, ArrowDown } from 'lucide-react';
-import { User, DayOfWeek, DailyAvailability, Department } from '../types';
+import { X, User as UserIcon, Phone, Mail, MapPin, Briefcase, Clock, AlertTriangle, AlertCircle, Save, MessageSquare, Lock, Check, FileText, Download, ChevronDown, ChevronUp, ChevronRight, Shield, Target, Key, DollarSign, ClipboardCheck, Calendar, ArrowUp, ArrowDown, FileWarning, PenTool, CheckCircle2 } from 'lucide-react';
+import { User, DayOfWeek, DailyAvailability, Department, DisciplinaryWriteUp, WriteUpCategory } from '../types';
 import { AVAILABLE_PERMISSIONS } from '../constants';
+import { DigitalWriteUpModal } from './DigitalWriteUpModal';
 
 interface Props {
   user: User | null;
@@ -98,6 +99,10 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
   const [showPermsDropdown, setShowPermsDropdown] = useState(false);
   const [showSchedulingDropdown, setShowSchedulingDropdown] = useState(false);
   const [showReviewDropdown, setShowReviewDropdown] = useState(false);
+  const [showWriteUpsDropdown, setShowWriteUpsDropdown] = useState(true);
+  const [showWriteUpModal, setShowWriteUpModal] = useState(false);
+  const [selectedWriteUp, setSelectedWriteUp] = useState<DisciplinaryWriteUp | null>(null);
+  const [initialWriteUpCategory, setInitialWriteUpCategory] = useState<WriteUpCategory>('Failure to Communicate');
   const [reviewRange, setReviewRange] = useState<'30' | '60' | '90' | 'yearly' | 'complete'>('30');
   const [localTimeCards, setLocalTimeCards] = useState<any[]>(timeCards || []);
   const [activeDrilldown, setActiveDrilldown] = useState<'sick' | 'timeOff' | 'noCall' | 'tardy' | null>(null);
@@ -612,6 +617,228 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
           {/* Remaining sections below the split top layout */}
           {viewerHasPermission('manage_users') && (
             <>
+              {/* Master iPad Digital Write-Ups & Automated Attendance Audit Vault (Manager Only) */}
+              <div className="mt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowWriteUpsDropdown(!showWriteUpsDropdown)}
+                    className="flex items-center gap-2 text-left hover:opacity-85 transition-all"
+                  >
+                    {showWriteUpsDropdown ? (
+                      <ChevronDown className="w-4 h-4 text-red-600 shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-red-600 shrink-0" />
+                    )}
+                    <FileWarning className="w-4 h-4 text-red-600 shrink-0" />
+                    <span className="text-xs font-bold text-red-600 uppercase tracking-wider shrink-0">
+                      Disciplinary Write-Ups & Tardy Audit Log (Manager Only)
+                    </span>
+                    {(() => {
+                      const pendingCount = (formData.disciplinaryWriteUps || []).filter(
+                        w => w.status === 'Pending Signature'
+                      ).length;
+                      if (pendingCount === 0) return null;
+                      return (
+                        <span className="ml-2 px-2 py-0.5 text-[10px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-300 rounded-full animate-pulse">
+                          ⚠️ {pendingCount} Pending Signature
+                        </span>
+                      );
+                    })()}
+                  </button>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedWriteUp(null);
+                        setInitialWriteUpCategory('No-Call No-Show');
+                        setShowWriteUpModal(true);
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors"
+                    >
+                      + No-Call No-Show
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedWriteUp(null);
+                        setInitialWriteUpCategory('Failure to Communicate');
+                        setShowWriteUpModal(true);
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-colors"
+                    >
+                      + No Communication
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedWriteUp(null);
+                        setInitialWriteUpCategory('Poor Employee Conduct / Insubordination');
+                        setShowWriteUpModal(true);
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-[11px] font-black bg-red-600 hover:bg-red-700 text-white shadow-sm flex items-center gap-1 transition-colors"
+                    >
+                      <PenTool className="w-3 h-3" /> Issue Digital Write-Up
+                    </button>
+                  </div>
+                </div>
+
+                {showWriteUpsDropdown && (
+                  <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 bg-red-50/20 border border-red-100 rounded-xl p-4">
+                    {/* Left Column: Digital Write-Ups List */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h5 className="text-xs font-black uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
+                          <FileWarning className="w-3.5 h-3.5 text-red-600" />
+                          Digital Write-Ups ({(formData.disciplinaryWriteUps || []).length})
+                        </h5>
+                        <span className="text-[10px] font-bold text-zinc-500">
+                          Active Strike Level: {formData.strikeLevel || 0}/3
+                        </span>
+                      </div>
+
+                      {(formData.disciplinaryWriteUps || []).length === 0 ? (
+                        <div className="bg-white border border-zinc-200 rounded-xl p-4 text-center text-xs text-zinc-400 italic">
+                          No disciplinary write-ups on file for {formData.name}.
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                          {(formData.disciplinaryWriteUps || []).map(wu => (
+                            <div
+                              key={wu.id}
+                              className={`p-3 rounded-xl border bg-white shadow-sm flex flex-col justify-between gap-2 ${
+                                wu.status === 'Pending Signature'
+                                  ? 'border-amber-300 ring-1 ring-amber-200'
+                                  : wu.status === 'Refused to Sign'
+                                  ? 'border-red-200'
+                                  : 'border-zinc-200'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-xs font-black text-zinc-900">
+                                      {wu.category}
+                                    </span>
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                                      {wu.severity}
+                                    </span>
+                                    {wu.autoGenerated && (
+                                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                        Auto
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-zinc-500 mt-0.5">
+                                    Incident: {wu.incidentDate} • Issued by {wu.issuedByManagerName}
+                                  </div>
+                                </div>
+
+                                <span
+                                  className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 ${
+                                    wu.status === 'Acknowledged'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : wu.status === 'Refused to Sign'
+                                      ? 'bg-red-100 text-red-800 border border-red-300'
+                                      : 'bg-amber-100 text-amber-900 border border-amber-300'
+                                  }`}
+                                >
+                                  {wu.status}
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-zinc-700 line-clamp-2">{wu.description}</p>
+
+                              <div className="flex items-center justify-between pt-1 border-t border-zinc-100">
+                                <span className="text-[10px] text-zinc-400">
+                                  {wu.employeeSignedAt
+                                    ? `Signed ${new Date(wu.employeeSignedAt).toLocaleDateString()}`
+                                    : wu.refusedToSign
+                                    ? 'Refusal Witnessed'
+                                    : 'Awaiting Master iPad Signature'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedWriteUp(wu);
+                                    setShowWriteUpModal(true);
+                                  }}
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-black flex items-center gap-1 transition-colors ${
+                                    wu.status === 'Pending Signature'
+                                      ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm'
+                                      : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
+                                  }`}
+                                >
+                                  <PenTool className="w-3 h-3" />
+                                  {wu.status === 'Pending Signature'
+                                    ? 'Review & Sign on iPad'
+                                    : 'View Signed Record'}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right Column: Automated Attendance & Tardy DM Audit Log */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h5 className="text-xs font-black uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                          Automated Attendance & Tardy DM Audit Log (
+                          {(formData.attendanceAuditLog || []).length})
+                        </h5>
+                        <span className="text-[10px] text-zinc-400 italic">
+                          Auto-logged 5-min alerts & replies
+                        </span>
+                      </div>
+
+                      {(formData.attendanceAuditLog || []).length === 0 ? (
+                        <div className="bg-white border border-zinc-200 rounded-xl p-4 text-center text-xs text-zinc-400 italic">
+                          No automated tardy alerts or DM check-in responses recorded yet.
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {(formData.attendanceAuditLog || []).map(entry => (
+                            <div
+                              key={entry.id}
+                              className="p-2.5 rounded-xl bg-white border border-zinc-200 text-xs flex flex-col gap-1"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span
+                                  className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                    entry.type === 'Tardy_Response'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : entry.type === '30_Min_No_Response' ||
+                                        entry.type === 'No_Call_No_Show'
+                                      ? 'bg-red-50 text-red-700 border border-red-200'
+                                      : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                  }`}
+                                >
+                                  {entry.type.replace(/_/g, ' ')}
+                                </span>
+                                <span className="text-[10px] text-zinc-400 font-medium">
+                                  {new Date(entry.timestamp).toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="text-zinc-700 font-medium">{entry.details}</div>
+                              {entry.responseMessage && (
+                                <div className="text-[11px] bg-emerald-50/60 border border-emerald-100 text-emerald-900 px-2.5 py-1 rounded-lg font-semibold">
+                                  Reply ({entry.responseLatencyMinutes ?? 0}m after alert): "
+                                  {entry.responseMessage}"
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Review Section */}
               {(() => {
                 // Proximity helper
@@ -1725,6 +1952,31 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
           </div>
         </form>
       </div>
+
+      {showWriteUpModal && formData && (
+        <DigitalWriteUpModal
+          targetUser={formData}
+          currentManager={
+            viewerUser || {
+              id: 'admin-manager',
+              name: 'Manager',
+              role: 'admin',
+              avatarInitials: 'MG',
+              pin: '0000'
+            }
+          }
+          existingWriteUp={selectedWriteUp}
+          initialCategory={initialWriteUpCategory}
+          onClose={() => {
+            setShowWriteUpModal(false);
+            setSelectedWriteUp(null);
+          }}
+          onSaveWriteUp={async updatedUser => {
+            setFormData(updatedUser);
+            onSave(updatedUser);
+          }}
+        />
+      )}
     </div>
   );
 };

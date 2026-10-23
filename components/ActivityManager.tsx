@@ -1,11 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import { Department, WorkLog, DailyTimeCard, User, AppSettings, UserSession } from '../types';
+import { Department, WorkLog, DailyTimeCard, User, AppSettings, UserSession, DisciplinaryWriteUp } from '../types';
 import {
   BarChart3, Users, Clock, Calendar, ChevronDown, ChevronRight, Download,
   Briefcase, CalendarRange, Sparkles, Zap, ListTodo, RefreshCw,
   Target, TrendingUp, AlertCircle, X, Save, Plus, Trash2, Edit3, Filter,
-  CheckSquare, Check, Link, CalendarDays, FileText
+  CheckSquare, Check, Link, CalendarDays, FileText, FileWarning, PenTool
 } from 'lucide-react';
 import { collection, getDoc, doc, updateDoc } from 'firebase/firestore';
 import { processExternalPlan } from '../services/geminiService';
@@ -13,6 +13,7 @@ import { UserProfileDialog } from './UserProfileDialog';
 import { LogAbsenceModal } from './LogAbsenceModal';
 import { AddRetroactiveCardModal } from './AddRetroactiveCardModal';
 import { ProjectTaskBoard } from './ProjectTaskBoard';
+import { DigitalWriteUpModal } from './DigitalWriteUpModal';
 import { db, isFirebaseConfigured } from '../services/firebaseService';
 
 // Generate more data (60 days) to allow testing different pay periods
@@ -259,6 +260,8 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [absenceUser, setAbsenceUser] = useState<User | null>(null);
   const [retroactiveUser, setRetroactiveUser] = useState<User | null>(null);
+  const [writeUpModalUser, setWriteUpModalUser] = useState<User | null>(null);
+  const [selectedWriteUpForModal, setSelectedWriteUpForModal] = useState<DisciplinaryWriteUp | null>(null);
 
   // ─── TACKBOARD & PROJECT TASK BOARD STATE ───
   const [planningSubView, setPlanningSubView] = useState<'sync' | 'tackboard'>('tackboard');
@@ -1477,22 +1480,68 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {users.map(user => (
-                    <button
-                      key={user.id}
-                      onClick={() => setSelectedUserForProfile(user)}
-                      className="flex items-center gap-4 bg-white p-5 rounded-2xl border border-zinc-200 hover:border-zinc-400 hover:shadow-lg transition-all text-left group"
-                    >
-                      <div className="w-14 h-14 rounded-full bg-zinc-100 text-zinc-700 flex items-center justify-center text-xl font-bold group-hover:bg-zinc-800 group-hover:text-white transition-colors">
-                        {user.avatarInitials}
+                  {users.map(user => {
+                    const pendingWriteUps = (user.disciplinaryWriteUps || []).filter(
+                      w => w.status === 'Pending Signature'
+                    );
+                    const totalWriteUps = (user.disciplinaryWriteUps || []).length;
+
+                    return (
+                      <div
+                        key={user.id}
+                        onClick={() => setSelectedUserForProfile(user)}
+                        className="flex flex-col justify-between gap-3 bg-white p-5 rounded-2xl border border-zinc-200 hover:border-zinc-400 hover:shadow-lg transition-all text-left group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 rounded-full bg-zinc-100 text-zinc-700 flex items-center justify-center text-xl font-bold group-hover:bg-zinc-800 group-hover:text-white transition-colors shrink-0">
+                            {user.avatarInitials}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-zinc-900 truncate">{user.name}</div>
+                            <div className="text-xs text-zinc-500 truncate">{user.role}</div>
+                            {user.strikeLevel ? (
+                              <span className="inline-block mt-1 px-2 py-0.5 text-[9px] font-black uppercase bg-red-50 text-red-700 border border-red-200 rounded-full">
+                                Strike {user.strikeLevel}/3
+                              </span>
+                            ) : null}
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-500 transition-colors shrink-0" />
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-100">
+                          {pendingWriteUps.length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setSelectedWriteUpForModal(pendingWriteUps[0]);
+                                setWriteUpModalUser(user);
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 flex items-center gap-1 animate-pulse"
+                            >
+                              ⚠️ {pendingWriteUps.length} Pending Write-Up (Sign)
+                            </button>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-zinc-400">
+                              {totalWriteUps > 0 ? `${totalWriteUps} Write-Up(s) on file` : 'Clean Disciplinary File'}
+                            </span>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedWriteUpForModal(null);
+                              setWriteUpModalUser(user);
+                            }}
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 flex items-center gap-1 transition-colors"
+                          >
+                            <PenTool className="w-3 h-3" /> Issue Write-Up
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-zinc-900 truncate">{user.name}</div>
-                        <div className="text-xs text-zinc-500 truncate">{user.role}</div>
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : (
@@ -1654,6 +1703,22 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                                       onClick={(e) => { e.stopPropagation(); setRetroactiveUser(user); }}
                                       className="text-[10px] font-bold bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded shadow-sm transition-colors"
                                     >+ Add Record</button>
+                                  )}
+                                  {user && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const pending = (user.disciplinaryWriteUps || []).find((w: DisciplinaryWriteUp) => w.status === 'Pending Signature') || null;
+                                        setSelectedWriteUpForModal(pending);
+                                        setWriteUpModalUser(user);
+                                      }}
+                                      className="text-[10px] font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 px-2 py-1 rounded shadow-sm transition-colors flex items-center gap-1"
+                                    >
+                                      <PenTool className="w-2.5 h-2.5" />
+                                      {(user.disciplinaryWriteUps || []).some((w: DisciplinaryWriteUp) => w.status === 'Pending Signature')
+                                        ? '⚠️ Sign Write-Up'
+                                        : 'Issue Write-Up'}
+                                    </button>
                                   )}
                                 </td>
                               </tr>
@@ -2043,6 +2108,31 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             </div>
           </div>
         </div>
+      )}
+
+      {writeUpModalUser && (
+        <DigitalWriteUpModal
+          targetUser={writeUpModalUser}
+          currentManager={
+            currentUser || {
+              id: 'admin-manager',
+              name: 'Manager',
+              role: 'admin',
+              avatarInitials: 'MG',
+              pin: '0000'
+            }
+          }
+          existingWriteUp={selectedWriteUpForModal}
+          onClose={() => {
+            setWriteUpModalUser(null);
+            setSelectedWriteUpForModal(null);
+          }}
+          onSaveWriteUp={async updatedUser => {
+            if (onUpdateUser) onUpdateUser(updatedUser);
+            setWriteUpModalUser(null);
+            setSelectedWriteUpForModal(null);
+          }}
+        />
       )}
     </div>
   );
