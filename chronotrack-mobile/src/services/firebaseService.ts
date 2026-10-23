@@ -273,15 +273,15 @@ export const subscribeToShiftBlocks = (onUpdate: (blocks: any[]) => void) => {
 };
 
 export const firebaseUploadTaskPhoto = async (taskId: string, base64Data: string): Promise<string> => {
+    const formattedData = base64Data.startsWith('data:') ? base64Data : `data:image/jpeg;base64,${base64Data}`;
     try {
         const timestamp = Date.now();
         const fileRef = ref(storage, `task-proofs/${taskId}_${timestamp}.jpg`);
-        const formattedData = base64Data.startsWith('data:') ? base64Data : `data:image/jpeg;base64,${base64Data}`;
         await uploadString(fileRef, formattedData, 'data_url');
         return await getDownloadURL(fileRef);
     } catch (err) {
-        console.error("Error uploading task verification photo:", err);
-        throw err;
+        console.warn("Firebase Storage upload failed, falling back to inline data URL:", err);
+        return formattedData;
     }
 };
 

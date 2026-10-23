@@ -165,7 +165,7 @@ export default function ActivityScreen() {
       }
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
-        quality: 0.7,
+        quality: 0.3,
         base64: true,
       });
       if (!result.canceled && result.assets && result.assets[0]) {
@@ -186,7 +186,7 @@ export default function ActivityScreen() {
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsEditing: true,
-        quality: 0.7,
+        quality: 0.3,
         base64: true,
       });
       if (!result.canceled && result.assets && result.assets[0]) {

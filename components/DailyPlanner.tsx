@@ -69,6 +69,7 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
     // Drag & Drop State
     const timelineRef = React.useRef<HTMLDivElement>(null);
+    const hasDraggedRef = React.useRef(false);
     const [dragState, setDragState] = useState<{
         block: ScheduleBlock;
         type: 'move' | 'resize';
@@ -358,9 +359,10 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
 
         const handleMouseMove = (e: MouseEvent) => {
             if (!timelineRef.current) return;
-            const timelineWidth = timelineRef.current.getBoundingClientRect().width;
-            
             const deltaX = e.clientX - dragState.startX;
+            if (Math.abs(deltaX) < 5 && !hasDraggedRef.current) return;
+            hasDraggedRef.current = true;
+            const timelineWidth = timelineRef.current.getBoundingClientRect().width;
             const deltaHours = (deltaX / timelineWidth) * TOTAL_HOURS;
             const deltaMs = deltaHours * 60 * 60 * 1000;
             
@@ -1396,20 +1398,24 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                             const block = isDragged ? previewBlock : originalBlock;
                                             const overlapIndex = overlaps.get(originalBlock.id) || 0;
                                             const styles = getBlockStyles(block, overlapIndex);
+                                            const blockPhotoUrl = block.proofPhotoUrl || block.checkIns?.find((c: any) => c.photoUrl)?.photoUrl;
                                             return (
                                                 <div
                                                     key={block.id}
                                                     onClick={() => {
-                                                        // Prevent click if we were dragging
-                                                        if (isDragged || dragState) return;
+                                                        if (hasDraggedRef.current) {
+                                                            hasDraggedRef.current = false;
+                                                            return;
+                                                        }
                                                         handleBlockClick(block);
                                                     }}
                                                     onMouseDown={(e) => {
                                                         if (!isAdminOrManager) return;
                                                         e.stopPropagation();
+                                                        hasDraggedRef.current = false;
                                                         const rect = e.currentTarget.getBoundingClientRect();
-                                                        // If clicked within 24px of the right edge, treat as resize
-                                                        const isResize = e.clientX > rect.right - 24;
+                                                        // Only treat far-right 10px edge as resize
+                                                        const isResize = e.clientX > rect.right - 10;
                                                         
                                                         setDragState({
                                                             block: originalBlock,
@@ -1418,39 +1424,49 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                             originalStart: new Date(originalBlock.startTime),
                                                             originalEnd: new Date(originalBlock.endTime)
                                                         });
-                                                        setPreviewBlock(originalBlock);
                                                     }}
                                                     style={{ left: styles.left, width: styles.width, top: styles.top, height: styles.height }}
                                                     className={styles.className + " group " + (isAdminOrManager ? "cursor-pointer" : "") + (isDragged ? " opacity-70 scale-105 z-50 shadow-xl" : "")}
                                                     title={`${block.title} (${new Date(block.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${new Date(block.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`}
                                                 >
-                                                    <div className="flex items-center gap-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-                                                        <span className="truncate">{block.title}</span>
-                                                        {block.proofPhotoUrl ? (
-                                                            <span 
+                                                    <div className="flex items-center gap-1.5 min-w-0 pr-2 overflow-hidden text-ellipsis whitespace-nowrap">
+                                                        {blockPhotoUrl ? (
+                                                            <button
+                                                                type="button"
+                                                                onMouseDown={(e) => e.stopPropagation()}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     setViewingProofPhoto({
-                                                                        url: block.proofPhotoUrl!,
+                                                                        url: blockPhotoUrl,
                                                                         title: block.title,
                                                                         userName: block.assignedToName,
                                                                         timestamp: block.endTime
                                                                     });
                                                                 }}
-                                                                className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold shadow-sm shrink-0 cursor-pointer"
+                                                                className="relative z-30 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold shadow-sm shrink-0 cursor-pointer"
                                                                 title="Verified with Photo Proof - Click to View"
                                                             >
                                                                 <Camera className="w-2.5 h-2.5" /> Photo
-                                                            </span>
+                                                            </button>
                                                         ) : block.requiresPhoto ? (
-                                                            <span className="inline-flex items-center text-[10px] text-amber-300 shrink-0" title="Photo proof required upon completion">
+                                                            <button
+                                                                type="button"
+                                                                onMouseDown={(e) => e.stopPropagation()}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleBlockClick(block);
+                                                                }}
+                                                                className="relative z-30 inline-flex items-center justify-center p-0.5 rounded hover:bg-black/20 text-[10px] text-amber-300 shrink-0 cursor-pointer"
+                                                                title={block.status === 'completed' ? "Completed (No photo uploaded yet - Click for details)" : "Photo proof required upon completion - Click for details"}
+                                                            >
                                                                 <Camera className="w-3 h-3" />
-                                                            </span>
+                                                            </button>
                                                         ) : null}
+                                                        <span className="truncate">{block.title}</span>
                                                     </div>
                                                     {isAdminOrManager && (
-                                                        <div className="absolute top-0 right-0 bottom-0 w-6 cursor-e-resize hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100" title="Drag to resize">
-                                                            <div className="w-1 h-3 border-l border-r border-white/50"></div>
+                                                        <div className="absolute top-0 right-0 bottom-0 w-2.5 cursor-e-resize hover:bg-black/15 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 z-20" title="Drag right edge to resize">
+                                                            <div className="w-0.5 h-3 bg-white/60 rounded"></div>
                                                         </div>
                                                     )}
                                                     {/* Tooltip-ish Details */}
@@ -1505,12 +1521,13 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                                                 </div>
                                                             )}
 
-                                                            {block.proofPhotoUrl && (
+                                                            {blockPhotoUrl && (
                                                                 <button
+                                                                    onMouseDown={(e) => e.stopPropagation()}
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         setViewingProofPhoto({
-                                                                            url: block.proofPhotoUrl!,
+                                                                            url: blockPhotoUrl,
                                                                             title: block.title,
                                                                             userName: block.assignedToName,
                                                                             timestamp: block.endTime
@@ -1670,43 +1687,103 @@ export const DailyPlanner: React.FC<Props> = ({ users, currentUser }) => {
                                 </label>
                             )}
 
-                            {editingBlock.proofPhotoUrl && (
-                                <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-3">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <label className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                                            <Camera className="w-4 h-4 text-emerald-600" />
-                                            Verified Completion Photo
-                                        </label>
-                                        <button
-                                            type="button"
-                                            onClick={() => setViewingProofPhoto({
-                                                url: editingBlock.proofPhotoUrl!,
-                                                title: editingBlock.title,
-                                                userName: editingBlock.assignedToName,
-                                                timestamp: editingBlock.endTime
-                                            })}
-                                            className="text-xs font-bold text-emerald-700 hover:underline"
-                                        >
-                                            View Full Size
-                                        </button>
-                                    </div>
-                                    <div 
-                                        className="cursor-pointer group relative rounded-lg overflow-hidden border border-emerald-200 h-36 flex items-center justify-center bg-black"
-                                        onClick={() => setViewingProofPhoto({
-                                            url: editingBlock.proofPhotoUrl!,
-                                            title: editingBlock.title,
-                                            userName: editingBlock.assignedToName,
-                                            timestamp: editingBlock.endTime
-                                        })}
-                                    >
-                                        <img 
-                                            src={editingBlock.proofPhotoUrl} 
-                                            alt="Proof of work" 
-                                            className="w-full h-full object-cover group-hover:opacity-85 transition-opacity"
-                                        />
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-opacity">
-                                            Click to Zoom
+                            {(() => {
+                                const modalPhotoUrl = editingBlock.proofPhotoUrl || editingBlock.checkIns?.find((c: any) => c.photoUrl)?.photoUrl;
+                                if (modalPhotoUrl) {
+                                    return (
+                                        <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-3">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <label className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                                                    <Camera className="w-4 h-4 text-emerald-600" />
+                                                    Verified Completion Photo
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setViewingProofPhoto({
+                                                        url: modalPhotoUrl,
+                                                        title: editingBlock.title,
+                                                        userName: editingBlock.assignedToName,
+                                                        timestamp: editingBlock.endTime
+                                                    })}
+                                                    className="text-xs font-bold text-emerald-700 hover:underline"
+                                                >
+                                                    View Full Size
+                                                </button>
+                                            </div>
+                                            <div 
+                                                className="cursor-pointer group relative rounded-lg overflow-hidden border border-emerald-200 h-36 flex items-center justify-center bg-black"
+                                                onClick={() => setViewingProofPhoto({
+                                                    url: modalPhotoUrl,
+                                                    title: editingBlock.title,
+                                                    userName: editingBlock.assignedToName,
+                                                    timestamp: editingBlock.endTime
+                                                })}
+                                            >
+                                                <img 
+                                                    src={modalPhotoUrl} 
+                                                    alt="Proof of work" 
+                                                    className="w-full h-full object-cover group-hover:opacity-85 transition-opacity"
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-opacity">
+                                                    Click to Zoom
+                                                </div>
+                                            </div>
                                         </div>
+                                    );
+                                }
+                                if (editingBlock.requiresPhoto) {
+                                    return (
+                                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 flex items-start gap-2">
+                                            <Camera className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                            <div>
+                                                <div className="font-bold">No Photo Uploaded Yet</div>
+                                                <div className="text-[11px] text-amber-700 mt-0.5">
+                                                    {editingBlock.status === 'completed'
+                                                        ? 'This task was marked completed, but no photo was saved with the check-in.'
+                                                        : 'Staff will be prompted to take a completion photo when logging 100% progress.'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+
+                            {editingBlock.checkIns && editingBlock.checkIns.length > 0 && (
+                                <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3">
+                                    <label className="block text-xs font-bold text-zinc-700 mb-2">Check-In History ({editingBlock.checkIns.length})</label>
+                                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                                        {editingBlock.checkIns.map((ci: any, idx: number) => {
+                                            const ts = ci.timestamp ? (typeof ci.timestamp === 'number' ? ci.timestamp : new Date(ci.timestamp).getTime()) : null;
+                                            const timeStr = ts && !isNaN(ts) ? new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+                                            const pct = ci.progress ?? ci.progressPercent;
+                                            return (
+                                                <div key={ci.id || idx} className="flex items-center justify-between gap-2 text-xs bg-white p-2 rounded border border-zinc-200">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="font-bold text-zinc-800">
+                                                            {pct !== undefined ? `${pct}%` : (ci.status || 'Update')}
+                                                            {ci.userName ? ` • ${ci.userName}` : ''}
+                                                            {timeStr ? <span className="text-zinc-400 font-normal ml-1">({timeStr})</span> : null}
+                                                        </div>
+                                                        {ci.notes && <div className="text-zinc-600 truncate">{ci.notes}</div>}
+                                                    </div>
+                                                    {ci.photoUrl && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setViewingProofPhoto({
+                                                                url: ci.photoUrl,
+                                                                title: editingBlock.title,
+                                                                userName: ci.userName || editingBlock.assignedToName,
+                                                                timestamp: ci.timestamp
+                                                            })}
+                                                            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold flex items-center gap-1 shrink-0"
+                                                        >
+                                                            <Camera className="w-3 h-3" /> View Photo
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
