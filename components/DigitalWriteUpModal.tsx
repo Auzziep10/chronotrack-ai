@@ -139,8 +139,82 @@ export const DigitalWriteUpModal: React.FC<DigitalWriteUpModalProps> = ({
   );
   const [isSaving, setIsSaving] = useState(false);
 
+  // DocuSign Click-to-Type Signature State (default mode: 'type', optional 'draw')
+  const [empSigMode, setEmpSigMode] = useState<'type' | 'draw'>('type');
+  const [mgrSigMode, setMgrSigMode] = useState<'type' | 'draw'>('type');
+  const [empTypedName, setEmpTypedName] = useState<string>('');
+  const [mgrTypedName, setMgrTypedName] = useState<string>(currentManager.name || '');
+  const [empClickToSignOpen, setEmpClickToSignOpen] = useState<boolean>(false);
+  const [mgrClickToSignOpen, setMgrClickToSignOpen] = useState<boolean>(true);
+
+  const empInputRef = useRef<HTMLInputElement>(null);
+  const mgrInputRef = useRef<HTMLInputElement>(null);
   const empSigRef = useRef<SignatureCanvas>(null);
   const mgrSigRef = useRef<SignatureCanvas>(null);
+
+  const empVerificationHash = React.useMemo(() => {
+    const raw = `${targetUser.id}-${existingWriteUp?.id || todayStr}-EMP`;
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+      hash = (hash << 5) - hash + raw.charCodeAt(i);
+      hash |= 0;
+    }
+    return `DS-${Math.abs(hash).toString(16).toUpperCase().padStart(8, '0')}4F9A`;
+  }, [targetUser.id, existingWriteUp?.id, todayStr]);
+
+  const mgrVerificationHash = React.useMemo(() => {
+    const raw = `${currentManager.id}-${existingWriteUp?.id || todayStr}-MGR`;
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+      hash = (hash << 5) - hash + raw.charCodeAt(i);
+      hash |= 0;
+    }
+    return `DS-${Math.abs(hash).toString(16).toUpperCase().padStart(8, '0')}8C2E`;
+  }, [currentManager.id, existingWriteUp?.id, todayStr]);
+
+  /** Generates a crisp DocuSign-style PNG data URL from a typed name */
+  const generateDocuSignStampDataUrl = (typedName: string, hashId: string): string => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 520;
+    canvas.height = 150;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    // Transparent/white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // DocuSign-style left & top/bottom bracket in royal blue/indigo
+    ctx.strokeStyle = '#1d4ed8';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    // Top bracket arm
+    ctx.moveTo(85, 22);
+    ctx.lineTo(18, 22);
+    // Left vertical spine
+    ctx.lineTo(18, 128);
+    // Bottom bracket arm
+    ctx.lineTo(165, 128);
+    ctx.stroke();
+
+    // "DocuSigned by:" header
+    ctx.fillStyle = '#475569';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('DocuSigned by:', 94, 26);
+
+    // Cursive signature name
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'italic 42px "Brush Script MT", "Apple Chancery", "Snell Roundhand", "Segoe Script", Georgia, cursive';
+    ctx.fillText(typedName.trim(), 38, 84);
+
+    // Verification Hash ID & Timestamp at bottom
+    const timeStampStr = new Date().toLocaleDateString();
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(`${hashId} • ${timeStampStr}`, 174, 132);
+
+    return canvas.toDataURL('image/png');
+  };
 
   const isReadOnlySigned =
     existingWriteUp?.status === 'Acknowledged' ||
@@ -219,20 +293,20 @@ export const DigitalWriteUpModal: React.FC<DigitalWriteUpModalProps> = ({
       return;
     }
 
-    const mgrEmpty =
-      !existingWriteUp?.managerSignatureDataUrl &&
-      (!mgrSigRef.current || (mgrSigRef.current as any).isEmpty());
-    if (mgrEmpty) {
-      alert('Manager signature is required on the Master iPad to finalize this write-up.');
+    const mgrHasTyped = mgrSigMode === 'type' && mgrTypedName.trim().length > 0;
+    const mgrHasDrawn =
+      mgrSigMode === 'draw' && mgrSigRef.current && !(mgrSigRef.current as any).isEmpty();
+    if (!existingWriteUp?.managerSignatureDataUrl && !mgrHasTyped && !mgrHasDrawn) {
+      alert('Manager signature is required (click to type your name or sign) to finalize this write-up.');
       return;
     }
 
-    const empEmpty =
-      !existingWriteUp?.employeeSignatureDataUrl &&
-      (!empSigRef.current || (empSigRef.current as any).isEmpty());
-    if (!refusedToSign && empEmpty) {
+    const empHasTyped = empSigMode === 'type' && empTypedName.trim().length > 0;
+    const empHasDrawn =
+      empSigMode === 'draw' && empSigRef.current && !(empSigRef.current as any).isEmpty();
+    if (!refusedToSign && !existingWriteUp?.employeeSignatureDataUrl && !empHasTyped && !empHasDrawn) {
       alert(
-        'Please have the team member sign on the Master iPad, or check "Employee Refused to Sign" if they decline.'
+        'Please have the team member click to type their signature on the Master iPad, or check "Employee Refused to Sign" if they decline.'
       );
       return;
     }
@@ -241,12 +315,16 @@ export const DigitalWriteUpModal: React.FC<DigitalWriteUpModalProps> = ({
     try {
       const mgrSigDataUrl =
         existingWriteUp?.managerSignatureDataUrl ||
-        (mgrSigRef.current as any).getTrimmedCanvas().toDataURL('image/png');
+        (mgrSigMode === 'type'
+          ? generateDocuSignStampDataUrl(mgrTypedName, mgrVerificationHash)
+          : (mgrSigRef.current as any).getTrimmedCanvas().toDataURL('image/png'));
 
       const empSigDataUrl = refusedToSign
         ? undefined
         : existingWriteUp?.employeeSignatureDataUrl ||
-          (empSigRef.current as any).getTrimmedCanvas().toDataURL('image/png');
+          (empSigMode === 'type'
+            ? generateDocuSignStampDataUrl(empTypedName, empVerificationHash)
+            : (empSigRef.current as any).getTrimmedCanvas().toDataURL('image/png'));
 
       const now = Date.now();
       const finalStatus: DisciplinaryWriteUp['status'] = refusedToSign
@@ -513,13 +591,13 @@ export const DigitalWriteUpModal: React.FC<DigitalWriteUpModalProps> = ({
             />
           </div>
 
-          {/* Master iPad Signature Section */}
+          {/* Master iPad DocuSign-Style Signature Section */}
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <PenTool className="w-4 h-4 text-red-600" />
+                <PenTool className="w-4 h-4 text-blue-600" />
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                  Master iPad Touchscreen Signatures
+                  DocuSign-Style Click-to-Type eSignatures
                 </h3>
               </div>
 
@@ -537,29 +615,45 @@ export const DigitalWriteUpModal: React.FC<DigitalWriteUpModalProps> = ({
             </div>
 
             <p className="text-[11px] text-slate-500 leading-relaxed">
-              By signing below, the team member acknowledges receipt of this disciplinary write-up and confirms that it was discussed with management. Signing does not necessarily indicate agreement with all statements above, but verifies the coaching conversation took place.
+              By clicking to sign and typing your full legal name below, the team member acknowledges receipt of this disciplinary write-up and confirms that it was discussed with management. Signing does not necessarily indicate agreement with all statements above, but verifies the coaching conversation took place.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Employee Signature Pad */}
-              <div className="bg-white rounded-xl p-3 border border-slate-200 flex flex-col justify-between">
-                <div className="flex items-center justify-between mb-2">
+              {/* Employee Signature Box */}
+              <div className="bg-white rounded-xl p-3.5 border border-slate-200 flex flex-col justify-between space-y-2.5">
+                <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-700">
                     Team Member Signature ({targetUser.name})
                   </span>
-                  {!isReadOnlySigned && !refusedToSign && (
-                    <button
-                      type="button"
-                      onClick={() => empSigRef.current?.clear()}
-                      className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 flex items-center gap-1"
-                    >
-                      <Eraser className="w-3 h-3" /> Clear
-                    </button>
+                  {!isReadOnlySigned && !refusedToSign && !existingWriteUp?.employeeSignatureDataUrl && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setEmpSigMode(empSigMode === 'type' ? 'draw' : 'type')}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                      >
+                        {empSigMode === 'type' ? 'Switch to Draw' : 'Switch to Type'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (empSigMode === 'type') {
+                            setEmpTypedName('');
+                            setEmpClickToSignOpen(false);
+                          } else {
+                            empSigRef.current?.clear();
+                          }
+                        }}
+                        className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 flex items-center gap-1"
+                      >
+                        <Eraser className="w-3 h-3" /> Clear
+                      </button>
+                    </div>
                   )}
                 </div>
 
                 {refusedToSign ? (
-                  <div className="h-32 rounded-lg bg-red-50/70 border border-dashed border-red-300 flex flex-col items-center justify-center p-3 text-center">
+                  <div className="h-36 rounded-xl bg-red-50/70 border border-dashed border-red-300 flex flex-col items-center justify-center p-3 text-center">
                     <ShieldAlert className="w-6 h-6 text-red-600 mb-1" />
                     <span className="text-xs font-black text-red-800 uppercase">
                       Employee Refused to Sign
@@ -574,58 +668,192 @@ export const DigitalWriteUpModal: React.FC<DigitalWriteUpModalProps> = ({
                     />
                   </div>
                 ) : existingWriteUp?.employeeSignatureDataUrl ? (
-                  <div className="h-32 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center p-2">
+                  <div className="h-36 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center p-2">
                     <img
                       src={existingWriteUp.employeeSignatureDataUrl}
                       alt="Employee Signature"
-                      className="max-h-28 object-contain"
+                      className="max-h-32 object-contain"
                     />
                   </div>
+                ) : empSigMode === 'type' ? (
+                  !empClickToSignOpen && !empTypedName ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmpClickToSignOpen(true);
+                        setTimeout(() => empInputRef.current?.focus(), 50);
+                      }}
+                      className="h-36 w-full rounded-xl bg-amber-50/70 hover:bg-amber-100/80 border-2 border-dashed border-amber-400 flex flex-col items-center justify-center gap-2 transition-all group cursor-pointer"
+                    >
+                      <div className="px-4 py-2 rounded-xl bg-amber-400 group-hover:bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-sm flex items-center gap-1.5 transition-colors">
+                        <PenTool className="w-3.5 h-3.5" />
+                        Click to Sign
+                      </div>
+                      <span className="text-[11px] font-semibold text-amber-900/80">
+                        Tap to type full name ({targetUser.name})
+                      </span>
+                    </button>
+                  ) : (
+                    <div className="h-36 rounded-xl bg-amber-50/30 border-2 border-blue-600/80 p-3 flex flex-col justify-between relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                          DocuSigned by:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setEmpTypedName(targetUser.name)}
+                          className="text-[10px] font-black text-amber-900 bg-amber-300 hover:bg-amber-400 px-2 py-0.5 rounded transition-colors"
+                        >
+                          Auto-Fill "{targetUser.name}"
+                        </button>
+                      </div>
+
+                      <input
+                        ref={empInputRef}
+                        type="text"
+                        value={empTypedName}
+                        onChange={e => setEmpTypedName(e.target.value)}
+                        placeholder={`Type "${targetUser.name}" to sign...`}
+                        className="w-full bg-white/90 border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+
+                      <div className="flex items-baseline justify-between border-l-4 border-b-2 border-blue-600 pl-2.5 pb-1 pt-0.5">
+                        <span
+                          className="text-2xl text-slate-900 truncate"
+                          style={{
+                            fontFamily:
+                              '"Brush Script MT", "Apple Chancery", "Snell Roundhand", "Segoe Script", Georgia, cursive',
+                            fontStyle: 'italic'
+                          }}
+                        >
+                          {empTypedName.trim() || 'Signature Preview'}
+                        </span>
+                        <span className="text-[9px] font-mono font-bold text-slate-400 shrink-0 ml-2">
+                          {empVerificationHash}
+                        </span>
+                      </div>
+                    </div>
+                  )
                 ) : (
-                  <div className="h-32 rounded-lg bg-slate-50 border-2 border-dashed border-slate-300 overflow-hidden">
+                  <div className="h-36 rounded-xl bg-slate-50 border-2 border-dashed border-slate-300 overflow-hidden">
                     <SignatureCanvas
                       ref={empSigRef}
                       penColor="#0f172a"
                       canvasProps={{
-                        className: 'w-full h-32 cursor-crosshair'
+                        className: 'w-full h-36 cursor-crosshair'
                       }}
                     />
                   </div>
                 )}
               </div>
 
-              {/* Manager Signature Pad */}
-              <div className="bg-white rounded-xl p-3 border border-slate-200 flex flex-col justify-between">
-                <div className="flex items-center justify-between mb-2">
+              {/* Manager Signature Box */}
+              <div className="bg-white rounded-xl p-3.5 border border-slate-200 flex flex-col justify-between space-y-2.5">
+                <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-700">
                     Manager Signature ({currentManager.name})
                   </span>
                   {!isReadOnlySigned && !existingWriteUp?.managerSignatureDataUrl && (
-                    <button
-                      type="button"
-                      onClick={() => mgrSigRef.current?.clear()}
-                      className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 flex items-center gap-1"
-                    >
-                      <Eraser className="w-3 h-3" /> Clear
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setMgrSigMode(mgrSigMode === 'type' ? 'draw' : 'type')}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                      >
+                        {mgrSigMode === 'type' ? 'Switch to Draw' : 'Switch to Type'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (mgrSigMode === 'type') {
+                            setMgrTypedName('');
+                            setMgrClickToSignOpen(false);
+                          } else {
+                            mgrSigRef.current?.clear();
+                          }
+                        }}
+                        className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 flex items-center gap-1"
+                      >
+                        <Eraser className="w-3 h-3" /> Clear
+                      </button>
+                    </div>
                   )}
                 </div>
 
                 {existingWriteUp?.managerSignatureDataUrl ? (
-                  <div className="h-32 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center p-2">
+                  <div className="h-36 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center p-2">
                     <img
                       src={existingWriteUp.managerSignatureDataUrl}
                       alt="Manager Signature"
-                      className="max-h-28 object-contain"
+                      className="max-h-32 object-contain"
                     />
                   </div>
+                ) : mgrSigMode === 'type' ? (
+                  !mgrClickToSignOpen && !mgrTypedName ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMgrClickToSignOpen(true);
+                        setTimeout(() => mgrInputRef.current?.focus(), 50);
+                      }}
+                      className="h-36 w-full rounded-xl bg-amber-50/70 hover:bg-amber-100/80 border-2 border-dashed border-amber-400 flex flex-col items-center justify-center gap-2 transition-all group cursor-pointer"
+                    >
+                      <div className="px-4 py-2 rounded-xl bg-amber-400 group-hover:bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-sm flex items-center gap-1.5 transition-colors">
+                        <PenTool className="w-3.5 h-3.5" />
+                        Click to Sign
+                      </div>
+                      <span className="text-[11px] font-semibold text-amber-900/80">
+                        Tap to type manager name ({currentManager.name})
+                      </span>
+                    </button>
+                  ) : (
+                    <div className="h-36 rounded-xl bg-amber-50/30 border-2 border-blue-600/80 p-3 flex flex-col justify-between relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                          DocuSigned by:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setMgrTypedName(currentManager.name)}
+                          className="text-[10px] font-black text-amber-900 bg-amber-300 hover:bg-amber-400 px-2 py-0.5 rounded transition-colors"
+                        >
+                          Auto-Fill "{currentManager.name}"
+                        </button>
+                      </div>
+
+                      <input
+                        ref={mgrInputRef}
+                        type="text"
+                        value={mgrTypedName}
+                        onChange={e => setMgrTypedName(e.target.value)}
+                        placeholder={`Type "${currentManager.name}" to sign...`}
+                        className="w-full bg-white/90 border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+
+                      <div className="flex items-baseline justify-between border-l-4 border-b-2 border-blue-600 pl-2.5 pb-1 pt-0.5">
+                        <span
+                          className="text-2xl text-slate-900 truncate"
+                          style={{
+                            fontFamily:
+                              '"Brush Script MT", "Apple Chancery", "Snell Roundhand", "Segoe Script", Georgia, cursive',
+                            fontStyle: 'italic'
+                          }}
+                        >
+                          {mgrTypedName.trim() || 'Signature Preview'}
+                        </span>
+                        <span className="text-[9px] font-mono font-bold text-slate-400 shrink-0 ml-2">
+                          {mgrVerificationHash}
+                        </span>
+                      </div>
+                    </div>
+                  )
                 ) : (
-                  <div className="h-32 rounded-lg bg-slate-50 border-2 border-dashed border-slate-300 overflow-hidden">
+                  <div className="h-36 rounded-xl bg-slate-50 border-2 border-dashed border-slate-300 overflow-hidden">
                     <SignatureCanvas
                       ref={mgrSigRef}
                       penColor="#1e1b4b"
                       canvasProps={{
-                        className: 'w-full h-32 cursor-crosshair'
+                        className: 'w-full h-36 cursor-crosshair'
                       }}
                     />
                   </div>
