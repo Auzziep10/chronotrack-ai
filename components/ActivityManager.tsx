@@ -990,9 +990,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         const grossPresses = '';
         const shirtsDowned = '';
         const netPresses = '';
-        const shiftHrlyPay = (viewerHasPermission('view_payroll') && user?.payRate) ? user.payRate.toFixed(2) : '';
+        const shiftHrlyPay = (isViewerAdmin && user?.payRate) ? user.payRate.toFixed(2) : '';
         const shiftInctvPay = '';
-        const shiftTotalPay = (viewerHasPermission('view_payroll') && user?.payRate) ? (card.totalHours * user.payRate).toFixed(2) : '';
+        const shiftTotalPay = (isViewerAdmin && user?.payRate) ? (card.totalHours * user.payRate).toFixed(2) : '';
         const timePaused = (card.totalIdleHours || 0).toFixed(2);
 
         return [

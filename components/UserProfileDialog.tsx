@@ -184,6 +184,13 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
     return [];
   }, [viewerUser, isViewerAdmin]);
 
+  const isActualViewerAdmin = React.useMemo(() => {
+    if (viewerUser) {
+      return viewerUser.role?.trim().toLowerCase() === 'admin' || viewerPerms.includes('admin');
+    }
+    return isViewerAdmin;
+  }, [viewerUser, viewerPerms, isViewerAdmin]);
+
   const viewerHasPermission = (permId: string) => {
     const isViewerAdminUser = viewerUser?.role?.toLowerCase() === 'admin' || viewerPerms.includes('admin') || isViewerAdmin;
     if (isViewerAdminUser) return true;
@@ -538,8 +545,8 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                         if (val.trim().toLowerCase() === 'admin') {
                           perms = AVAILABLE_PERMISSIONS.map(p => p.id);
                         } else if (val.trim().toLowerCase() === 'manager') {
-                          const managerPerms = ['manage_users', 'edit_timecards', 'approve_timecards', 'manage_schedule', 'create_tasks', 'view_reports', 'view_payroll'];
-                          perms = Array.from(new Set([...perms.filter(p => p !== 'admin'), ...managerPerms]));
+                          const managerPerms = ['manage_users', 'edit_timecards', 'approve_timecards', 'manage_schedule', 'create_tasks', 'view_reports'];
+                          perms = Array.from(new Set([...perms.filter(p => p !== 'admin' && p !== 'view_payroll'), ...managerPerms]));
                         } else if (val.trim().toLowerCase() === 'staff' || val.trim().toLowerCase() === 'terminal') {
                           perms = perms.filter(p => p === 'mobile_clock_in');
                         } else {
@@ -551,7 +558,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                       placeholder="e.g. Production Lead, manager, admin"
                     />
                   </div>
-                  {viewerHasPermission('view_payroll') && (
+                  {isActualViewerAdmin && (
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-medium text-zinc-500 mb-1">Hourly Pay Rate</label>
