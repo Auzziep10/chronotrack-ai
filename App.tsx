@@ -501,7 +501,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateUser = async (updatedUser: User) => {
+  const handleUpdateUser = async (updatedUser: User, silent = false) => {
     lastUserUpdateRef.current = Date.now();
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
     setActiveSessions(prev => {
@@ -515,7 +515,9 @@ const App: React.FC = () => {
     if (isFirebaseConfigured()) {
       try {
         await firebaseSaveUser(updatedUser);
-        alert(`✅ ${updatedUser.name}'s profile saved successfully!`);
+        if (!silent) {
+          alert(`✅ ${updatedUser.name}'s profile saved successfully!`);
+        }
       } catch (err) {
         console.error('Firebase save user failed:', err);
       }

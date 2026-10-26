@@ -9,7 +9,7 @@ interface Props {
   onClose: () => void;
   users: User[];
   onAddUser: (user: User) => void;
-  onUpdateUser: (user: User) => void;
+  onUpdateUser: (user: User, silent?: boolean) => void;
   onDeleteUser: (userId: string) => void;
   settings: AppSettings;
   onUpdateSettings: (settings: AppSettings) => void;
@@ -469,6 +469,10 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
         user={editingUser}
         onClose={() => setEditingUser(null)}
         onSave={onUpdateUser}
+        onQuickUpdate={(u) => {
+          setEditingUser(u);
+          onUpdateUser(u, true);
+        }}
         isViewerAdmin={true}
         viewerUser={currentUser}
         users={users}

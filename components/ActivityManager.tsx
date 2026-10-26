@@ -214,7 +214,7 @@ interface Props {
   activeSessions?: Record<string, UserSession>;
   onClockIn?: (user: User) => void;
   onClockOut?: (user: User) => void;
-  onUpdateUser?: (updatedUser: User) => void;
+  onUpdateUser?: (updatedUser: User, silent?: boolean) => void;
   onLogAbsence?: (user: User, type: 'No-Call No-Show' | 'Sick' | 'Emergency', notes?: string) => Promise<any>;
   currentUser?: User | null;
 }
@@ -227,22 +227,57 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     return [];
   }, [currentUser]);
 
+  const isViewerAdmin = React.useMemo(() => {
+    if (!currentUser) return false;
+    return currentUser.role?.trim().toLowerCase() === 'admin' || viewerPerms.includes('admin');
+  }, [currentUser, viewerPerms]);
+
+  const isViewerManager = React.useMemo(() => {
+    if (!currentUser) return false;
+    if (isViewerAdmin) return true;
+    const roleLower = currentUser.role?.trim().toLowerCase() || '';
+    if (roleLower === 'manager') return true;
+    const managerPermIds = ['manage_team', 'manage_users', 'edit_timecards', 'approve_timecards', 'manage_schedule', 'create_tasks', 'view_reports', 'view_payroll'];
+    return viewerPerms.some(p => managerPermIds.includes(p));
+  }, [currentUser, isViewerAdmin, viewerPerms]);
+
   const viewerHasPermission = React.useCallback((permId: string) => {
     if (!currentUser) return false;
-    const isUserAdmin = currentUser.role?.toLowerCase() === 'admin' || viewerPerms.includes('admin');
-    if (isUserAdmin) return true;
+    if (isViewerAdmin) return true;
     return viewerPerms.includes(permId);
-  }, [currentUser, viewerPerms]);
+  }, [currentUser, isViewerAdmin, viewerPerms]);
+
+  const isTargetUserAdmin = React.useCallback((u: User) => {
+    return u.role?.trim().toLowerCase() === 'admin';
+  }, []);
+
+  const isTargetUserActive = React.useCallback((u: User) => {
+    return u.isActive !== false;
+  }, []);
+
+  const displayedUsers = React.useMemo(() => {
+    if (!isViewerAdmin) {
+      return users.filter(u => !isTargetUserAdmin(u) && isTargetUserActive(u));
+    }
+
+    const getPriorityGroup = (u: User) => {
+      if (isTargetUserAdmin(u)) return 0;
+      if (isTargetUserActive(u)) return 1;
+      return 2;
+    };
+
+    return [...users].sort((a, b) => getPriorityGroup(a) - getPriorityGroup(b));
+  }, [users, isViewerAdmin, isTargetUserAdmin, isTargetUserActive]);
 
   // Allowed views based on permissions
   const allowedViews = React.useMemo(() => {
     const views: string[] = [];
-    if (viewerHasPermission('manage_users')) views.push('users');
+    if (viewerHasPermission('manage_users') || isViewerManager) views.push('users');
     if (viewerHasPermission('edit_timecards')) views.push('timecards');
     if (viewerHasPermission('manage_schedule')) views.push('planning');
     if (viewerHasPermission('view_reports')) views.push('departments');
     return views;
-  }, [viewerHasPermission]);
+  }, [viewerHasPermission, isViewerManager]);
 
   const [activeView, setActiveView] = useState<'departments' | 'users' | 'timecards' | 'planning'>('users');
 
@@ -1474,23 +1509,30 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
               <div className="space-y-6 animate-in slide-in-from-bottom-4">
                 <div className="flex flex-col md:flex-row gap-4 justify-between bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
                   <div>
-                    <h3 className="text-xl font-bold text-zinc-800">Active Team Members - {users.length}</h3>
+                    <h3 className="text-xl font-bold text-zinc-800">
+                      Active Team Members - {displayedUsers.filter(u => isTargetUserAdmin(u) || isTargetUserActive(u)).length}
+                    </h3>
                     <p className="text-zinc-500 text-sm">Select a staff member to view their performance metrics and full profile.</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {users.map(user => {
+                  {displayedUsers.map(user => {
                     const pendingWriteUps = (user.disciplinaryWriteUps || []).filter(
                       w => w.status === 'Pending Signature'
                     );
                     const totalWriteUps = (user.disciplinaryWriteUps || []).length;
+                    const isInactiveMember = !isTargetUserAdmin(user) && !isTargetUserActive(user);
 
                     return (
                       <div
                         key={user.id}
                         onClick={() => setSelectedUserForProfile(user)}
-                        className="flex flex-col justify-between gap-3 bg-white p-5 rounded-2xl border border-zinc-200 hover:border-zinc-400 hover:shadow-lg transition-all text-left group cursor-pointer"
+                        className={`flex flex-col justify-between gap-3 p-5 rounded-2xl border transition-all text-left group cursor-pointer ${
+                          isInactiveMember
+                            ? 'bg-zinc-50/70 border-zinc-200/80 opacity-75 hover:opacity-100 hover:border-zinc-300'
+                            : 'bg-white border-zinc-200 hover:border-zinc-400 hover:shadow-lg'
+                        }`}
                       >
                         <div className="flex items-center gap-4">
                           <div className="w-14 h-14 rounded-full bg-zinc-100 text-zinc-700 flex items-center justify-center text-xl font-bold group-hover:bg-zinc-800 group-hover:text-white transition-colors shrink-0">
@@ -1498,7 +1540,14 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="font-bold text-zinc-900 truncate">{user.name}</div>
-                            <div className="text-xs text-zinc-500 truncate">{user.role}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-zinc-500 truncate">{user.role}</span>
+                              {isInactiveMember && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase bg-zinc-200 text-zinc-600 rounded">
+                                  Inactive
+                                </span>
+                              )}
+                            </div>
                             {user.strikeLevel ? (
                               <span className="inline-block mt-1 px-2 py-0.5 text-[9px] font-black uppercase bg-red-50 text-red-700 border border-red-200 rounded-full">
                                 Strike {user.strikeLevel}/3
@@ -1916,6 +1965,10 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
           onSave={(u) => { 
             if (onUpdateUser) onUpdateUser(u); 
             setSelectedUserForProfile(null); 
+          }}
+          onQuickUpdate={(u) => {
+            setSelectedUserForProfile(u);
+            if (onUpdateUser) onUpdateUser(u, true);
           }}
           isViewerAdmin={true}
           viewerUser={currentUser}

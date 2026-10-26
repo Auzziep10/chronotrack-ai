@@ -108,6 +108,7 @@ export interface User {
   supportingRole?: string;
   avatarInitials: string;
   pin: string;
+  isActive?: boolean;
   // Personal Info
   phoneNumber?: string;
   email?: string;

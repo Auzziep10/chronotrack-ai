@@ -9,6 +9,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSave: (updatedUser: User) => void;
+  onQuickUpdate?: (updatedUser: User) => void;
   isViewerAdmin?: boolean;
   viewerUser?: User | null;
   timeCards?: any[];
@@ -94,7 +95,7 @@ const formatPhoneNumber = (value: string) => {
   return `(${match.slice(0, 3)})${match.slice(3, 6)}-${match.slice(6)}`;
 };
 
-export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSave, isViewerAdmin = false, viewerUser = null, timeCards = [], users = [] }) => {
+export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSave, onQuickUpdate, isViewerAdmin = false, viewerUser = null, timeCards = [], users = [] }) => {
   const [formData, setFormData] = useState<User | null>(null);
   const [showPermsDropdown, setShowPermsDropdown] = useState(false);
   const [showSchedulingDropdown, setShowSchedulingDropdown] = useState(false);
@@ -372,6 +373,29 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
             <div>
               <h3 className="text-xl font-bold">{formData.name}</h3>
               <p className="text-zinc-100 text-sm">{formData.role}</p>
+              {formData.role?.trim().toLowerCase() !== 'admin' && (
+                <label className="inline-flex items-center gap-2 mt-1.5 cursor-pointer select-none text-xs font-semibold text-zinc-100 hover:text-white">
+                  <input
+                    type="checkbox"
+                    checked={formData.isActive !== false}
+                    onChange={e => {
+                      const updated: User = { ...formData, isActive: e.target.checked };
+                      setFormData(updated);
+                      if (onQuickUpdate) {
+                        onQuickUpdate(updated);
+                      } else {
+                        import('../services/firebaseService').then(({ firebaseSaveUser, isFirebaseConfigured }) => {
+                          if (isFirebaseConfigured()) {
+                            firebaseSaveUser(updated).catch(console.error);
+                          }
+                        });
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-white/40 accent-emerald-500 cursor-pointer"
+                  />
+                  <span>Active</span>
+                </label>
+              )}
             </div>
           </div>
           <button onClick={onClose} className="text-white/70 hover:text-white transition-colors">
@@ -511,13 +535,15 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                           }
                         }
                         let perms = [...currentPerms];
-                        if (val.toLowerCase() === 'admin') {
+                        if (val.trim().toLowerCase() === 'admin') {
                           perms = AVAILABLE_PERMISSIONS.map(p => p.id);
-                        } else if (val.toLowerCase() === 'manager') {
+                        } else if (val.trim().toLowerCase() === 'manager') {
                           const managerPerms = ['manage_users', 'edit_timecards', 'approve_timecards', 'manage_schedule', 'create_tasks', 'view_reports', 'view_payroll'];
                           perms = Array.from(new Set([...perms.filter(p => p !== 'admin'), ...managerPerms]));
-                        } else if (val.toLowerCase() === 'staff' || val.toLowerCase() === 'terminal') {
+                        } else if (val.trim().toLowerCase() === 'staff' || val.trim().toLowerCase() === 'terminal') {
                           perms = perms.filter(p => p === 'mobile_clock_in');
+                        } else {
+                          perms = perms.filter(p => p !== 'admin');
                         }
                         setFormData({ ...formData, role: val, permissions: perms });
                       }}
