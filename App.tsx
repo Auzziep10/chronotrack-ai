@@ -1207,6 +1207,17 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            {currentUser && (
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-50 border border-zinc-200 mr-1">
+                <div className="w-6 h-6 rounded-full bg-zinc-900 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                  {currentUser.avatarInitials || (currentUser.name ? currentUser.name.substring(0, 2).toUpperCase() : 'ME')}
+                </div>
+                <div className="flex flex-col text-left leading-tight">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Signed in as</span>
+                  <span className="text-xs font-bold text-zinc-900 truncate max-w-[140px]">{currentUser.name}</span>
+                </div>
+              </div>
+            )}
             <div className="hidden sm:flex flex-col items-end text-right mr-2">
               <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Active Staff</span>
               <span className="text-sm font-semibold text-zinc-800">

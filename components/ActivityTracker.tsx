@@ -151,15 +151,13 @@ export const ActivityTracker: React.FC<Props> = ({
     })
     : [];
 
-  // Auto-select if only one user (convenience)
+  // Auto-select for standard staff on their own profile
   useEffect(() => {
     // If we're a standard user on our own profile, aggressively select ourselves if possible
     if (!isAdminOrManager && !isDedicatedTerminal && currentUser) {
       if (activeSessions[currentUser.id] && selectedUserId !== currentUser.id) {
         setSelectedUserId(currentUser.id);
       }
-    } else if (visibleUsers.length === 1 && !selectedUserId) {
-      setSelectedUserId(visibleUsers[0].userId);
     }
 
     // If selected user clocks out, reset
@@ -167,7 +165,7 @@ export const ActivityTracker: React.FC<Props> = ({
       setSelectedUserId('');
       setIsLocked(false);
     }
-  }, [activeSessions, selectedUserId]);
+  }, [activeSessions, selectedUserId, isAdminOrManager, isDedicatedTerminal, currentUser]);
 
   // Check interval for selected user
   useEffect(() => {
@@ -301,17 +299,94 @@ export const ActivityTracker: React.FC<Props> = ({
     );
   }
 
+  const isCurrentUserClockedIn = Boolean(currentUser?.id && activeSessions[currentUser.id]);
+  const renderAdminSelfBanner = () => {
+    if (!isAdminOrManager || isDedicatedTerminal || !currentUser) return null;
+    return (
+      <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-zinc-900 text-white flex items-center justify-center text-sm font-bold shrink-0">
+            {currentUser.avatarInitials || (currentUser.name ? currentUser.name.substring(0, 2).toUpperCase() : 'ME')}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Signed in as</span>
+              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 border border-zinc-200">
+                {currentUser.role || 'Admin'}
+              </span>
+            </div>
+            <div className="font-bold text-zinc-900 text-base">{currentUser.name}</div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {isCurrentUserClockedIn ? (
+            <button
+              onClick={() => setSelectedUserId(currentUser.id)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              My Active Shift
+            </button>
+          ) : (
+            onClockIn && (
+              <button
+                onClick={() => onClockIn(currentUser)}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm"
+              >
+                <Play className="w-3.5 h-3.5" />
+                Start My Shift
+              </button>
+            )
+          )}
+          <button
+            onClick={() => setIsRequestingTimeOff(true)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-white hover:bg-zinc-50 text-zinc-700 border border-zinc-200 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all shadow-sm"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            Request Time Off
+          </button>
+          <button
+            onClick={() => setIsDiscordSetupOpen(true)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-white hover:bg-zinc-50 text-zinc-700 border border-zinc-200 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all shadow-sm"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Discord Alerts
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Dashboard Empty View (for Admins / Terminals)
   if (visibleUsers.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-96 bg-white rounded-2xl shadow-sm border border-zinc-100 p-8 text-center animate-fade-in">
-        <div className="bg-zinc-50 p-6 rounded-full mb-6">
-          <Clock className="w-16 h-16 text-zinc-300" />
+      <div className="max-w-6xl mx-auto py-6 animate-fade-in space-y-6">
+        {renderAdminSelfBanner()}
+        <div className="flex flex-col items-center justify-center h-96 bg-white rounded-2xl shadow-sm border border-zinc-100 p-8 text-center">
+          <div className="bg-zinc-50 p-6 rounded-full mb-6">
+            <Clock className="w-16 h-16 text-zinc-300" />
+          </div>
+          <h3 className="text-xl font-bold text-zinc-800 mb-2">No Active Shifts</h3>
+          <p className="text-zinc-500 max-w-md">
+            {(!isAdminOrManager && !isDedicatedTerminal) ? "You are not scheduled or clocked in." : "No team members are currently clocked in."}
+          </p>
         </div>
-        <h3 className="text-xl font-bold text-zinc-800 mb-2">No Active Shifts</h3>
-        <p className="text-zinc-500 max-w-md">
-          {(!isAdminOrManager && !isDedicatedTerminal) ? "You are not scheduled or clocked in." : "No team members are currently clocked in."}
-        </p>
+        {isDiscordSetupOpen && (
+          <DiscordSetupModal
+            isOpen={isDiscordSetupOpen}
+            user={currentUser}
+            onClose={() => setIsDiscordSetupOpen(false)}
+            onSave={onUpdateUser || (() => { })}
+          />
+        )}
+        {isRequestingTimeOff && (
+          <TimeOffRequestModal
+            isOpen={isRequestingTimeOff}
+            onClose={() => setIsRequestingTimeOff(false)}
+            user={currentUser}
+            onSave={onUpdateUser || (() => { })}
+          />
+        )}
       </div>
     );
   }
@@ -320,6 +395,7 @@ export const ActivityTracker: React.FC<Props> = ({
     if (isAdminOrManager) {
       return (
         <div className="max-w-6xl mx-auto py-6 animate-fade-in space-y-6">
+          {renderAdminSelfBanner()}
           <div className="flex flex-wrap justify-between items-center gap-4 border-b border-zinc-100 pb-4">
             <div>
               <h2 className="text-2xl font-bold text-zinc-905">Active Time Cards</h2>
@@ -452,6 +528,22 @@ export const ActivityTracker: React.FC<Props> = ({
               );
             })}
           </div>
+          {isDiscordSetupOpen && (
+            <DiscordSetupModal
+              isOpen={isDiscordSetupOpen}
+              user={currentUser}
+              onClose={() => setIsDiscordSetupOpen(false)}
+              onSave={onUpdateUser || (() => { })}
+            />
+          )}
+          {isRequestingTimeOff && (
+            <TimeOffRequestModal
+              isOpen={isRequestingTimeOff}
+              onClose={() => setIsRequestingTimeOff(false)}
+              user={currentUser}
+              onSave={onUpdateUser || (() => { })}
+            />
+          )}
         </div>
       );
     }
@@ -525,8 +617,21 @@ export const ActivityTracker: React.FC<Props> = ({
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1">
-                <div className="text-white font-mono text-sm px-3 py-1 bg-white/10 rounded-full border border-white/20">
-                  {selectedSession.isPaused ? 'IDLE' : 'OVERDUE'}
+                <div className="flex items-center gap-2">
+                  {(isAdminOrManager || isDedicatedTerminal) && (
+                    <button
+                      onClick={() => {
+                        setIsLocked(false);
+                        setSelectedUserId('');
+                      }}
+                      className="text-xs font-bold px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-full border border-white/30 transition-colors"
+                    >
+                      ← Back
+                    </button>
+                  )}
+                  <div className="text-white font-mono text-sm px-3 py-1 bg-white/10 rounded-full border border-white/20">
+                    {selectedSession.isPaused ? 'IDLE' : 'OVERDUE'}
+                  </div>
                 </div>
                 <div className="text-[10px] font-bold text-white/70 uppercase">
                   {Math.floor((Date.now() - selectedSession.lastLogTime) / 60000)} mins since last log
@@ -689,8 +794,24 @@ export const ActivityTracker: React.FC<Props> = ({
             {selectedSession.user.avatarInitials}
           </div>
           <div>
-            <div className="text-xs text-zinc-500">Logged in as</div>
-            <div className="font-bold text-zinc-900 leading-none">{selectedSession.user.name}</div>
+            {String(selectedSession.userId) === String(currentUser?.id) ? (
+              <>
+                <div className="text-xs text-zinc-500">Logged in as</div>
+                <div className="font-bold text-zinc-900 leading-none">{selectedSession.user.name}</div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500">Viewing Active Shift</span>
+                  {currentUser?.name && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 border border-zinc-200">
+                      Signed in as {currentUser.name}
+                    </span>
+                  )}
+                </div>
+                <div className="font-bold text-zinc-900 leading-none mt-0.5">{selectedSession.user.name}</div>
+              </>
+            )}
           </div>
         </div>
 

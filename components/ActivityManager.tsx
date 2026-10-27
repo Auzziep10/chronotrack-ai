@@ -1990,6 +1990,12 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             setSelectedUserForProfile(u);
             if (onUpdateUser) onUpdateUser(u, true);
           }}
+          onTimeCardSaved={(card) => {
+            setTimeCards(prev => {
+              const exists = prev.some(c => c.id === card.id);
+              return exists ? prev.map(c => (c.id === card.id ? card : c)) : [card, ...prev];
+            });
+          }}
           isViewerAdmin={isViewerAdmin}
           viewerUser={currentUser}
           timeCards={allCurrentCards}

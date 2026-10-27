@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, User as UserIcon, Phone, Mail, MapPin, Briefcase, Clock, AlertTriangle, AlertCircle, Save, MessageSquare, Lock, Check, FileText, Download, ChevronDown, ChevronUp, ChevronRight, Shield, Target, Key, DollarSign, ClipboardCheck, Calendar, ArrowUp, ArrowDown, FileWarning, PenTool, CheckCircle2 } from 'lucide-react';
-import { User, DayOfWeek, DailyAvailability, Department, DisciplinaryWriteUp, WriteUpCategory } from '../types';
+import { X, User as UserIcon, Phone, Mail, MapPin, Briefcase, Clock, AlertTriangle, AlertCircle, Save, MessageSquare, Lock, Check, FileText, Download, ChevronDown, ChevronUp, ChevronRight, Shield, Target, Key, DollarSign, ClipboardCheck, Calendar, ArrowUp, ArrowDown, FileWarning, PenTool, CheckCircle2, Plus } from 'lucide-react';
+import { User, DayOfWeek, DailyAvailability, Department, DisciplinaryWriteUp, WriteUpCategory, TimeOffRequest, AttendanceAuditEntry } from '../types';
 import { AVAILABLE_PERMISSIONS } from '../constants';
 import { DigitalWriteUpModal } from './DigitalWriteUpModal';
 
@@ -10,6 +10,7 @@ interface Props {
   onClose: () => void;
   onSave: (updatedUser: User) => void;
   onQuickUpdate?: (updatedUser: User) => void;
+  onTimeCardSaved?: (card: any) => void;
   isViewerAdmin?: boolean;
   viewerUser?: User | null;
   timeCards?: any[];
@@ -95,7 +96,7 @@ const formatPhoneNumber = (value: string) => {
   return `(${match.slice(0, 3)})${match.slice(3, 6)}-${match.slice(6)}`;
 };
 
-export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSave, onQuickUpdate, isViewerAdmin = false, viewerUser = null, timeCards = [], users = [] }) => {
+export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSave, onQuickUpdate, onTimeCardSaved, isViewerAdmin = false, viewerUser = null, timeCards = [], users = [] }) => {
   const [formData, setFormData] = useState<User | null>(null);
   const [showPermsDropdown, setShowPermsDropdown] = useState(false);
   const [showSchedulingDropdown, setShowSchedulingDropdown] = useState(false);
@@ -111,6 +112,297 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
   const [localTimeCards, setLocalTimeCards] = useState<any[]>(timeCards || []);
   const [activeDrilldown, setActiveDrilldown] = useState<'sick' | 'timeOff' | 'noCall' | 'tardy' | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const todayIsoStr = () => {
+    const now = Date.now();
+    const tzOffset = now - new Date(now).getTimezoneOffset() * 60000;
+    return new Date(tzOffset).toISOString().split('T')[0];
+  };
+
+  // Input states for the 4 clickable Review cards
+  const [sickInputType, setSickInputType] = useState<'Sick' | 'Emergency'>('Sick');
+  const [sickInputDate, setSickInputDate] = useState<string>(todayIsoStr);
+  const [sickInputDocProvided, setSickInputDocProvided] = useState<boolean>(false);
+  const [sickInputNotes, setSickInputNotes] = useState<string>('');
+
+  const [timeOffStartDate, setTimeOffStartDate] = useState<string>(todayIsoStr);
+  const [timeOffEndDate, setTimeOffEndDate] = useState<string>(todayIsoStr);
+  const [timeOffCategory, setTimeOffCategory] = useState<NonNullable<TimeOffRequest['category']>>('Vacation');
+  const [timeOffStatus, setTimeOffStatus] = useState<TimeOffRequest['status']>('Approved');
+  const [timeOffInAdvance, setTimeOffInAdvance] = useState<boolean>(true);
+  const [timeOffReason, setTimeOffReason] = useState<string>('');
+
+  const [noCallInputDate, setNoCallInputDate] = useState<string>(todayIsoStr);
+  const [noCallInputShiftTitle, setNoCallInputShiftTitle] = useState<string>('');
+  const [noCallInputCoveredBy, setNoCallInputCoveredBy] = useState<string>('');
+  const [noCallInputNotes, setNoCallInputNotes] = useState<string>('');
+
+  const [tardyInputDate, setTardyInputDate] = useState<string>(todayIsoStr);
+  const [tardyInputMinutes, setTardyInputMinutes] = useState<string>('15');
+  const [tardyInputShiftTitle, setTardyInputShiftTitle] = useState<string>('');
+  const [tardyInputProtocolType, setTardyInputProtocolType] = useState<'Late_Clock_In' | '5_Min_Tardy_Alert' | '30_Min_No_Response'>('Late_Clock_In');
+  const [tardyInputNotes, setTardyInputNotes] = useState<string>('');
+
+  const persistUserUpdate = (updatedUser: User) => {
+    setFormData(updatedUser);
+    if (onQuickUpdate) {
+      onQuickUpdate(updatedUser);
+    } else {
+      import('../services/firebaseService').then(({ firebaseSaveUser, isFirebaseConfigured }) => {
+        if (isFirebaseConfigured()) {
+          firebaseSaveUser(updatedUser).catch(console.error);
+        }
+      });
+    }
+  };
+
+  const persistTimeCard = (card: any) => {
+    setLocalTimeCards(prev => {
+      const exists = prev.some(c => c.id === card.id);
+      return exists ? prev.map(c => (c.id === card.id ? card : c)) : [card, ...prev];
+    });
+    if (onTimeCardSaved) {
+      onTimeCardSaved(card);
+    }
+    import('../services/storageService').then(mod => {
+      mod.storageService.saveTimeCard(card);
+    });
+    import('../services/firebaseService').then(({ firebaseSaveTimeCard, isFirebaseConfigured }) => {
+      if (isFirebaseConfigured() && !String(card.id).startsWith('active-')) {
+        firebaseSaveTimeCard(card).catch(console.error);
+      }
+    });
+  };
+
+  const handleLogSickOrEmergency = () => {
+    if (!formData || !sickInputDate) return;
+    const ts = new Date(`${sickInputDate}T09:00:00`).getTime() || Date.now();
+    const newCard = {
+      id: `tc-abs-${formData.id}-${Date.now()}`,
+      userId: formData.id,
+      date: sickInputDate,
+      clockIn: ts,
+      clockOut: ts,
+      totalHours: 0,
+      totalIdleHours: 0,
+      status: sickInputType,
+      sickDocumentationProvided: sickInputDocProvided,
+      managerNotes: sickInputNotes.trim() || (sickInputType === 'Emergency' ? 'Family emergency call-in' : 'Sick call-in'),
+    };
+    persistTimeCard(newCard);
+    setSickInputNotes('');
+    setSickInputDocProvided(false);
+  };
+
+  const handleLogTimeOffRequest = () => {
+    if (!formData || !timeOffStartDate) return;
+    const end = timeOffEndDate && timeOffEndDate >= timeOffStartDate ? timeOffEndDate : timeOffStartDate;
+    const newReq: TimeOffRequest = {
+      id: `tor-${formData.id}-${Date.now()}`,
+      startDate: timeOffStartDate,
+      endDate: end,
+      status: timeOffStatus,
+      category: timeOffCategory,
+      requestedInAdvance: timeOffInAdvance,
+      reason: timeOffReason.trim() || `${timeOffCategory} request`,
+      submittedAt: Date.now(),
+    };
+    const updatedUser: User = {
+      ...formData,
+      timeOffRequests: [newReq, ...(formData.timeOffRequests || [])],
+    };
+    persistUserUpdate(updatedUser);
+    setTimeOffReason('');
+  };
+
+  const handleUpdateTimeOffStatus = (reqId: string, nextStatus: TimeOffRequest['status']) => {
+    if (!formData) return;
+    const updatedRequests = (formData.timeOffRequests || []).map(r =>
+      r.id === reqId ? { ...r, status: nextStatus } : r
+    );
+    persistUserUpdate({ ...formData, timeOffRequests: updatedRequests });
+  };
+
+  const handleLogNoCallNoShow = () => {
+    if (!formData || !noCallInputDate) return;
+    const now = Date.now();
+    const ts = new Date(`${noCallInputDate}T09:00:00`).getTime() || now;
+    const coverUser = users.find(u => u.id === noCallInputCoveredBy);
+    const shiftLabel = noCallInputShiftTitle.trim() || 'Scheduled Shift';
+
+    const newCard = {
+      id: `tc-ncns-${formData.id}-${now}`,
+      userId: formData.id,
+      date: noCallInputDate,
+      clockIn: ts,
+      clockOut: ts,
+      totalHours: 0,
+      totalIdleHours: 0,
+      status: 'No-Call No-Show' as const,
+      missedShiftTitle: shiftLabel,
+      coveredByUserId: coverUser ? coverUser.id : undefined,
+      coveredByUserName: coverUser ? coverUser.name : undefined,
+      managerNotes: noCallInputNotes.trim() || 'No-Call No-Show logged by management',
+    };
+    persistTimeCard(newCard);
+
+    // Link to Clock-In Tardy Protocol tools (Audit Log + Pending Signature Write-Up)
+    const auditEntry: AttendanceAuditEntry = {
+      id: `audit-ncns-${now}`,
+      date: noCallInputDate,
+      timestamp: ts,
+      type: 'No_Call_No_Show',
+      shiftTitle: shiftLabel,
+      details: `Logged as No-Call No-Show for ${shiftLabel} by ${viewerUser?.name || 'Manager'}.${noCallInputNotes.trim() ? ` Notes: ${noCallInputNotes.trim()}` : ''}`,
+    };
+
+    const existingWriteUps = formData.disciplinaryWriteUps || [];
+    const hasWriteUpForDate = existingWriteUps.some(w => w.incidentDate === noCallInputDate && w.category === 'No-Call No-Show');
+    const ncnsWriteUp: DisciplinaryWriteUp | null = hasWriteUpForDate
+      ? null
+      : {
+          id: `wu-ncns-${now}`,
+          userId: formData.id,
+          userName: formData.name,
+          date: todayIsoStr(),
+          createdAt: now,
+          issuedByManagerId: viewerUser?.id || 'system-attendance',
+          issuedByManagerName: viewerUser?.name || 'Clockwork Manager',
+          category: 'No-Call No-Show',
+          severity: 'Final Written Warning (Strike 2)',
+          incidentDate: noCallInputDate,
+          shiftTitle: shiftLabel,
+          description: `${formData.name} failed to report for ${shiftLabel} on ${noCallInputDate} without prior notice or communication.${noCallInputNotes.trim() ? ` Notes: ${noCallInputNotes.trim()}` : ''}`,
+          correctiveActionPlan:
+            'Team member must adhere to all scheduled shifts and notify management at least 2 hours prior to shift start in the event of an emergency. Any further No-Call No-Show infraction may result in immediate termination.',
+          status: 'Pending Signature',
+          autoGenerated: true,
+        };
+
+    const updatedUser: User = {
+      ...formData,
+      strikeLevel: Math.max(formData.strikeLevel || 0, 2) as 0 | 1 | 2 | 3,
+      attendanceAuditLog: [auditEntry, ...(formData.attendanceAuditLog || [])].slice(0, 100),
+      disciplinaryWriteUps: ncnsWriteUp ? [ncnsWriteUp, ...existingWriteUps] : existingWriteUps,
+    };
+    persistUserUpdate(updatedUser);
+
+    setNoCallInputShiftTitle('');
+    setNoCallInputCoveredBy('');
+    setNoCallInputNotes('');
+  };
+
+  const handleLogTardy = () => {
+    if (!formData || !tardyInputDate) return;
+    const minsLate = Math.max(1, parseInt(tardyInputMinutes, 10) || 15);
+    const now = Date.now();
+    const ts = new Date(`${tardyInputDate}T09:00:00`).getTime() || now;
+    const shiftLabel = tardyInputShiftTitle.trim() || 'Scheduled Shift';
+
+    // Update existing timecard on that date or create a tardy timecard
+    const existingCardOnDate = localTimeCards.find(
+      c => c.userId === formData.id && (c.date === tardyInputDate || new Date(c.clockIn).toISOString().split('T')[0] === tardyInputDate) && (c.status === 'Complete' || c.status === 'Active')
+    );
+
+    if (existingCardOnDate) {
+      const updatedCard = {
+        ...existingCardOnDate,
+        minutesLate: minsLate,
+        tardyShiftTitle: shiftLabel,
+        managerNotes: tardyInputNotes.trim() || existingCardOnDate.managerNotes,
+      };
+      persistTimeCard(updatedCard);
+    } else {
+      const newCard = {
+        id: `tc-tardy-${formData.id}-${now}`,
+        userId: formData.id,
+        date: tardyInputDate,
+        clockIn: ts,
+        clockOut: ts + 8 * 60 * 60 * 1000,
+        totalHours: 8,
+        totalIdleHours: 0,
+        status: 'Complete' as const,
+        minutesLate: minsLate,
+        tardyShiftTitle: shiftLabel,
+        managerNotes: tardyInputNotes.trim() || `Logged tardy (${minsLate}m late)`,
+      };
+      persistTimeCard(newCard);
+    }
+
+    // Link to Clock-In Tardy Protocol tools (Audit Log + 30-day rolling count + Strike escalation)
+    const auditEntry: AttendanceAuditEntry = {
+      id: `audit-tardy-${now}`,
+      date: tardyInputDate,
+      timestamp: ts,
+      type: tardyInputProtocolType,
+      shiftTitle: shiftLabel,
+      details:
+        tardyInputProtocolType === '30_Min_No_Response'
+          ? `${formData.name} was ${minsLate}m late for ${shiftLabel} with 30+ mins no response to tardy check-in.${tardyInputNotes.trim() ? ` Notes: ${tardyInputNotes.trim()}` : ''}`
+          : `${formData.name} clocked in ${minsLate}m late for ${shiftLabel} (logged by ${viewerUser?.name || 'Manager'}).${tardyInputNotes.trim() ? ` Notes: ${tardyInputNotes.trim()}` : ''}`,
+      responseMessage: tardyInputNotes.trim() || undefined,
+    };
+
+    const nextAuditLogs = [auditEntry, ...(formData.attendanceAuditLog || [])].slice(0, 100);
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+    const rollingDates = new Set<string>([tardyInputDate]);
+    localTimeCards
+      .filter(c => c.userId === formData.id && (c.status === 'Complete' || c.status === 'Active') && c.minutesLate && c.minutesLate > 0 && c.clockIn >= thirtyDaysAgo)
+      .forEach(c => rollingDates.add(c.date || new Date(c.clockIn).toISOString().split('T')[0]));
+    nextAuditLogs
+      .filter(l => ['Late_Clock_In', '5_Min_Tardy_Alert', '30_Min_No_Response'].includes(l.type) && l.timestamp >= thirtyDaysAgo)
+      .forEach(l => rollingDates.add(l.date));
+
+    const newTardyCount30d = Math.max((formData.tardyCount30Days || 0) + 1, rollingDates.size);
+    const strikeFromCount = newTardyCount30d >= 6 ? 3 : newTardyCount30d >= 5 ? 2 : newTardyCount30d >= 3 ? 1 : 0;
+    const newStrikeLevel = Math.max(formData.strikeLevel || 0, strikeFromCount, tardyInputProtocolType === '30_Min_No_Response' ? 1 : 0) as 0 | 1 | 2 | 3;
+
+    let nextWriteUps = [...(formData.disciplinaryWriteUps || [])];
+    if (tardyInputProtocolType === '30_Min_No_Response' || newTardyCount30d === 3 || newTardyCount30d === 5 || newTardyCount30d >= 6) {
+      const severity =
+        newStrikeLevel >= 3
+          ? 'Suspension / Termination Review (Strike 3)'
+          : newStrikeLevel === 2
+          ? 'Final Written Warning (Strike 2)'
+          : 'Written Warning (Strike 1)';
+      const category: WriteUpCategory = tardyInputProtocolType === '30_Min_No_Response' ? 'Failure to Communicate' : 'Excessive Tardiness';
+      const autoWriteUp: DisciplinaryWriteUp = {
+        id: `wu-tardy-${now}`,
+        userId: formData.id,
+        userName: formData.name,
+        date: todayIsoStr(),
+        createdAt: now,
+        issuedByManagerId: viewerUser?.id || 'system-attendance',
+        issuedByManagerName: viewerUser?.name || 'Clockwork Manager',
+        category,
+        severity,
+        incidentDate: tardyInputDate,
+        shiftTitle: shiftLabel,
+        description:
+          tardyInputProtocolType === '30_Min_No_Response'
+            ? `${formData.name} was ${minsLate} minutes late for ${shiftLabel} on ${tardyInputDate} and failed to communicate within 30 minutes of shift start.`
+            : `${formData.name} clocked in ${minsLate} minutes late for ${shiftLabel} on ${tardyInputDate}, reaching ${newTardyCount30d} tardies in the rolling 30-day period (${severity}).`,
+        correctiveActionPlan:
+          'Employee must arrive and clock in on time for all scheduled shifts and respond immediately to the 5-minute tardy check-in DM if delayed.',
+        status: 'Pending Signature',
+        autoGenerated: true,
+      };
+      nextWriteUps = [autoWriteUp, ...nextWriteUps];
+    }
+
+    const updatedUser: User = {
+      ...formData,
+      lateDays: (formData.lateDays || 0) + 1,
+      tardyCount30Days: newTardyCount30d,
+      strikeLevel: newStrikeLevel,
+      attendanceAuditLog: nextAuditLogs,
+      disciplinaryWriteUps: nextWriteUps,
+    };
+    persistUserUpdate(updatedUser);
+
+    setTardyInputShiftTitle('');
+    setTardyInputNotes('');
+  };
 
   useEffect(() => {
     if (timeCards && timeCards.length > 0) {
@@ -693,19 +985,23 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                   const priorEnd = rangeStart;
                   
                   const shiftsWorked = userCards.filter(c => (c.status === 'Complete' || c.status === 'Active') && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
-                  const sickCards = userCards.filter(c => c.status === 'Sick' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
+                  const sickCards = userCards.filter(c => (c.status === 'Sick' || c.status === 'Emergency') && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
                   
+                  const getAuditType = (l: any) => l.type || l.eventType;
+                  const getAuditDate = (l: any) => l.date || l.dateStr || new Date(l.timestamp).toISOString().split('T')[0];
+
                   // Link No-Call No-Show cards with Clock-In Tardy Protocol 'No_Call_No_Show' audit logs
                   const rawNoCallCards = userCards.filter(c => c.status === 'No-Call No-Show' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
-                  const noCallAuditLogs = userAuditLogs.filter(l => l.eventType === 'No_Call_No_Show' && (rangeDays === 9999 ? true : l.timestamp >= rangeStart));
+                  const noCallAuditLogs = userAuditLogs.filter(l => getAuditType(l) === 'No_Call_No_Show' && (rangeDays === 9999 ? true : l.timestamp >= rangeStart));
                   const noCallCards = [...rawNoCallCards];
                   noCallAuditLogs.forEach(log => {
-                    const logDate = log.dateStr || new Date(log.timestamp).toISOString().split('T')[0];
-                    const exists = noCallCards.some(c => new Date(c.clockIn).toISOString().split('T')[0] === logDate);
+                    const logDate = getAuditDate(log);
+                    const exists = noCallCards.some(c => (c.date || new Date(c.clockIn).toISOString().split('T')[0]) === logDate);
                     if (!exists) {
                       noCallCards.push({
                         id: log.id,
                         userId: formData.id,
+                        date: logDate,
                         clockIn: log.timestamp,
                         status: 'No-Call No-Show',
                         missedShiftTitle: log.shiftTitle || 'Scheduled Shift',
@@ -716,53 +1012,37 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                   // Link Tardy cards with Clock-In Tardy Protocol events ('Late_Clock_In', '5_Min_Tardy_Alert', '30_Min_No_Response')
                   const rawTardyCards = userCards.filter(c => (c.status === 'Complete' || c.status === 'Active') && c.minutesLate && c.minutesLate > 0 && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
                   const tardyProtocolLogsInRange = userAuditLogs.filter(
-                    l => ['Late_Clock_In', '5_Min_Tardy_Alert', 'Tardy_Response', '30_Min_No_Response'].includes(l.eventType) && (rangeDays === 9999 ? true : l.timestamp >= rangeStart)
+                    l => ['Late_Clock_In', '5_Min_Tardy_Alert', 'Tardy_Response', '30_Min_No_Response'].includes(getAuditType(l)) && (rangeDays === 9999 ? true : l.timestamp >= rangeStart)
                   );
                   const tardyCards = [...rawTardyCards];
-                  const tardyDatesSeen = new Set(tardyCards.map(c => new Date(c.clockIn).toISOString().split('T')[0]));
+                  const tardyDatesSeen = new Set(tardyCards.map(c => c.date || new Date(c.clockIn).toISOString().split('T')[0]));
                   userAuditLogs
-                    .filter(l => ['Late_Clock_In', '5_Min_Tardy_Alert', '30_Min_No_Response'].includes(l.eventType) && (rangeDays === 9999 ? true : l.timestamp >= rangeStart))
+                    .filter(l => ['Late_Clock_In', '5_Min_Tardy_Alert', '30_Min_No_Response'].includes(getAuditType(l)) && (rangeDays === 9999 ? true : l.timestamp >= rangeStart))
                     .forEach(log => {
-                      const logDate = log.dateStr || new Date(log.timestamp).toISOString().split('T')[0];
+                      const logDate = getAuditDate(log);
                       if (!tardyDatesSeen.has(logDate)) {
                         tardyDatesSeen.add(logDate);
-                        const lateLogForDay = userAuditLogs.find(l2 => l2.eventType === 'Late_Clock_In' && (l2.dateStr === logDate || new Date(l2.timestamp).toISOString().split('T')[0] === logDate));
-                        const noRespForDay = userAuditLogs.find(l2 => l2.eventType === '30_Min_No_Response' && (l2.dateStr === logDate || new Date(l2.timestamp).toISOString().split('T')[0] === logDate));
+                        const lateLogForDay = userAuditLogs.find(l2 => getAuditType(l2) === 'Late_Clock_In' && getAuditDate(l2) === logDate);
+                        const noRespForDay = userAuditLogs.find(l2 => getAuditType(l2) === '30_Min_No_Response' && getAuditDate(l2) === logDate);
                         tardyCards.push({
                           id: log.id,
                           userId: formData.id,
+                          date: logDate,
                           clockIn: lateLogForDay?.timestamp || log.timestamp,
                           status: 'Complete',
-                          minutesLate: lateLogForDay?.minutesLate || (noRespForDay ? 30 : log.minutesLate || 5),
+                          minutesLate: (lateLogForDay as any)?.minutesLate || (noRespForDay ? 30 : (log as any).minutesLate || 5),
                           tardyShiftTitle: lateLogForDay?.shiftTitle || log.shiftTitle || 'Scheduled Shift',
                         });
                       }
                     });
                   tardyCards.sort((a, b) => b.clockIn - a.clockIn);
 
-                  // Rolling 30-day Tardy Protocol & Strike calculations
-                  const thirtyDaysAgoTs = now - 30 * 24 * 60 * 60 * 1000;
-                  const rolling30DayTardyDates = new Set<string>();
-                  userCards
-                    .filter(c => (c.status === 'Complete' || c.status === 'Active') && c.minutesLate && c.minutesLate > 0 && c.clockIn >= thirtyDaysAgoTs)
-                    .forEach(c => rolling30DayTardyDates.add(new Date(c.clockIn).toISOString().split('T')[0]));
-                  userAuditLogs
-                    .filter(l => ['Late_Clock_In', '5_Min_Tardy_Alert', '30_Min_No_Response'].includes(l.eventType) && l.timestamp >= thirtyDaysAgoTs)
-                    .forEach(l => rolling30DayTardyDates.add(l.dateStr || new Date(l.timestamp).toISOString().split('T')[0]));
-                  const effectiveTardy30Days = Math.max(formData.tardyCount30Days || 0, rolling30DayTardyDates.size);
-                  const computedStrikeFromTardies = effectiveTardy30Days >= 6 ? 3 : effectiveTardy30Days >= 5 ? 2 : effectiveTardy30Days >= 3 ? 1 : 0;
-                  const effectiveStrikeLevel = Math.max(formData.strikeLevel || 0, computedStrikeFromTardies);
-                  const pendingWriteUps = userWriteUps.filter(w => w.status === 'Pending Signature');
-                  const alert5MinCount = tardyProtocolLogsInRange.filter(l => l.eventType === '5_Min_Tardy_Alert').length;
-                  const dmResponseCount = tardyProtocolLogsInRange.filter(l => l.eventType === 'Tardy_Response').length;
-                  const noResponse30MinCount = tardyProtocolLogsInRange.filter(l => l.eventType === '30_Min_No_Response').length;
-
                   const timeOffRequests = userRequests.filter(req => {
                     const t = req.submittedAt || new Date(req.startDate).getTime();
                     return rangeDays === 9999 ? true : (t >= rangeStart && t < now);
                   });
 
-                  const priorSick = userCards.filter(c => c.status === 'Sick' && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
+                  const priorSick = userCards.filter(c => (c.status === 'Sick' || c.status === 'Emergency') && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
                   const priorNoCall = userCards.filter(c => c.status === 'No-Call No-Show' && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
                   const priorTardys = userCards.filter(c => (c.status === 'Complete' || c.status === 'Active') && c.minutesLate && c.minutesLate > 0 && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
                   const priorTimeOff = userRequests.filter(req => {
@@ -781,7 +1061,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                     teamUserIds.forEach(uid => {
                       const uCards = localTimeCards.filter(c => c.userId === uid);
                       const uShifts = uCards.filter(c => c.status === 'Complete' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
-                      const uSick = uCards.filter(c => c.status === 'Sick' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                      const uSick = uCards.filter(c => (c.status === 'Sick' || c.status === 'Emergency') && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
                       const uNoCall = uCards.filter(c => c.status === 'No-Call No-Show' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
                       const uTardys = uCards.filter(c => c.status === 'Complete' && c.minutesLate && c.minutesLate > 0 && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
 
@@ -1086,100 +1366,6 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                           </div>
                         </div>
 
-                        {/* Clock-In Tardy Protocol Status & Action Bar */}
-                        <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex flex-col gap-2.5 shadow-sm">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[10px] font-black text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
-                                <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                                Clock-In Tardy Protocol
-                              </span>
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${
-                                effectiveStrikeLevel >= 3
-                                  ? 'bg-red-100 text-red-800 border-red-300'
-                                  : effectiveStrikeLevel === 2
-                                  ? 'bg-orange-100 text-orange-800 border-orange-300'
-                                  : effectiveStrikeLevel === 1
-                                  ? 'bg-amber-100 text-amber-800 border-amber-300'
-                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              }`}>
-                                Strike {effectiveStrikeLevel}/3
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                {effectiveTardy30Days} {effectiveTardy30Days === 1 ? 'Tardy' : 'Tardies'} (30d)
-                              </span>
-                              {alert5MinCount > 0 && (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                  5m Alerts: {alert5MinCount} • Replied: {dmResponseCount}/{alert5MinCount}
-                                </span>
-                              )}
-                              {noResponse30MinCount > 0 && (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                  30m No-Resp: {noResponse30MinCount}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              {pendingWriteUps.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedWriteUp(pendingWriteUps[0]);
-                                    setShowWriteUpModal(true);
-                                  }}
-                                  className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors flex items-center gap-1 animate-pulse"
-                                >
-                                  <PenTool className="w-3 h-3" />
-                                  Sign Pending Write-Up ({pendingWriteUps.length})
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedWriteUp(null);
-                                  setInitialWriteUpCategory('Excessive Tardiness');
-                                  setInitialWriteUpIncidentDate(new Date().toISOString().split('T')[0]);
-                                  setInitialWriteUpShiftTitle('');
-                                  setInitialWriteUpDescription(
-                                    effectiveTardy30Days > 0
-                                      ? `Employee has accumulated ${effectiveTardy30Days} tardy clock-ins within the rolling 30-day window (Strike ${Math.max(1, effectiveStrikeLevel)}/3 threshold).`
-                                      : ''
-                                  );
-                                  setShowWriteUpModal(true);
-                                }}
-                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors"
-                              >
-                                + Tardy Write-Up
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedWriteUp(null);
-                                  setInitialWriteUpCategory('Failure to Communicate');
-                                  setInitialWriteUpIncidentDate(new Date().toISOString().split('T')[0]);
-                                  setInitialWriteUpShiftTitle('');
-                                  setInitialWriteUpDescription('');
-                                  setShowWriteUpModal(true);
-                                }}
-                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-colors"
-                              >
-                                + No-Comm Write-Up
-                              </button>
-                            </div>
-                          </div>
-                          <div className="text-[10px] text-zinc-500 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200/70 pt-1.5">
-                            <span>Protocol thresholds (rolling 30d): <strong>3 tardies = Strike 1</strong> • <strong>5 tardies = Strike 2</strong> • <strong>6+ tardies = Strike 3</strong></span>
-                            <button
-                              type="button"
-                              onClick={() => setActiveDrilldown(activeDrilldown === 'tardy' ? null : 'tardy')}
-                              className="text-indigo-600 hover:text-indigo-800 font-bold underline"
-                            >
-                              {activeDrilldown === 'tardy' ? 'Hide Tardy Protocol Logs' : 'Inspect Tardy Protocol & Audit Logs →'}
-                            </button>
-                          </div>
-                        </div>
-
                         {/* Warnings Banner Stack */}
                         {warningBanners.length > 0 && (
                           <div className="space-y-2">
@@ -1192,9 +1378,9 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                           </div>
                         )}
 
-                        {/* Metric Grid */}
+                        {/* Metric Grid (Clickable for Managers/Admins to Input & Review) */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                          {/* Sick Card */}
+                          {/* Sick / Family Emergency Call-Ins Card */}
                           <div
                             onClick={() => setActiveDrilldown(activeDrilldown === 'sick' ? null : 'sick')}
                             className={`bg-white border rounded-xl p-3 flex flex-col justify-between min-h-[96px] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
@@ -1331,17 +1517,76 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                           </div>
                         </div>
 
-                        {/* Active Drilldown Section */}
+                        {/* Active Drilldown & Input Section */}
                         {activeDrilldown && (
                           <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-inner mt-2 space-y-3 animate-in slide-in-from-bottom-2 duration-200">
                             {activeDrilldown === 'sick' && (
                               <div className="space-y-3">
                                 <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
-                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Sick Call-ins Logs ({sickCards.length} instances)</h5>
-                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Toggle status or review weekend patterns</span>
+                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Sick / Family Emergency Call-Ins ({sickCards.length} instances)</h5>
+                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Log call-ins & documentation</span>
                                 </div>
+
+                                {canManageTarget && (
+                                  <div className="p-3 bg-amber-50/50 border border-amber-200/80 rounded-xl space-y-2.5">
+                                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                                      <Plus className="w-3.5 h-3.5 text-amber-600" />
+                                      Input Sick or Family Emergency Call-In
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Call-In Type</label>
+                                        <select
+                                          value={sickInputType}
+                                          onChange={e => setSickInputType(e.target.value as 'Sick' | 'Emergency')}
+                                          className="w-full text-xs font-semibold border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        >
+                                          <option value="Sick">Sick Call-In</option>
+                                          <option value="Emergency">Family Emergency</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Date</label>
+                                        <input
+                                          type="date"
+                                          value={sickInputDate}
+                                          onChange={e => setSickInputDate(e.target.value)}
+                                          className="w-full text-xs font-semibold border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        />
+                                      </div>
+                                      <div className="flex items-end pb-1">
+                                        <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold text-zinc-700">
+                                          <input
+                                            type="checkbox"
+                                            checked={sickInputDocProvided}
+                                            onChange={e => setSickInputDocProvided(e.target.checked)}
+                                            className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                                          />
+                                          <span>Doctor's Note / Proof Provided</span>
+                                        </label>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                      <input
+                                        type="text"
+                                        value={sickInputNotes}
+                                        onChange={e => setSickInputNotes(e.target.value)}
+                                        placeholder="Notes (e.g., Called at 7:45 AM regarding illness / family emergency)..."
+                                        className="flex-1 text-xs border border-zinc-300 rounded-lg py-1.5 px-2.5 bg-white"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={handleLogSickOrEmergency}
+                                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-zinc-900 hover:bg-zinc-800 text-white shadow-sm transition-colors shrink-0 flex items-center justify-center gap-1"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" /> Log Call-In
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {sickCards.length === 0 ? (
-                                  <p className="text-xs text-zinc-400 italic">No sick call-ins logged for this period.</p>
+                                  <p className="text-xs text-zinc-400 italic">No sick or family emergency call-ins logged for this period.</p>
                                 ) : (
                                   <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                                     {sickCards.map(card => {
@@ -1349,7 +1594,18 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                                       return (
                                         <div key={card.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-zinc-50 border border-zinc-150 rounded-lg hover:bg-zinc-100/55 transition-colors">
                                           <div>
-                                            <div className="text-xs font-bold text-zinc-800">{new Date(card.clockIn).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs font-bold text-zinc-800">
+                                                {new Date(card.clockIn).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                                              </span>
+                                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                                card.status === 'Emergency'
+                                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                                              }`}>
+                                                {card.status === 'Emergency' ? 'Family Emergency' : 'Sick Call-In'}
+                                              </span>
+                                            </div>
                                             {card.managerNotes && <div className="text-[10px] text-zinc-500 italic mt-0.5">Note: "{card.managerNotes}"</div>}
                                           </div>
                                           <div className="flex flex-wrap items-center gap-2">
@@ -1382,7 +1638,96 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                               <div className="space-y-3">
                                 <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
                                   <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Time Off Requests Log ({timeOffRequests.length} instances)</h5>
+                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Input or manage time off requests</span>
                                 </div>
+
+                                {canManageTarget && (
+                                  <div className="p-3 bg-blue-50/50 border border-blue-200/80 rounded-xl space-y-2.5">
+                                    <div className="text-[10px] font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                                      <Plus className="w-3.5 h-3.5 text-blue-600" />
+                                      Input Time Off Request
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Start Date</label>
+                                        <input
+                                          type="date"
+                                          value={timeOffStartDate}
+                                          onChange={e => {
+                                            setTimeOffStartDate(e.target.value);
+                                            if (timeOffEndDate < e.target.value) setTimeOffEndDate(e.target.value);
+                                          }}
+                                          className="w-full text-xs font-semibold border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">End Date</label>
+                                        <input
+                                          type="date"
+                                          value={timeOffEndDate}
+                                          min={timeOffStartDate}
+                                          onChange={e => setTimeOffEndDate(e.target.value)}
+                                          className="w-full text-xs font-semibold border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Category</label>
+                                        <select
+                                          value={timeOffCategory}
+                                          onChange={e => setTimeOffCategory(e.target.value as any)}
+                                          className="w-full text-xs font-semibold border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        >
+                                          <option value="Vacation">Vacation</option>
+                                          <option value="Personal">Personal</option>
+                                          <option value="Sick">Sick</option>
+                                          <option value="Emergency">Family Emergency</option>
+                                          <option value="Retainer Time Off">Retainer Time Off</option>
+                                          <option value="Unpaid Leave">Unpaid Leave</option>
+                                          <option value="Bereavement">Bereavement</option>
+                                          <option value="Other">Other</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Status</label>
+                                        <select
+                                          value={timeOffStatus}
+                                          onChange={e => setTimeOffStatus(e.target.value as any)}
+                                          className="w-full text-xs font-semibold border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        >
+                                          <option value="Approved">Approved</option>
+                                          <option value="Pending">Pending</option>
+                                          <option value="Denied">Denied</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                      <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold text-zinc-700 shrink-0">
+                                        <input
+                                          type="checkbox"
+                                          checked={timeOffInAdvance}
+                                          onChange={e => setTimeOffInAdvance(e.target.checked)}
+                                          className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span>Advance Notice Provided</span>
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={timeOffReason}
+                                        onChange={e => setTimeOffReason(e.target.value)}
+                                        placeholder="Reason / details..."
+                                        className="flex-1 text-xs border border-zinc-300 rounded-lg py-1.5 px-2.5 bg-white"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={handleLogTimeOffRequest}
+                                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-zinc-900 hover:bg-zinc-800 text-white shadow-sm transition-colors shrink-0 flex items-center justify-center gap-1"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" /> Log Time Off
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {timeOffRequests.length === 0 ? (
                                   <p className="text-xs text-zinc-400 italic">No time off requests recorded for this period.</p>
                                 ) : (
@@ -1392,7 +1737,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                                       return (
                                         <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-zinc-50 border border-zinc-150 rounded-lg">
                                           <div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex flex-wrap items-center gap-2">
                                               <span className="text-xs font-bold text-zinc-850">
                                                 {new Date(req.startDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                                 {req.startDate !== req.endDate && ` - ${new Date(req.endDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`}
@@ -1400,11 +1745,29 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                                               <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-zinc-200 text-zinc-700 tracking-wider">
                                                 {req.category || 'Vacation'}
                                               </span>
-                                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                                                req.status === 'Approved' ? 'bg-emerald-50 text-emerald-700' : req.status === 'Pending' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
-                                              }`}>
-                                                {req.status}
-                                              </span>
+                                              {canManageTarget ? (
+                                                <select
+                                                  value={req.status}
+                                                  onChange={e => handleUpdateTimeOffStatus(req.id, e.target.value as any)}
+                                                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded border cursor-pointer ${
+                                                    req.status === 'Approved'
+                                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                      : req.status === 'Pending'
+                                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                      : 'bg-red-50 text-red-700 border-red-200'
+                                                  }`}
+                                                >
+                                                  <option value="Approved">Approved</option>
+                                                  <option value="Pending">Pending</option>
+                                                  <option value="Denied">Denied</option>
+                                                </select>
+                                              ) : (
+                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                                  req.status === 'Approved' ? 'bg-emerald-50 text-emerald-700' : req.status === 'Pending' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
+                                                }`}>
+                                                  {req.status}
+                                                </span>
+                                              )}
                                             </div>
                                             <div className="text-[10px] text-zinc-500 mt-1">Reason: "{req.reason || 'None specified'}"</div>
                                           </div>
@@ -1431,12 +1794,72 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                                   <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">No Call Shows Log ({noCallCards.length} instances)</h5>
                                   <span className="text-[10px] text-zinc-400 font-semibold italic">Log coverage & protocol write-ups</span>
                                 </div>
+
+                                {canManageTarget && (
+                                  <div className="p-3 bg-red-50/50 border border-red-200/80 rounded-xl space-y-2.5">
+                                    <div className="text-[10px] font-black uppercase tracking-wider text-red-900 flex items-center gap-1.5">
+                                      <Plus className="w-3.5 h-3.5 text-red-600" />
+                                      Input No-Call No-Show
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Date</label>
+                                        <input
+                                          type="date"
+                                          value={noCallInputDate}
+                                          onChange={e => setNoCallInputDate(e.target.value)}
+                                          className="w-full text-xs font-semibold border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Missed Shift</label>
+                                        <input
+                                          type="text"
+                                          value={noCallInputShiftTitle}
+                                          onChange={e => setNoCallInputShiftTitle(e.target.value)}
+                                          placeholder="e.g. Morning Production Shift"
+                                          className="w-full text-xs border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Covered By</label>
+                                        <select
+                                          value={noCallInputCoveredBy}
+                                          onChange={e => setNoCallInputCoveredBy(e.target.value)}
+                                          className="w-full text-xs font-semibold border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        >
+                                          <option value="">No cover logged</option>
+                                          {users.filter(u => u.id !== formData.id).map(u => (
+                                            <option key={u.id} value={u.id}>Covered by {u.name}</option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                      <input
+                                        type="text"
+                                        value={noCallInputNotes}
+                                        onChange={e => setNoCallInputNotes(e.target.value)}
+                                        placeholder="Notes (auto-generates Pending Signature Write-Up & Audit entry)..."
+                                        className="flex-1 text-xs border border-zinc-300 rounded-lg py-1.5 px-2.5 bg-white"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={handleLogNoCallNoShow}
+                                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm transition-colors shrink-0 flex items-center justify-center gap-1"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" /> Log No-Call No-Show
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {noCallCards.length === 0 ? (
                                   <p className="text-xs text-zinc-400 italic">No-shows logged for this period.</p>
                                 ) : (
                                   <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                                     {noCallCards.map(card => {
-                                      const cardDateStr = new Date(card.clockIn).toISOString().split('T')[0];
+                                      const cardDateStr = card.date || new Date(card.clockIn).toISOString().split('T')[0];
                                       const linkedWriteUp = userWriteUps.find(w => w.incidentDate === cardDateStr);
                                       return (
                                         <div key={card.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-zinc-50 border border-zinc-150 rounded-lg hover:bg-zinc-100/55 transition-colors">
@@ -1502,6 +1925,75 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                                   <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Tardys & Protocol Log ({tardyCards.length} instances)</h5>
                                   <span className="text-[10px] text-zinc-400 font-semibold italic">Linked to Clock-In Tardy Protocol</span>
                                 </div>
+
+                                {canManageTarget && (
+                                  <div className="p-3 bg-indigo-50/50 border border-indigo-200/80 rounded-xl space-y-2.5">
+                                    <div className="text-[10px] font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                                      <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                                      Input Tardy (Linked to Clock-In Tardy Protocol)
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Date</label>
+                                        <input
+                                          type="date"
+                                          value={tardyInputDate}
+                                          onChange={e => setTardyInputDate(e.target.value)}
+                                          className="w-full text-xs font-semibold border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Minutes Late</label>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          value={tardyInputMinutes}
+                                          onChange={e => setTardyInputMinutes(e.target.value)}
+                                          className="w-full text-xs font-semibold border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Shift Title</label>
+                                        <input
+                                          type="text"
+                                          value={tardyInputShiftTitle}
+                                          onChange={e => setTardyInputShiftTitle(e.target.value)}
+                                          placeholder="e.g. Morning Shift"
+                                          className="w-full text-xs border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Protocol Status</label>
+                                        <select
+                                          value={tardyInputProtocolType}
+                                          onChange={e => setTardyInputProtocolType(e.target.value as any)}
+                                          className="w-full text-xs font-semibold border border-zinc-300 rounded-lg py-1.5 px-2 bg-white"
+                                        >
+                                          <option value="Late_Clock_In">Late Clock-In (Communicated)</option>
+                                          <option value="5_Min_Tardy_Alert">5-Min Tardy Alert Sent</option>
+                                          <option value="30_Min_No_Response">30+ Min Late (No Response)</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                      <input
+                                        type="text"
+                                        value={tardyInputNotes}
+                                        onChange={e => setTardyInputNotes(e.target.value)}
+                                        placeholder="Reason / DM reply note..."
+                                        className="flex-1 text-xs border border-zinc-300 rounded-lg py-1.5 px-2.5 bg-white"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={handleLogTardy}
+                                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors shrink-0 flex items-center justify-center gap-1"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" /> Log Tardy
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {tardyCards.length === 0 && tardyProtocolLogsInRange.length === 0 ? (
                                   <p className="text-xs text-zinc-400 italic">No tardy clock-ins or protocol alerts logged for this period.</p>
                                 ) : (
@@ -1539,13 +2031,13 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                                       {tardyCards.map(card => {
                                         const isHighTardy = (card.minutesLate || 0) >= 30;
                                         const isMidTardy = (card.minutesLate || 0) > 10 && (card.minutesLate || 0) < 30;
-                                        const cardDateStr = new Date(card.clockIn).toISOString().split('T')[0];
+                                        const cardDateStr = card.date || new Date(card.clockIn).toISOString().split('T')[0];
                                         const dayProtocolLogs = userAuditLogs.filter(
-                                          l => (l.dateStr || new Date(l.timestamp).toISOString().split('T')[0]) === cardDateStr
+                                          l => getAuditDate(l) === cardDateStr
                                         );
-                                        const has5MinAlert = dayProtocolLogs.some(l => l.eventType === '5_Min_Tardy_Alert');
-                                        const dmResponseLog = dayProtocolLogs.find(l => l.eventType === 'Tardy_Response');
-                                        const has30MinNoResp = dayProtocolLogs.some(l => l.eventType === '30_Min_No_Response');
+                                        const has5MinAlert = dayProtocolLogs.some(l => getAuditType(l) === '5_Min_Tardy_Alert');
+                                        const dmResponseLog = dayProtocolLogs.find(l => getAuditType(l) === 'Tardy_Response');
+                                        const has30MinNoResp = dayProtocolLogs.some(l => getAuditType(l) === '30_Min_No_Response');
                                         const linkedWriteUp = userWriteUps.find(w => w.incidentDate === cardDateStr);
                                         
                                         return (
@@ -1573,8 +2065,8 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                                               </div>
                                               <div className="text-[10px] text-zinc-500 mt-0.5">
                                                 Shift: {card.tardyShiftTitle || 'Not specified'}
-                                                {dmResponseLog?.responseText && (
-                                                  <span className="ml-2 italic text-zinc-600">• Reply: "{dmResponseLog.responseText}"</span>
+                                                {(dmResponseLog?.responseMessage || (dmResponseLog as any)?.responseText) && (
+                                                  <span className="ml-2 italic text-zinc-600">• Reply: "{dmResponseLog?.responseMessage || (dmResponseLog as any)?.responseText}"</span>
                                                 )}
                                               </div>
                                             </div>
