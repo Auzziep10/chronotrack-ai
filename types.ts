@@ -145,6 +145,8 @@ export interface UserSession {
   totalIdleTimeMs?: number;
   clockInDepartment?: string;
   isUnscheduled?: boolean;
+  minutesLate?: number;
+  tardyShiftTitle?: string;
 }
 
 export interface DailyTimeCard {

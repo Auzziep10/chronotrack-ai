@@ -99,11 +99,14 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
   const [formData, setFormData] = useState<User | null>(null);
   const [showPermsDropdown, setShowPermsDropdown] = useState(false);
   const [showSchedulingDropdown, setShowSchedulingDropdown] = useState(false);
-  const [showReviewDropdown, setShowReviewDropdown] = useState(false);
+  const [showDocumentsDropdown, setShowDocumentsDropdown] = useState(false);
   const [showWriteUpsDropdown, setShowWriteUpsDropdown] = useState(true);
   const [showWriteUpModal, setShowWriteUpModal] = useState(false);
   const [selectedWriteUp, setSelectedWriteUp] = useState<DisciplinaryWriteUp | null>(null);
   const [initialWriteUpCategory, setInitialWriteUpCategory] = useState<WriteUpCategory>('Failure to Communicate');
+  const [initialWriteUpIncidentDate, setInitialWriteUpIncidentDate] = useState<string | undefined>(undefined);
+  const [initialWriteUpShiftTitle, setInitialWriteUpShiftTitle] = useState<string>('');
+  const [initialWriteUpDescription, setInitialWriteUpDescription] = useState<string | undefined>(undefined);
   const [reviewRange, setReviewRange] = useState<'30' | '60' | '90' | 'yearly' | 'complete'>('30');
   const [localTimeCards, setLocalTimeCards] = useState<any[]>(timeCards || []);
   const [activeDrilldown, setActiveDrilldown] = useState<'sick' | 'timeOff' | 'noCall' | 'tardy' | null>(null);
@@ -142,6 +145,11 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
         import('../services/storageService').then(mod => {
           mod.storageService.saveTimeCard(updated);
         });
+        import('../services/firebaseService').then(({ firebaseSaveTimeCard, isFirebaseConfigured }) => {
+          if (isFirebaseConfigured() && !String(updated.id).startsWith('active-')) {
+            firebaseSaveTimeCard(updated).catch(() => {});
+          }
+        });
         return updated;
       }
       return c;
@@ -160,6 +168,11 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
         };
         import('../services/storageService').then(mod => {
           mod.storageService.saveTimeCard(updated);
+        });
+        import('../services/firebaseService').then(({ firebaseSaveTimeCard, isFirebaseConfigured }) => {
+          if (isFirebaseConfigured() && !String(updated.id).startsWith('active-')) {
+            firebaseSaveTimeCard(updated).catch(() => {});
+          }
         });
         return updated;
       }
@@ -191,13 +204,39 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
     return isViewerAdmin;
   }, [viewerUser, viewerPerms, isViewerAdmin]);
 
+  const isActualViewerManager = React.useMemo(() => {
+    if (isActualViewerAdmin) return true;
+    if (!viewerUser) return false;
+    const roleLower = viewerUser.role?.trim().toLowerCase() || '';
+    if (roleLower === 'manager') return true;
+    const managerPermIds = ['manage_team', 'manage_users', 'edit_timecards', 'approve_timecards', 'manage_schedule', 'create_tasks', 'view_reports'];
+    return viewerPerms.some(p => managerPermIds.includes(p));
+  }, [viewerUser, viewerPerms, isActualViewerAdmin]);
+
+  const isTargetAdmin = React.useMemo(() => {
+    if (!formData) return false;
+    const targetPerms = Array.isArray(formData.permissions) ? formData.permissions : [];
+    return formData.role?.trim().toLowerCase() === 'admin' || targetPerms.includes('admin');
+  }, [formData]);
+
+  const isTargetManager = React.useMemo(() => {
+    if (!formData) return false;
+    return formData.role?.trim().toLowerCase() === 'manager';
+  }, [formData]);
+
   const viewerHasPermission = (permId: string) => {
-    const isViewerAdminUser = viewerUser?.role?.toLowerCase() === 'admin' || viewerPerms.includes('admin') || isViewerAdmin;
-    if (isViewerAdminUser) return true;
+    if (isActualViewerAdmin) return true;
+    if (viewerUser?.role?.trim().toLowerCase() === 'manager') {
+      const fullManagerPerms = ['manage_team', 'manage_users', 'edit_timecards', 'approve_timecards', 'manage_schedule', 'create_tasks', 'view_reports', 'manage_permissions'];
+      if (fullManagerPerms.includes(permId)) return true;
+    }
     return viewerPerms.includes(permId);
   };
 
-  const canEditPermissions = viewerHasPermission('manage_permissions');
+  // Admin has full access to ALL individuals (including admins, managers, and team members).
+  // Anyone labeled manager has full access to all team members NOT labeled manager or admin.
+  const canManageTarget = isActualViewerAdmin || (isActualViewerManager && !isTargetAdmin && !isTargetManager);
+  const canEditPermissions = isActualViewerAdmin || (canManageTarget && viewerHasPermission('manage_permissions'));
 
   useEffect(() => {
     if (user) {
@@ -328,6 +367,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
   const togglePermission = (permId: string) => {
     if (!formData) return;
+    if (!isActualViewerAdmin && (permId === 'admin' || permId === 'view_payroll')) return;
 
     // Safely parse permissions since external databases might return stringified JSON or CSVs
     let currentPerms: string[] = [];
@@ -380,7 +420,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
             <div>
               <h3 className="text-xl font-bold">{formData.name}</h3>
               <p className="text-zinc-100 text-sm">{formData.role}</p>
-              {formData.role?.trim().toLowerCase() !== 'admin' && (
+              {!isTargetAdmin && canManageTarget && (
                 <label className="inline-flex items-center gap-2 mt-1.5 cursor-pointer select-none text-xs font-semibold text-zinc-100 hover:text-white">
                   <input
                     type="checkbox"
@@ -412,7 +452,7 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-8">
           {/* Split Top Layout: Left = Personal Information, Right = Work Information */}
-          <div className={`grid grid-cols-1 ${viewerHasPermission('manage_users') ? 'lg:grid-cols-2' : ''} gap-8`}>
+          <div className={`grid grid-cols-1 ${canManageTarget ? 'lg:grid-cols-2' : ''} gap-8`}>
             {/* Personal Information */}
             <section className="space-y-4 flex flex-col h-full">
               <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
@@ -502,8 +542,8 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
               </div>
             </section>
 
-            {/* Work Information - Only visible to authorized viewers */}
-            {viewerHasPermission('manage_users') && (
+            {/* Work Information - Visible when viewer can manage target (Admin for all individuals; Manager for non-manager/non-admin team members) */}
+            {canManageTarget && (
               <section className="space-y-4">
                 <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2">
                   <Briefcase className="w-4 h-4 text-zinc-500" /> Work Information
@@ -529,6 +569,9 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                       value={formData.role}
                       onChange={e => {
                         const val = e.target.value;
+                        if (!isActualViewerAdmin && val.trim().toLowerCase() === 'admin') {
+                          return;
+                        }
                         let currentPerms: string[] = [];
                         const rawPerms = formData.permissions as any;
                         if (Array.isArray(rawPerms)) {
@@ -542,10 +585,10 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                           }
                         }
                         let perms = [...currentPerms];
-                        if (val.trim().toLowerCase() === 'admin') {
+                        if (val.trim().toLowerCase() === 'admin' && isActualViewerAdmin) {
                           perms = AVAILABLE_PERMISSIONS.map(p => p.id);
                         } else if (val.trim().toLowerCase() === 'manager') {
-                          const managerPerms = ['manage_users', 'edit_timecards', 'approve_timecards', 'manage_schedule', 'create_tasks', 'view_reports'];
+                          const managerPerms = ['manage_users', 'edit_timecards', 'approve_timecards', 'manage_schedule', 'create_tasks', 'view_reports', 'manage_team'];
                           perms = Array.from(new Set([...perms.filter(p => p !== 'admin' && p !== 'view_payroll'), ...managerPerms]));
                         } else if (val.trim().toLowerCase() === 'staff' || val.trim().toLowerCase() === 'terminal') {
                           perms = perms.filter(p => p === 'mobile_clock_in');
@@ -592,63 +635,1015 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
 
                 </div>
 
-                {/* Documents Section */}
-                <div className="mt-10">
-                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2 mb-3">
-                    <FileText className="w-4 h-4 text-zinc-500" /> Documents
-                  </h4>
-                  {formData.onboardingDocuments && formData.onboardingDocuments.length > 0 ? (
-                    <div className="flex flex-row gap-3 overflow-x-auto pb-2 scroll-smooth">
-                      {formData.onboardingDocuments.map(doc => (
-                        <a
-                          key={doc.id}
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={doc.fileName || (doc.formType === 'w9' ? 'W-9 Form' : 'Direct Deposit')}
-                          className="flex items-center gap-3 p-3 bg-white border border-zinc-200 rounded-lg shadow-sm hover:border-zinc-300 hover:shadow-md transition-all group flex-shrink-0 w-60"
-                        >
-                          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
-                            <FileText className="w-5 h-5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-zinc-900 truncate">
-                              {doc.formType === 'w9' ? 'W-9 Form' : 'Direct Deposit'}
-                            </div>
-                            <div className="text-[10px] text-zinc-500">
-                              {new Date(doc.uploadedAt).toLocaleDateString()}
-                            </div>
-                          </div>
-                          <Download className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 shrink-0" />
-                        </a>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-4 text-center text-sm text-zinc-500 italic">
-                      No documents submitted yet.
-                    </div>
-                  )}
-                </div>
+                {/* Review Section */}
+                {(() => {
+                  const isNearWeekendOrHoliday = (timestamp: number) => {
+                    const d = new Date(timestamp);
+                    const day = d.getDay();
+                    if (day === 0 || day === 1 || day === 5 || day === 6) {
+                      const dayNames = ['Sunday', 'Monday', 'Unknown', 'Unknown', 'Unknown', 'Friday', 'Saturday'];
+                      return `Weekend (${dayNames[day]})`;
+                    }
+                    
+                    const month = d.getMonth() + 1;
+                    const date = d.getDate();
+                    const md = `${month.toString().padStart(2, '0')}-${date.toString().padStart(2, '0')}`;
+                    
+                    const holidays: Record<string, string> = {
+                      '01-01': "New Year's Day",
+                      '07-04': 'Independence Day',
+                      '11-25': 'Thanksgiving',
+                      '11-26': 'Black Friday',
+                      '12-24': 'Christmas Eve',
+                      '12-25': 'Christmas Day',
+                      '12-31': "New Year's Eve",
+                    };
+                    
+                    if (holidays[md]) {
+                      return `Holiday (${holidays[md]})`;
+                    }
+                    
+                    const tomorrow = new Date(timestamp + 24 * 60 * 60 * 1000);
+                    const tMonth = tomorrow.getMonth() + 1;
+                    const tDate = tomorrow.getDate();
+                    const tMd = `${tMonth.toString().padStart(2, '0')}-${tDate.toString().padStart(2, '0')}`;
+                    if (holidays[tMd]) {
+                      return `Holiday Eve (${holidays[tMd]})`;
+                    }
+                    
+                    return null;
+                  };
 
-                {/* Correction Reviews Section */}
-                <div className="mt-6">
-                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-100 pb-2 mb-3">
-                    <MessageSquare className="w-4 h-4 text-zinc-500" /> Correction Reviews
-                  </h4>
-                  <textarea
-                    value={formData.correctionNotes || ''}
-                    onChange={e => setFormData({ ...formData, correctionNotes: e.target.value })}
-                    placeholder="Log any disciplinary actions, performance corrections, or time card adjustments here..."
-                    rows={4}
-                    className="w-full text-sm border-zinc-300 rounded-md shadow-sm focus:ring-zinc-500 focus:border-zinc-500 p-3 bg-yellow-50/50"
-                  />
-                </div>
+                  if (!formData) return null;
+
+                  const userCards = (localTimeCards || []).filter(c => c.userId === formData.id);
+                  const userRequests = formData.timeOffRequests || [];
+                  const userAuditLogs = formData.attendanceAuditLog || [];
+                  const userWriteUps = formData.disciplinaryWriteUps || [];
+                  
+                  const now = Date.now();
+                  let rangeDays = 30;
+                  if (reviewRange === '60') rangeDays = 60;
+                  else if (reviewRange === '90') rangeDays = 90;
+                  else if (reviewRange === 'yearly') rangeDays = 365;
+                  else if (reviewRange === 'complete') rangeDays = 9999;
+                  
+                  const rangeStart = rangeDays === 9999 ? 0 : now - rangeDays * 24 * 60 * 60 * 1000;
+                  const priorStart = rangeDays === 9999 ? 0 : rangeStart - rangeDays * 24 * 60 * 60 * 1000;
+                  const priorEnd = rangeStart;
+                  
+                  const shiftsWorked = userCards.filter(c => (c.status === 'Complete' || c.status === 'Active') && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                  const sickCards = userCards.filter(c => c.status === 'Sick' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
+                  
+                  // Link No-Call No-Show cards with Clock-In Tardy Protocol 'No_Call_No_Show' audit logs
+                  const rawNoCallCards = userCards.filter(c => c.status === 'No-Call No-Show' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
+                  const noCallAuditLogs = userAuditLogs.filter(l => l.eventType === 'No_Call_No_Show' && (rangeDays === 9999 ? true : l.timestamp >= rangeStart));
+                  const noCallCards = [...rawNoCallCards];
+                  noCallAuditLogs.forEach(log => {
+                    const logDate = log.dateStr || new Date(log.timestamp).toISOString().split('T')[0];
+                    const exists = noCallCards.some(c => new Date(c.clockIn).toISOString().split('T')[0] === logDate);
+                    if (!exists) {
+                      noCallCards.push({
+                        id: log.id,
+                        userId: formData.id,
+                        clockIn: log.timestamp,
+                        status: 'No-Call No-Show',
+                        missedShiftTitle: log.shiftTitle || 'Scheduled Shift',
+                      });
+                    }
+                  });
+
+                  // Link Tardy cards with Clock-In Tardy Protocol events ('Late_Clock_In', '5_Min_Tardy_Alert', '30_Min_No_Response')
+                  const rawTardyCards = userCards.filter(c => (c.status === 'Complete' || c.status === 'Active') && c.minutesLate && c.minutesLate > 0 && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
+                  const tardyProtocolLogsInRange = userAuditLogs.filter(
+                    l => ['Late_Clock_In', '5_Min_Tardy_Alert', 'Tardy_Response', '30_Min_No_Response'].includes(l.eventType) && (rangeDays === 9999 ? true : l.timestamp >= rangeStart)
+                  );
+                  const tardyCards = [...rawTardyCards];
+                  const tardyDatesSeen = new Set(tardyCards.map(c => new Date(c.clockIn).toISOString().split('T')[0]));
+                  userAuditLogs
+                    .filter(l => ['Late_Clock_In', '5_Min_Tardy_Alert', '30_Min_No_Response'].includes(l.eventType) && (rangeDays === 9999 ? true : l.timestamp >= rangeStart))
+                    .forEach(log => {
+                      const logDate = log.dateStr || new Date(log.timestamp).toISOString().split('T')[0];
+                      if (!tardyDatesSeen.has(logDate)) {
+                        tardyDatesSeen.add(logDate);
+                        const lateLogForDay = userAuditLogs.find(l2 => l2.eventType === 'Late_Clock_In' && (l2.dateStr === logDate || new Date(l2.timestamp).toISOString().split('T')[0] === logDate));
+                        const noRespForDay = userAuditLogs.find(l2 => l2.eventType === '30_Min_No_Response' && (l2.dateStr === logDate || new Date(l2.timestamp).toISOString().split('T')[0] === logDate));
+                        tardyCards.push({
+                          id: log.id,
+                          userId: formData.id,
+                          clockIn: lateLogForDay?.timestamp || log.timestamp,
+                          status: 'Complete',
+                          minutesLate: lateLogForDay?.minutesLate || (noRespForDay ? 30 : log.minutesLate || 5),
+                          tardyShiftTitle: lateLogForDay?.shiftTitle || log.shiftTitle || 'Scheduled Shift',
+                        });
+                      }
+                    });
+                  tardyCards.sort((a, b) => b.clockIn - a.clockIn);
+
+                  // Rolling 30-day Tardy Protocol & Strike calculations
+                  const thirtyDaysAgoTs = now - 30 * 24 * 60 * 60 * 1000;
+                  const rolling30DayTardyDates = new Set<string>();
+                  userCards
+                    .filter(c => (c.status === 'Complete' || c.status === 'Active') && c.minutesLate && c.minutesLate > 0 && c.clockIn >= thirtyDaysAgoTs)
+                    .forEach(c => rolling30DayTardyDates.add(new Date(c.clockIn).toISOString().split('T')[0]));
+                  userAuditLogs
+                    .filter(l => ['Late_Clock_In', '5_Min_Tardy_Alert', '30_Min_No_Response'].includes(l.eventType) && l.timestamp >= thirtyDaysAgoTs)
+                    .forEach(l => rolling30DayTardyDates.add(l.dateStr || new Date(l.timestamp).toISOString().split('T')[0]));
+                  const effectiveTardy30Days = Math.max(formData.tardyCount30Days || 0, rolling30DayTardyDates.size);
+                  const computedStrikeFromTardies = effectiveTardy30Days >= 6 ? 3 : effectiveTardy30Days >= 5 ? 2 : effectiveTardy30Days >= 3 ? 1 : 0;
+                  const effectiveStrikeLevel = Math.max(formData.strikeLevel || 0, computedStrikeFromTardies);
+                  const pendingWriteUps = userWriteUps.filter(w => w.status === 'Pending Signature');
+                  const alert5MinCount = tardyProtocolLogsInRange.filter(l => l.eventType === '5_Min_Tardy_Alert').length;
+                  const dmResponseCount = tardyProtocolLogsInRange.filter(l => l.eventType === 'Tardy_Response').length;
+                  const noResponse30MinCount = tardyProtocolLogsInRange.filter(l => l.eventType === '30_Min_No_Response').length;
+
+                  const timeOffRequests = userRequests.filter(req => {
+                    const t = req.submittedAt || new Date(req.startDate).getTime();
+                    return rangeDays === 9999 ? true : (t >= rangeStart && t < now);
+                  });
+
+                  const priorSick = userCards.filter(c => c.status === 'Sick' && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
+                  const priorNoCall = userCards.filter(c => c.status === 'No-Call No-Show' && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
+                  const priorTardys = userCards.filter(c => (c.status === 'Complete' || c.status === 'Active') && c.minutesLate && c.minutesLate > 0 && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
+                  const priorTimeOff = userRequests.filter(req => {
+                    const t = req.submittedAt || new Date(req.startDate).getTime();
+                    return t >= priorStart && t < priorEnd;
+                  }).length;
+
+                  const teamStats = (() => {
+                    const teamUserIds = users.length > 0 ? users.map(u => u.id) : Array.from(new Set(localTimeCards.map(c => c.userId)));
+                    let totalShifts = 0;
+                    let totalSick = 0;
+                    let totalNoCall = 0;
+                    let totalTardys = 0;
+                    let totalTimeOff = 0;
+
+                    teamUserIds.forEach(uid => {
+                      const uCards = localTimeCards.filter(c => c.userId === uid);
+                      const uShifts = uCards.filter(c => c.status === 'Complete' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                      const uSick = uCards.filter(c => c.status === 'Sick' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                      const uNoCall = uCards.filter(c => c.status === 'No-Call No-Show' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                      const uTardys = uCards.filter(c => c.status === 'Complete' && c.minutesLate && c.minutesLate > 0 && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+
+                      const uObj = users.find(u => u.id === uid) || (uid === formData.id ? formData : null);
+                      const uRequests = uObj?.timeOffRequests || [];
+                      const uTimeOff = uRequests.filter(req => {
+                        const t = req.submittedAt || new Date(req.startDate).getTime();
+                        return rangeDays === 9999 ? true : (t >= rangeStart && t < now);
+                      }).length;
+
+                      totalShifts += uShifts;
+                      totalSick += uSick;
+                      totalNoCall += uNoCall;
+                      totalTardys += uTardys;
+                      totalTimeOff += uTimeOff;
+                    });
+
+                    return {
+                      sickRate: totalShifts + totalSick > 0 ? totalSick / (totalShifts + totalSick) : 0,
+                      tardyRate: totalShifts > 0 ? totalTardys / totalShifts : 0,
+                      noCallRate: totalShifts + totalNoCall > 0 ? totalNoCall / (totalShifts + totalNoCall) : 0,
+                      timeOffRate: totalShifts + totalTimeOff > 0 ? totalTimeOff / (totalShifts + totalTimeOff) : 0,
+                    };
+                  })();
+
+                  const userSickRate = shiftsWorked + sickCards.length > 0 ? sickCards.length / (shiftsWorked + sickCards.length) : 0;
+                  const userTardyRate = shiftsWorked > 0 ? tardyCards.length / shiftsWorked : 0;
+                  const userNoCallRate = shiftsWorked + noCallCards.length > 0 ? noCallCards.length / (shiftsWorked + noCallCards.length) : 0;
+                  const userTimeOffRate = shiftsWorked + timeOffRequests.length > 0 ? timeOffRequests.length / (shiftsWorked + timeOffRequests.length) : 0;
+
+                  const reliabilityCalculations = (() => {
+                    const teamUserIds = users.length > 0 ? users.map(u => u.id) : Array.from(new Set(localTimeCards.map(c => c.userId)));
+                    let teamTotalShifts = 0;
+                    let teamTotalNoCallPoints = 0;
+                    let teamTotalSickPoints = 0;
+                    let teamTotalTardyPoints = 0;
+                    let teamTotalTimeOffPoints = 0;
+
+                    teamUserIds.forEach(uid => {
+                      const uCards = localTimeCards.filter(c => c.userId === uid);
+                      const uShifts = uCards.filter(c => c.status === 'Complete' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                      
+                      const uNoShowsCount = uCards.filter(c => c.status === 'No-Call No-Show' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
+                      const uNoShowPoints = uNoShowsCount * RELIABILITY_CONFIG.weights.noCallShow;
+
+                      let uSickPoints = 0;
+                      const uSickCards = uCards.filter(c => c.status === 'Sick' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
+                      uSickCards.forEach(c => {
+                        if (c.sickDocumentationProvided) {
+                          uSickPoints += RELIABILITY_CONFIG.weights.sickWithDoc;
+                        } else {
+                          uSickPoints += RELIABILITY_CONFIG.weights.sickNoDoc;
+                          if (isNearWeekendOrHoliday(c.clockIn)) {
+                            uSickPoints += RELIABILITY_CONFIG.weights.weekendHolidaySickPenalty;
+                          }
+                        }
+                      });
+
+                      let uTardyPoints = 0;
+                      const uTardyCards = uCards.filter(c => c.status === 'Complete' && c.minutesLate && c.minutesLate > 0 && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
+                      uTardyCards.forEach(c => {
+                        const mins = c.minutesLate || 0;
+                        uTardyPoints += Math.min(10, Math.ceil(mins / 5)) * RELIABILITY_CONFIG.weights.tardyPer5Min;
+                      });
+
+                      const uObj = users.find(u => u.id === uid) || (uid === formData.id ? formData : null);
+                      const uRequests = uObj?.timeOffRequests || [];
+                      const uTimeOffRequests = uRequests.filter(req => {
+                        const t = req.submittedAt || new Date(req.startDate).getTime();
+                        return rangeDays === 9999 ? true : (t >= rangeStart && t < now);
+                      });
+                      let uTimeOffPoints = 0;
+                      uTimeOffRequests.forEach(req => {
+                        if (req.requestedInAdvance === false) {
+                          uTimeOffPoints += RELIABILITY_CONFIG.weights.unplannedTimeOff;
+                        }
+                      });
+
+                      teamTotalShifts += uShifts;
+                      teamTotalNoCallPoints += uNoShowPoints;
+                      teamTotalSickPoints += uSickPoints;
+                      teamTotalTardyPoints += uTardyPoints;
+                      teamTotalTimeOffPoints += uTimeOffPoints;
+                    });
+
+                    const userNoShowRaw = noCallCards.length * RELIABILITY_CONFIG.weights.noCallShow;
+                    
+                    let userSickRaw = 0;
+                    sickCards.forEach(c => {
+                      if (c.sickDocumentationProvided) {
+                        userSickRaw += RELIABILITY_CONFIG.weights.sickWithDoc;
+                      } else {
+                        userSickRaw += RELIABILITY_CONFIG.weights.sickNoDoc;
+                        if (isNearWeekendOrHoliday(c.clockIn)) {
+                          userSickRaw += RELIABILITY_CONFIG.weights.weekendHolidaySickPenalty;
+                        }
+                      }
+                    });
+
+                    let userTardyRaw = 0;
+                    tardyCards.forEach(c => {
+                      const mins = c.minutesLate || 0;
+                      userTardyRaw += Math.min(10, Math.ceil(mins / 5)) * RELIABILITY_CONFIG.weights.tardyPer5Min;
+                    });
+
+                    let userTimeOffRaw = 0;
+                    timeOffRequests.forEach(req => {
+                      if (req.requestedInAdvance === false) {
+                        userTimeOffRaw += RELIABILITY_CONFIG.weights.unplannedTimeOff;
+                      }
+                    });
+
+                    const S_user = Math.max(1, shiftsWorked);
+                    const S_team = Math.max(1, teamTotalShifts);
+
+                    const R_user_noshow = userNoShowRaw / S_user;
+                    const R_team_noshow = teamTotalNoCallPoints / S_team;
+
+                    const R_user_sick = userSickRaw / S_user;
+                    const R_team_sick = teamTotalSickPoints / S_team;
+
+                    const R_user_tardy = userTardyRaw / S_user;
+                    const R_team_tardy = teamTotalTardyPoints / S_team;
+
+                    const R_user_timeoff = userTimeOffRaw / S_user;
+                    const R_team_timeoff = teamTotalTimeOffPoints / S_team;
+
+                    const getComparisonFactor = (userRate: number, teamRate: number) => {
+                      return Math.min(2.0, Math.max(0.5, (userRate + 0.5) / (teamRate + 0.5)));
+                    };
+
+                    const C_noshow = getComparisonFactor(R_user_noshow, R_team_noshow);
+                    const C_sick = getComparisonFactor(R_user_sick, R_team_sick);
+                    const C_tardy = getComparisonFactor(R_user_tardy, R_team_tardy);
+                    const C_timeoff = getComparisonFactor(R_user_timeoff, R_team_timeoff);
+
+                    const noCallDeduction = userNoShowRaw * (10 / S_user) * C_noshow;
+                    const sickDeduction = userSickRaw * (10 / S_user) * C_sick;
+                    const tardyDeduction = userTardyRaw * (10 / S_user) * C_tardy;
+                    const timeOffDeduction = userTimeOffRaw * (10 / S_user) * C_timeoff;
+
+                    const displayNoCall = Math.round(noCallDeduction * 10) / 10;
+                    const displaySick = Math.round(sickDeduction * 10) / 10;
+                    const displayTardy = Math.round(tardyDeduction * 10) / 10;
+                    const displayTimeOff = Math.round(timeOffDeduction * 10) / 10;
+
+                    const totalDeductions = displayNoCall + displaySick + displayTardy + displayTimeOff;
+                    const finalScore = Math.max(0, Math.min(100, Math.round(100 - totalDeductions)));
+
+                    let rating: 'Excellent' | 'Good' | 'Needs Attention' | 'At Risk' = 'Excellent';
+                    let ratingColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+                    if (finalScore >= 90) {
+                      rating = 'Excellent';
+                      ratingColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+                    } else if (finalScore >= 75) {
+                      rating = 'Good';
+                      ratingColor = 'text-teal-700 bg-teal-50 border-teal-200';
+                    } else if (finalScore >= 55) {
+                      rating = 'Needs Attention';
+                      ratingColor = 'text-amber-700 bg-amber-50 border-amber-200';
+                    } else {
+                      rating = 'At Risk';
+                      ratingColor = 'text-rose-700 bg-rose-50 border-rose-200';
+                    }
+
+                    return {
+                      score: finalScore,
+                      rating,
+                      ratingColor,
+                      deductions: {
+                        noCall: displayNoCall,
+                        sick: displaySick,
+                        tardy: displayTardy,
+                        timeOff: displayTimeOff
+                      }
+                    };
+                  })();
+
+                  const warningBanners = (() => {
+                    const banners: string[] = [];
+                    const suffix = rangeDays === 9999 ? 'all-time' : `last ${rangeDays} days`;
+                    
+                    if (noCallCards.length >= RELIABILITY_CONFIG.thresholds.noCallShows) {
+                      banners.push(`⚠ ${noCallCards.length} no-shows in ${suffix} — review before assigning to upcoming events.`);
+                    }
+                    if (tardyCards.length >= RELIABILITY_CONFIG.thresholds.tardys) {
+                      banners.push(`⚠ ${tardyCards.length} tardys in ${suffix} — check shift alignment/punctuality.`);
+                    }
+                    const undocumentedSick = sickCards.filter(c => !c.sickDocumentationProvided).length;
+                    if (undocumentedSick >= RELIABILITY_CONFIG.thresholds.undocumentedSick) {
+                      banners.push(`⚠ ${undocumentedSick} undocumented sick call-ins in ${suffix} — verify documentation policy compliance.`);
+                    }
+                    return banners;
+                  })();
+
+                  const getTrendIndicator = (current: number, prior: number) => {
+                    if (rangeDays === 9999) return null;
+                    if (prior === 0) {
+                      return current === 0 ? null : { text: `+${current}`, isWorse: true };
+                    }
+                    const pct = Math.round(((current - prior) / prior) * 100);
+                    if (pct === 0) return null;
+                    return {
+                      text: pct > 0 ? `↑ ${pct}%` : `↓ ${Math.abs(pct)}%`,
+                      isWorse: pct > 0
+                    };
+                  };
+
+                  const getBaselineDiffText = (userVal: number, teamVal: number) => {
+                    const diff = (userVal - teamVal) * 100;
+                    if (Math.abs(diff) < 0.1) return 'Matches team average';
+                    const formatted = Math.abs(diff).toFixed(1) + '%';
+                    if (diff > 0) {
+                      return `${formatted} above team average`;
+                    } else {
+                      return `${formatted} below team average`;
+                    }
+                  };
+
+                  return (
+                    <div className="mt-6">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-2 mb-3">
+                        <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                          <ClipboardCheck className="w-4 h-4 text-zinc-500" /> Review
+                        </h4>
+                        <div className="flex border border-zinc-200 rounded-lg overflow-hidden w-fit bg-white shadow-sm">
+                          {(['30', '60', '90', 'yearly', 'complete'] as const).map(range => (
+                            <button
+                              key={range}
+                              type="button"
+                              onClick={() => {
+                                setReviewRange(range);
+                                setActiveDrilldown(null);
+                              }}
+                              className={`px-2.5 py-1 text-[10px] font-bold transition-colors ${
+                                reviewRange === range
+                                  ? 'bg-zinc-900 text-white'
+                                  : 'text-zinc-600 hover:bg-zinc-50'
+                              }`}
+                            >
+                              {range === '30' && '30 Days'}
+                              {range === '60' && '60 Days'}
+                              {range === '90' && '90 Days'}
+                              {range === 'yearly' && 'Yearly'}
+                              {range === 'complete' && 'All'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 pl-6">
+                        {/* Reliability Banner */}
+                        <div className="bg-zinc-900 text-white border border-zinc-800 rounded-xl p-4 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 shadow-md">
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Reliability</span>
+                            <div className="flex flex-wrap items-center gap-2.5">
+                              <span className="text-2xl font-extrabold">{reliabilityCalculations.score}/100</span>
+                              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${reliabilityCalculations.ratingColor.replace('bg-', 'bg-white/10 ').replace('text-', 'text-')}`}>
+                                {reliabilityCalculations.rating}
+                              </span>
+                              {shiftsWorked < RELIABILITY_CONFIG.thresholds.lowSampleSizeShifts && (
+                                <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/35 px-2 py-0.5 rounded-full shrink-0 animate-pulse">
+                                  ⚠ Limited data ({shiftsWorked} shifts)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-zinc-400 pt-0.5 leading-snug">
+                              Weighted score based on punctuality, undocumented sick absences, and unplanned time off.
+                            </p>
+                          </div>
+                          
+                          {/* Mini breakdown of deductions & shift count */}
+                          <div className="flex gap-3 shrink-0 text-center text-xs border-t xl:border-t-0 xl:border-l border-zinc-800 pt-2.5 xl:pt-0 xl:pl-4 w-full xl:w-auto justify-between xl:justify-end">
+                            <div className="border-r border-zinc-800 pr-3">
+                              <div className="text-[9px] text-zinc-300 font-bold uppercase">Shifts</div>
+                              <div className="font-bold text-zinc-300">{shiftsWorked}</div>
+                            </div>
+                            <div>
+                              <div className="text-[9px] text-zinc-500 font-bold uppercase">No-Show</div>
+                              <div className={`font-semibold ${reliabilityCalculations.deductions.noCall > 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                                -{reliabilityCalculations.deductions.noCall}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[9px] text-zinc-500 font-bold uppercase">Sick</div>
+                              <div className={`font-semibold ${reliabilityCalculations.deductions.sick > 0 ? 'text-amber-400' : 'text-zinc-500'}`}>
+                                -{reliabilityCalculations.deductions.sick}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[9px] text-zinc-500 font-bold uppercase">Tardy</div>
+                              <div className={`font-semibold ${reliabilityCalculations.deductions.tardy > 0 ? 'text-indigo-400' : 'text-zinc-500'}`}>
+                                -{reliabilityCalculations.deductions.tardy}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[9px] text-zinc-500 font-bold uppercase">Time Off</div>
+                              <div className={`font-semibold ${reliabilityCalculations.deductions.timeOff > 0 ? 'text-blue-400' : 'text-zinc-500'}`}>
+                                -{reliabilityCalculations.deductions.timeOff}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Clock-In Tardy Protocol Status & Action Bar */}
+                        <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex flex-col gap-2.5 shadow-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] font-black text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                                Clock-In Tardy Protocol
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                                effectiveStrikeLevel >= 3
+                                  ? 'bg-red-100 text-red-800 border-red-300'
+                                  : effectiveStrikeLevel === 2
+                                  ? 'bg-orange-100 text-orange-800 border-orange-300'
+                                  : effectiveStrikeLevel === 1
+                                  ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}>
+                                Strike {effectiveStrikeLevel}/3
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                {effectiveTardy30Days} {effectiveTardy30Days === 1 ? 'Tardy' : 'Tardies'} (30d)
+                              </span>
+                              {alert5MinCount > 0 && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                  5m Alerts: {alert5MinCount} • Replied: {dmResponseCount}/{alert5MinCount}
+                                </span>
+                              )}
+                              {noResponse30MinCount > 0 && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                  30m No-Resp: {noResponse30MinCount}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {pendingWriteUps.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedWriteUp(pendingWriteUps[0]);
+                                    setShowWriteUpModal(true);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors flex items-center gap-1 animate-pulse"
+                                >
+                                  <PenTool className="w-3 h-3" />
+                                  Sign Pending Write-Up ({pendingWriteUps.length})
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedWriteUp(null);
+                                  setInitialWriteUpCategory('Excessive Tardiness');
+                                  setInitialWriteUpIncidentDate(new Date().toISOString().split('T')[0]);
+                                  setInitialWriteUpShiftTitle('');
+                                  setInitialWriteUpDescription(
+                                    effectiveTardy30Days > 0
+                                      ? `Employee has accumulated ${effectiveTardy30Days} tardy clock-ins within the rolling 30-day window (Strike ${Math.max(1, effectiveStrikeLevel)}/3 threshold).`
+                                      : ''
+                                  );
+                                  setShowWriteUpModal(true);
+                                }}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors"
+                              >
+                                + Tardy Write-Up
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedWriteUp(null);
+                                  setInitialWriteUpCategory('Failure to Communicate');
+                                  setInitialWriteUpIncidentDate(new Date().toISOString().split('T')[0]);
+                                  setInitialWriteUpShiftTitle('');
+                                  setInitialWriteUpDescription('');
+                                  setShowWriteUpModal(true);
+                                }}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-colors"
+                              >
+                                + No-Comm Write-Up
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-zinc-500 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200/70 pt-1.5">
+                            <span>Protocol thresholds (rolling 30d): <strong>3 tardies = Strike 1</strong> • <strong>5 tardies = Strike 2</strong> • <strong>6+ tardies = Strike 3</strong></span>
+                            <button
+                              type="button"
+                              onClick={() => setActiveDrilldown(activeDrilldown === 'tardy' ? null : 'tardy')}
+                              className="text-indigo-600 hover:text-indigo-800 font-bold underline"
+                            >
+                              {activeDrilldown === 'tardy' ? 'Hide Tardy Protocol Logs' : 'Inspect Tardy Protocol & Audit Logs →'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Warnings Banner Stack */}
+                        {warningBanners.length > 0 && (
+                          <div className="space-y-2">
+                            {warningBanners.map((banner, index) => (
+                              <div key={index} className="bg-rose-50/80 border border-rose-200/60 rounded-xl p-2.5 text-xs text-rose-800 flex items-start gap-2 animate-in slide-in-from-top-1">
+                                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                <span className="font-semibold leading-normal">{banner}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Metric Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {/* Sick Card */}
+                          <div
+                            onClick={() => setActiveDrilldown(activeDrilldown === 'sick' ? null : 'sick')}
+                            className={`bg-white border rounded-xl p-3 flex flex-col justify-between min-h-[96px] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
+                              activeDrilldown === 'sick' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-1">
+                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Sick Call-ins</span>
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            </div>
+                            <div className="mt-1.5 flex items-baseline justify-between">
+                              <span className="text-xl font-black text-zinc-900">{sickCards.length}</span>
+                              {(() => {
+                                const trend = getTrendIndicator(sickCards.length, priorSick);
+                                if (!trend) return null;
+                                return (
+                                  <span className={`text-[9px] font-bold px-1 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
+                                    trend.isWorse ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+                                  }`}>
+                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                                    {trend.text.replace(/[↑↓\s]/g, '')}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div className="mt-1.5 text-[9px] text-zinc-500 space-y-0.5 leading-tight">
+                              <div className="font-semibold">{sickCards.length} / {shiftsWorked} shifts</div>
+                              <div className={`font-medium truncate ${userSickRate > teamStats.sickRate ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                {getBaselineDiffText(userSickRate, teamStats.sickRate)}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Time Off Card */}
+                          <div
+                            onClick={() => setActiveDrilldown(activeDrilldown === 'timeOff' ? null : 'timeOff')}
+                            className={`bg-white border rounded-xl p-3 flex flex-col justify-between min-h-[96px] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
+                              activeDrilldown === 'timeOff' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-1">
+                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Time Off</span>
+                              <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            </div>
+                            <div className="mt-1.5 flex items-baseline justify-between">
+                              <span className="text-xl font-black text-zinc-900">{timeOffRequests.length}</span>
+                              {(() => {
+                                const trend = getTrendIndicator(timeOffRequests.length, priorTimeOff);
+                                if (!trend) return null;
+                                return (
+                                  <span className={`text-[9px] font-bold px-1 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
+                                    trend.isWorse ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+                                  }`}>
+                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                                    {trend.text.replace(/[↑↓\s]/g, '')}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div className="mt-1.5 text-[9px] text-zinc-500 space-y-0.5 leading-tight">
+                              <div className="font-semibold">{timeOffRequests.length} / {shiftsWorked} shifts</div>
+                              <div className={`font-medium truncate ${userTimeOffRate > teamStats.timeOffRate ? 'text-zinc-600' : 'text-emerald-600'}`}>
+                                {getBaselineDiffText(userTimeOffRate, teamStats.timeOffRate)}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* No Call Shows Card */}
+                          <div
+                            onClick={() => setActiveDrilldown(activeDrilldown === 'noCall' ? null : 'noCall')}
+                            className={`bg-white border rounded-xl p-3 flex flex-col justify-between min-h-[96px] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
+                              activeDrilldown === 'noCall' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-1">
+                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">No Call Shows</span>
+                              <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                            </div>
+                            <div className="mt-1.5 flex items-baseline justify-between">
+                              <span className="text-xl font-black text-zinc-900">{noCallCards.length}</span>
+                              {(() => {
+                                const trend = getTrendIndicator(noCallCards.length, priorNoCall);
+                                if (!trend) return null;
+                                return (
+                                  <span className={`text-[9px] font-bold px-1 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
+                                    trend.isWorse ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+                                  }`}>
+                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                                    {trend.text.replace(/[↑↓\s]/g, '')}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div className="mt-1.5 text-[9px] text-zinc-500 space-y-0.5 leading-tight">
+                              <div className="font-semibold">{noCallCards.length} / {shiftsWorked} shifts</div>
+                              <div className={`font-medium truncate ${userNoCallRate > teamStats.noCallRate ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                {getBaselineDiffText(userNoCallRate, teamStats.noCallRate)}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Tardys Card */}
+                          <div
+                            onClick={() => setActiveDrilldown(activeDrilldown === 'tardy' ? null : 'tardy')}
+                            className={`bg-white border rounded-xl p-3 flex flex-col justify-between min-h-[96px] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
+                              activeDrilldown === 'tardy' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-1">
+                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Tardys</span>
+                              <Clock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                            </div>
+                            <div className="mt-1.5 flex items-baseline justify-between">
+                              <span className="text-xl font-black text-zinc-900">{tardyCards.length}</span>
+                              {(() => {
+                                const trend = getTrendIndicator(tardyCards.length, priorTardys);
+                                if (!trend) return null;
+                                return (
+                                  <span className={`text-[9px] font-bold px-1 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
+                                    trend.isWorse ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+                                  }`}>
+                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                                    {trend.text.replace(/[↑↓\s]/g, '')}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div className="mt-1.5 text-[9px] text-zinc-500 space-y-0.5 leading-tight">
+                              <div className="font-semibold">{tardyCards.length} / {shiftsWorked} shifts</div>
+                              <div className={`font-medium truncate ${userTardyRate > teamStats.tardyRate ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                {getBaselineDiffText(userTardyRate, teamStats.tardyRate)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Active Drilldown Section */}
+                        {activeDrilldown && (
+                          <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-inner mt-2 space-y-3 animate-in slide-in-from-bottom-2 duration-200">
+                            {activeDrilldown === 'sick' && (
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
+                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Sick Call-ins Logs ({sickCards.length} instances)</h5>
+                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Toggle status or review weekend patterns</span>
+                                </div>
+                                {sickCards.length === 0 ? (
+                                  <p className="text-xs text-zinc-400 italic">No sick call-ins logged for this period.</p>
+                                ) : (
+                                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                                    {sickCards.map(card => {
+                                      const proxy = isNearWeekendOrHoliday(card.clockIn);
+                                      return (
+                                        <div key={card.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-zinc-50 border border-zinc-150 rounded-lg hover:bg-zinc-100/55 transition-colors">
+                                          <div>
+                                            <div className="text-xs font-bold text-zinc-800">{new Date(card.clockIn).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                                            {card.managerNotes && <div className="text-[10px] text-zinc-500 italic mt-0.5">Note: "{card.managerNotes}"</div>}
+                                          </div>
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            {proxy && (
+                                              <span className="text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded flex items-center gap-1 shrink-0">
+                                                ⚠️ {proxy}
+                                              </span>
+                                            )}
+                                            <button
+                                              type="button"
+                                              onClick={() => handleToggleSickDoc(card.id)}
+                                              className={`text-[9px] font-bold px-2 py-1 rounded border transition-all ${
+                                                card.sickDocumentationProvided
+                                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/70'
+                                                  : 'bg-zinc-100 border-zinc-300 text-zinc-700 hover:bg-zinc-200/80'
+                                              }`}
+                                            >
+                                              {card.sickDocumentationProvided ? '✓ Document Provided' : '+ Add Documentation'}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {activeDrilldown === 'timeOff' && (
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
+                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Time Off Requests Log ({timeOffRequests.length} instances)</h5>
+                                </div>
+                                {timeOffRequests.length === 0 ? (
+                                  <p className="text-xs text-zinc-400 italic">No time off requests recorded for this period.</p>
+                                ) : (
+                                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                                    {timeOffRequests.map(req => {
+                                      const isPlanned = req.requestedInAdvance !== false;
+                                      return (
+                                        <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-zinc-50 border border-zinc-150 rounded-lg">
+                                          <div>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs font-bold text-zinc-850">
+                                                {new Date(req.startDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                {req.startDate !== req.endDate && ` - ${new Date(req.endDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                                              </span>
+                                              <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-zinc-200 text-zinc-700 tracking-wider">
+                                                {req.category || 'Vacation'}
+                                              </span>
+                                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                                req.status === 'Approved' ? 'bg-emerald-50 text-emerald-700' : req.status === 'Pending' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
+                                              }`}>
+                                                {req.status}
+                                              </span>
+                                            </div>
+                                            <div className="text-[10px] text-zinc-500 mt-1">Reason: "{req.reason || 'None specified'}"</div>
+                                          </div>
+                                          <div className="shrink-0">
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                              isPlanned
+                                                ? 'bg-blue-50 border-blue-100 text-blue-700'
+                                                : 'bg-rose-50 border-rose-100 text-rose-700'
+                                            }`}>
+                                              {isPlanned ? 'Notice Provided' : 'Last-Minute Request'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {activeDrilldown === 'noCall' && (
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
+                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">No Call Shows Log ({noCallCards.length} instances)</h5>
+                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Log coverage & protocol write-ups</span>
+                                </div>
+                                {noCallCards.length === 0 ? (
+                                  <p className="text-xs text-zinc-400 italic">No-shows logged for this period.</p>
+                                ) : (
+                                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                                    {noCallCards.map(card => {
+                                      const cardDateStr = new Date(card.clockIn).toISOString().split('T')[0];
+                                      const linkedWriteUp = userWriteUps.find(w => w.incidentDate === cardDateStr);
+                                      return (
+                                        <div key={card.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-zinc-50 border border-zinc-150 rounded-lg hover:bg-zinc-100/55 transition-colors">
+                                          <div>
+                                            <div className="text-xs font-bold text-zinc-800">{new Date(card.clockIn).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                                            <div className="text-[10px] text-red-500 font-bold mt-0.5">Missed Shift: {card.missedShiftTitle || 'Not specified'}</div>
+                                          </div>
+                                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                            <span className="text-[10px] text-zinc-500 font-semibold">Coverage:</span>
+                                            <select
+                                              value={card.coveredByUserId || ''}
+                                              onChange={(e) => handleUpdateNoCallCover(card.id, e.target.value)}
+                                              className="text-[10px] font-medium border-zinc-300 rounded bg-white py-0.5 px-2 focus:ring-zinc-500 focus:border-zinc-300"
+                                            >
+                                              <option value="">No cover logged</option>
+                                              {users.filter(u => u.id !== formData.id).map(u => (
+                                                <option key={u.id} value={u.id}>Covered by {u.name}</option>
+                                              ))}
+                                            </select>
+                                            {linkedWriteUp ? (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setSelectedWriteUp(linkedWriteUp);
+                                                  setShowWriteUpModal(true);
+                                                }}
+                                                className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border transition-colors ${
+                                                  linkedWriteUp.status === 'Pending Signature'
+                                                    ? 'bg-amber-100 border-amber-300 text-amber-900 hover:bg-amber-200'
+                                                    : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                                }`}
+                                              >
+                                                {linkedWriteUp.status === 'Pending Signature' ? '✍️ Sign Write-Up' : '✓ Signed Write-Up'}
+                                              </button>
+                                            ) : (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setSelectedWriteUp(null);
+                                                  setInitialWriteUpCategory('No-Call No-Show');
+                                                  setInitialWriteUpIncidentDate(cardDateStr);
+                                                  setInitialWriteUpShiftTitle(card.missedShiftTitle || 'Scheduled Shift');
+                                                  setInitialWriteUpDescription(`Employee did not arrive or communicate for scheduled shift (${card.missedShiftTitle || 'Scheduled Shift'}) on ${cardDateStr}.`);
+                                                  setShowWriteUpModal(true);
+                                                }}
+                                                className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors"
+                                              >
+                                                + Issue Write-Up
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {activeDrilldown === 'tardy' && (
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
+                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Tardys & Protocol Log ({tardyCards.length} instances)</h5>
+                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Linked to Clock-In Tardy Protocol</span>
+                                </div>
+                                {tardyCards.length === 0 && tardyProtocolLogsInRange.length === 0 ? (
+                                  <p className="text-xs text-zinc-400 italic">No tardy clock-ins or protocol alerts logged for this period.</p>
+                                ) : (
+                                  <div className="space-y-3">
+                                    {(() => {
+                                      const dayCounts: Record<string, number> = {};
+                                      const shiftCounts: Record<string, number> = {};
+                                      
+                                      tardyCards.forEach(c => {
+                                        const dateVal = new Date(c.clockIn);
+                                        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dateVal.getDay()];
+                                        dayCounts[dayName] = (dayCounts[dayName] || 0) + 1;
+                                        
+                                        const shift = c.tardyShiftTitle || 'Default Shift';
+                                        shiftCounts[shift] = (shiftCounts[shift] || 0) + 1;
+                                      });
+                                      
+                                      const peakDays = Object.entries(dayCounts).filter(([_, count]) => count >= 2).map(([day]) => day);
+                                      const peakShifts = Object.entries(shiftCounts).filter(([name, count]) => name !== 'Default Shift' && count >= 2).map(([name]) => name);
+                                      
+                                      if (peakDays.length === 0 && peakShifts.length === 0) return null;
+                                      return (
+                                        <div className="p-2.5 bg-indigo-50/60 border border-indigo-100 rounded-lg text-[11px] text-indigo-950 space-y-1">
+                                          <div className="font-bold flex items-center gap-1">
+                                            <AlertCircle className="w-3.5 h-3.5 text-indigo-600" />
+                                            Punctuality Cluster Alert
+                                          </div>
+                                          {peakDays.length > 0 && <div>• Repeated tardiness clustered on: <span className="font-bold">{peakDays.join(', ')}s</span>.</div>}
+                                          {peakShifts.length > 0 && <div>• Repeated tardiness clustered during: <span className="font-bold">{peakShifts.join(', ')}</span>.</div>}
+                                        </div>
+                                      );
+                                    })()}
+                                    
+                                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                                      {tardyCards.map(card => {
+                                        const isHighTardy = (card.minutesLate || 0) >= 30;
+                                        const isMidTardy = (card.minutesLate || 0) > 10 && (card.minutesLate || 0) < 30;
+                                        const cardDateStr = new Date(card.clockIn).toISOString().split('T')[0];
+                                        const dayProtocolLogs = userAuditLogs.filter(
+                                          l => (l.dateStr || new Date(l.timestamp).toISOString().split('T')[0]) === cardDateStr
+                                        );
+                                        const has5MinAlert = dayProtocolLogs.some(l => l.eventType === '5_Min_Tardy_Alert');
+                                        const dmResponseLog = dayProtocolLogs.find(l => l.eventType === 'Tardy_Response');
+                                        const has30MinNoResp = dayProtocolLogs.some(l => l.eventType === '30_Min_No_Response');
+                                        const linkedWriteUp = userWriteUps.find(w => w.incidentDate === cardDateStr);
+                                        
+                                        return (
+                                          <div key={card.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-zinc-50 border border-zinc-150 rounded-lg">
+                                            <div>
+                                              <div className="flex flex-wrap items-center gap-1.5">
+                                                <span className="text-xs font-bold text-zinc-800">
+                                                  {new Date(card.clockIn).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                                                </span>
+                                                {has5MinAlert && (
+                                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                                                    5m Alert Sent
+                                                  </span>
+                                                )}
+                                                {dmResponseLog && (
+                                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                    DM Replied{dmResponseLog.responseLatencyMinutes !== undefined ? ` (${dmResponseLog.responseLatencyMinutes}m)` : ''}
+                                                  </span>
+                                                )}
+                                                {has30MinNoResp && (
+                                                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-200">
+                                                    30m No Response
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div className="text-[10px] text-zinc-500 mt-0.5">
+                                                Shift: {card.tardyShiftTitle || 'Not specified'}
+                                                {dmResponseLog?.responseText && (
+                                                  <span className="ml-2 italic text-zinc-600">• Reply: "{dmResponseLog.responseText}"</span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <div className="shrink-0 flex flex-wrap items-center gap-1.5">
+                                              <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                                                isHighTardy
+                                                  ? 'bg-rose-50 border-rose-200 text-rose-700 font-extrabold'
+                                                  : isMidTardy
+                                                  ? 'bg-amber-50 border-amber-200 text-amber-700'
+                                                  : 'bg-zinc-100 border-zinc-200 text-zinc-650'
+                                              }`}>
+                                                {card.minutesLate} mins late
+                                              </span>
+                                              {linkedWriteUp ? (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setSelectedWriteUp(linkedWriteUp);
+                                                    setShowWriteUpModal(true);
+                                                  }}
+                                                  className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border transition-colors ${
+                                                    linkedWriteUp.status === 'Pending Signature'
+                                                      ? 'bg-amber-100 border-amber-300 text-amber-900 hover:bg-amber-200'
+                                                      : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                                  }`}
+                                                >
+                                                  {linkedWriteUp.status === 'Pending Signature' ? '✍️ Sign Write-Up' : '✓ Signed Write-Up'}
+                                                </button>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setSelectedWriteUp(null);
+                                                    setInitialWriteUpCategory(has30MinNoResp ? 'Failure to Communicate' : 'Excessive Tardiness');
+                                                    setInitialWriteUpIncidentDate(cardDateStr);
+                                                    setInitialWriteUpShiftTitle(card.tardyShiftTitle || 'Scheduled Shift');
+                                                    setInitialWriteUpDescription(
+                                                      has30MinNoResp
+                                                        ? `Employee was ${card.minutesLate} minutes late for ${card.tardyShiftTitle || 'scheduled shift'} on ${cardDateStr} and failed to respond to the 5-minute tardy DM check-in within 30 minutes.`
+                                                        : `Employee clocked in ${card.minutesLate} minutes late for ${card.tardyShiftTitle || 'scheduled shift'} on ${cardDateStr}.`
+                                                    );
+                                                    setShowWriteUpModal(true);
+                                                  }}
+                                                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors"
+                                                >
+                                                  + Write-Up
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </section>
             )}
           </div>
 
           {/* Remaining sections below the split top layout */}
-          {viewerHasPermission('manage_users') && (
+          {canManageTarget && (
             <>
               {/* Master iPad Digital Write-Ups & Automated Attendance Audit Vault (Manager Only) */}
               <div className="mt-4">
@@ -872,803 +1867,60 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
                 )}
               </div>
 
-              {/* Review Section */}
-              {(() => {
-                // Proximity helper
-                const isNearWeekendOrHoliday = (timestamp: number) => {
-                  const d = new Date(timestamp);
-                  const day = d.getDay();
-                  // 0 = Sun, 1 = Mon, 5 = Fri, 6 = Sat
-                  if (day === 0 || day === 1 || day === 5 || day === 6) {
-                    const dayNames = ['Sunday', 'Monday', 'Unknown', 'Unknown', 'Unknown', 'Friday', 'Saturday'];
-                    return `Weekend (${dayNames[day]})`;
-                  }
-                  
-                  // Basic holidays in US (simplified check by MM-DD)
-                  const month = d.getMonth() + 1; // 1-12
-                  const date = d.getDate();
-                  const md = `${month.toString().padStart(2, '0')}-${date.toString().padStart(2, '0')}`;
-                  
-                  const holidays: Record<string, string> = {
-                    '01-01': "New Year's Day",
-                    '07-04': 'Independence Day',
-                    '11-25': 'Thanksgiving',
-                    '11-26': 'Black Friday',
-                    '12-24': 'Christmas Eve',
-                    '12-25': 'Christmas Day',
-                    '12-31': "New Year's Eve",
-                  };
-                  
-                  if (holidays[md]) {
-                    return `Holiday (${holidays[md]})`;
-                  }
-                  
-                  // Check day before/after holiday
-                  const tomorrow = new Date(timestamp + 24 * 60 * 60 * 1000);
-                  const tMonth = tomorrow.getMonth() + 1;
-                  const tDate = tomorrow.getDate();
-                  const tMd = `${tMonth.toString().padStart(2, '0')}-${tDate.toString().padStart(2, '0')}`;
-                  if (holidays[tMd]) {
-                    return `Holiday Eve (${holidays[tMd]})`;
-                  }
-                  
-                  return null;
-                };
+              {/* Documents Accordion Section */}
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowDocumentsDropdown(!showDocumentsDropdown)}
+                  className="w-full flex items-center gap-2 border-b border-zinc-100 pb-2 text-left hover:opacity-85 transition-all"
+                >
+                  {showDocumentsDropdown ? (
+                    <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
+                  )}
+                  <FileText className="w-4 h-4 text-zinc-500 shrink-0" />
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">
+                    Documents ({(formData.onboardingDocuments || []).length})
+                  </span>
+                </button>
 
-                if (!formData) return null;
-
-                const userCards = (localTimeCards || []).filter(c => c.userId === formData.id);
-                const userRequests = formData.timeOffRequests || [];
-                
-                const now = Date.now();
-                let rangeDays = 30;
-                if (reviewRange === '60') rangeDays = 60;
-                else if (reviewRange === '90') rangeDays = 90;
-                else if (reviewRange === 'yearly') rangeDays = 365;
-                else if (reviewRange === 'complete') rangeDays = 9999;
-                
-                const rangeStart = rangeDays === 9999 ? 0 : now - rangeDays * 24 * 60 * 60 * 1000;
-                const priorStart = rangeDays === 9999 ? 0 : rangeStart - rangeDays * 24 * 60 * 60 * 1000;
-                const priorEnd = rangeStart;
-                
-                // Active range filters
-                const shiftsWorked = userCards.filter(c => c.status === 'Complete' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
-                const sickCards = userCards.filter(c => c.status === 'Sick' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
-                const noCallCards = userCards.filter(c => c.status === 'No-Call No-Show' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
-                const tardyCards = userCards.filter(c => c.status === 'Complete' && c.minutesLate && c.minutesLate > 0 && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
-                const timeOffRequests = userRequests.filter(req => {
-                  const t = req.submittedAt || new Date(req.startDate).getTime();
-                  return rangeDays === 9999 ? true : (t >= rangeStart && t < now);
-                });
-
-                // Prior range filters (for trend indicator)
-                const priorShifts = userCards.filter(c => c.status === 'Complete' && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
-                const priorSick = userCards.filter(c => c.status === 'Sick' && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
-                const priorNoCall = userCards.filter(c => c.status === 'No-Call No-Show' && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
-                const priorTardys = userCards.filter(c => c.status === 'Complete' && c.minutesLate && c.minutesLate > 0 && c.clockIn >= priorStart && c.clockIn < priorEnd).length;
-                const priorTimeOff = userRequests.filter(req => {
-                  const t = req.submittedAt || new Date(req.startDate).getTime();
-                  return t >= priorStart && t < priorEnd;
-                }).length;
-
-                // Team calculations
-                const teamStats = (() => {
-                  const teamUserIds = users.length > 0 ? users.map(u => u.id) : Array.from(new Set(localTimeCards.map(c => c.userId)));
-                  let totalShifts = 0;
-                  let totalSick = 0;
-                  let totalNoCall = 0;
-                  let totalTardys = 0;
-                  let totalTimeOff = 0;
-
-                  teamUserIds.forEach(uid => {
-                    const uCards = localTimeCards.filter(c => c.userId === uid);
-                    const uShifts = uCards.filter(c => c.status === 'Complete' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
-                    const uSick = uCards.filter(c => c.status === 'Sick' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
-                    const uNoCall = uCards.filter(c => c.status === 'No-Call No-Show' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
-                    const uTardys = uCards.filter(c => c.status === 'Complete' && c.minutesLate && c.minutesLate > 0 && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
-
-                    const uObj = users.find(u => u.id === uid) || (uid === formData.id ? formData : null);
-                    const uRequests = uObj?.timeOffRequests || [];
-                    const uTimeOff = uRequests.filter(req => {
-                      const t = req.submittedAt || new Date(req.startDate).getTime();
-                      return rangeDays === 9999 ? true : (t >= rangeStart && t < now);
-                    }).length;
-
-                    totalShifts += uShifts;
-                    totalSick += uSick;
-                    totalNoCall += uNoCall;
-                    totalTardys += uTardys;
-                    totalTimeOff += uTimeOff;
-                  });
-
-                  return {
-                    sickRate: totalShifts + totalSick > 0 ? totalSick / (totalShifts + totalSick) : 0,
-                    tardyRate: totalShifts > 0 ? totalTardys / totalShifts : 0,
-                    noCallRate: totalShifts + totalNoCall > 0 ? totalNoCall / (totalShifts + totalNoCall) : 0,
-                    timeOffRate: totalShifts + totalTimeOff > 0 ? totalTimeOff / (totalShifts + totalTimeOff) : 0,
-                  };
-                })();
-
-                // User rates
-                const userSickRate = shiftsWorked + sickCards.length > 0 ? sickCards.length / (shiftsWorked + sickCards.length) : 0;
-                const userTardyRate = shiftsWorked > 0 ? tardyCards.length / shiftsWorked : 0;
-                const userNoCallRate = shiftsWorked + noCallCards.length > 0 ? noCallCards.length / (shiftsWorked + noCallCards.length) : 0;
-                const userTimeOffRate = shiftsWorked + timeOffRequests.length > 0 ? timeOffRequests.length / (shiftsWorked + timeOffRequests.length) : 0;
-
-                // Reliability calculations
-                const reliabilityCalculations = (() => {
-                  // Calculate team totals in selected period
-                  const teamUserIds = users.length > 0 ? users.map(u => u.id) : Array.from(new Set(localTimeCards.map(c => c.userId)));
-                  let teamTotalShifts = 0;
-                  let teamTotalNoCallPoints = 0;
-                  let teamTotalSickPoints = 0;
-                  let teamTotalTardyPoints = 0;
-                  let teamTotalTimeOffPoints = 0;
-
-                  teamUserIds.forEach(uid => {
-                    const uCards = localTimeCards.filter(c => c.userId === uid);
-                    const uShifts = uCards.filter(c => c.status === 'Complete' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
-                    
-                    // No-shows points
-                    const uNoShowsCount = uCards.filter(c => c.status === 'No-Call No-Show' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart)).length;
-                    const uNoShowPoints = uNoShowsCount * RELIABILITY_CONFIG.weights.noCallShow;
-
-                    // Sick points
-                    let uSickPoints = 0;
-                    const uSickCards = uCards.filter(c => c.status === 'Sick' && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
-                    uSickCards.forEach(c => {
-                      if (c.sickDocumentationProvided) {
-                        uSickPoints += RELIABILITY_CONFIG.weights.sickWithDoc;
-                      } else {
-                        uSickPoints += RELIABILITY_CONFIG.weights.sickNoDoc;
-                        if (isNearWeekendOrHoliday(c.clockIn)) {
-                          uSickPoints += RELIABILITY_CONFIG.weights.weekendHolidaySickPenalty;
-                        }
-                      }
-                    });
-
-                    // Tardy points
-                    let uTardyPoints = 0;
-                    const uTardyCards = uCards.filter(c => c.status === 'Complete' && c.minutesLate && c.minutesLate > 0 && (rangeDays === 9999 ? true : c.clockIn >= rangeStart));
-                    uTardyCards.forEach(c => {
-                      const mins = c.minutesLate || 0;
-                      uTardyPoints += Math.min(10, Math.ceil(mins / 5)) * RELIABILITY_CONFIG.weights.tardyPer5Min;
-                    });
-
-                    // Time off points (unplanned)
-                    const uObj = users.find(u => u.id === uid) || (uid === formData.id ? formData : null);
-                    const uRequests = uObj?.timeOffRequests || [];
-                    const uTimeOffRequests = uRequests.filter(req => {
-                      const t = req.submittedAt || new Date(req.startDate).getTime();
-                      return rangeDays === 9999 ? true : (t >= rangeStart && t < now);
-                    });
-                    let uTimeOffPoints = 0;
-                    uTimeOffRequests.forEach(req => {
-                      if (req.requestedInAdvance === false) {
-                        uTimeOffPoints += RELIABILITY_CONFIG.weights.unplannedTimeOff;
-                      }
-                    });
-
-                    teamTotalShifts += uShifts;
-                    teamTotalNoCallPoints += uNoShowPoints;
-                    teamTotalSickPoints += uSickPoints;
-                    teamTotalTardyPoints += uTardyPoints;
-                    teamTotalTimeOffPoints += uTimeOffPoints;
-                  });
-
-                  // User raw points
-                  const userNoShowRaw = noCallCards.length * RELIABILITY_CONFIG.weights.noCallShow;
-                  
-                  let userSickRaw = 0;
-                  sickCards.forEach(c => {
-                    if (c.sickDocumentationProvided) {
-                      userSickRaw += RELIABILITY_CONFIG.weights.sickWithDoc;
-                    } else {
-                      userSickRaw += RELIABILITY_CONFIG.weights.sickNoDoc;
-                      if (isNearWeekendOrHoliday(c.clockIn)) {
-                        userSickRaw += RELIABILITY_CONFIG.weights.weekendHolidaySickPenalty;
-                      }
-                    }
-                  });
-
-                  let userTardyRaw = 0;
-                  tardyCards.forEach(c => {
-                    const mins = c.minutesLate || 0;
-                    userTardyRaw += Math.min(10, Math.ceil(mins / 5)) * RELIABILITY_CONFIG.weights.tardyPer5Min;
-                  });
-
-                  let userTimeOffRaw = 0;
-                  timeOffRequests.forEach(req => {
-                    if (req.requestedInAdvance === false) {
-                      userTimeOffRaw += RELIABILITY_CONFIG.weights.unplannedTimeOff;
-                    }
-                  });
-
-                  // Safe divisions to avoid NaN
-                  const S_user = Math.max(1, shiftsWorked);
-                  const S_team = Math.max(1, teamTotalShifts);
-
-                  const R_user_noshow = userNoShowRaw / S_user;
-                  const R_team_noshow = teamTotalNoCallPoints / S_team;
-
-                  const R_user_sick = userSickRaw / S_user;
-                  const R_team_sick = teamTotalSickPoints / S_team;
-
-                  const R_user_tardy = userTardyRaw / S_user;
-                  const R_team_tardy = teamTotalTardyPoints / S_team;
-
-                  const R_user_timeoff = userTimeOffRaw / S_user;
-                  const R_team_timeoff = teamTotalTimeOffPoints / S_team;
-
-                  // Baseline Damped Comparison Factors
-                  const getComparisonFactor = (userRate: number, teamRate: number) => {
-                    return Math.min(2.0, Math.max(0.5, (userRate + 0.5) / (teamRate + 0.5)));
-                  };
-
-                  const C_noshow = getComparisonFactor(R_user_noshow, R_team_noshow);
-                  const C_sick = getComparisonFactor(R_user_sick, R_team_sick);
-                  const C_tardy = getComparisonFactor(R_user_tardy, R_team_tardy);
-                  const C_timeoff = getComparisonFactor(R_user_timeoff, R_team_timeoff);
-
-                  // Normalized Deductions (using a 10-shift reference baseline)
-                  const noCallDeduction = userNoShowRaw * (10 / S_user) * C_noshow;
-                  const sickDeduction = userSickRaw * (10 / S_user) * C_sick;
-                  const tardyDeduction = userTardyRaw * (10 / S_user) * C_tardy;
-                  const timeOffDeduction = userTimeOffRaw * (10 / S_user) * C_timeoff;
-
-                  // Rounded for layout display
-                  const displayNoCall = Math.round(noCallDeduction * 10) / 10;
-                  const displaySick = Math.round(sickDeduction * 10) / 10;
-                  const displayTardy = Math.round(tardyDeduction * 10) / 10;
-                  const displayTimeOff = Math.round(timeOffDeduction * 10) / 10;
-
-                  const totalDeductions = displayNoCall + displaySick + displayTardy + displayTimeOff;
-                  const finalScore = Math.max(0, Math.min(100, Math.round(100 - totalDeductions)));
-
-                  let rating: 'Excellent' | 'Good' | 'Needs Attention' | 'At Risk' = 'Excellent';
-                  let ratingColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
-                  if (finalScore >= 90) {
-                    rating = 'Excellent';
-                    ratingColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
-                  } else if (finalScore >= 75) {
-                    rating = 'Good';
-                    ratingColor = 'text-teal-700 bg-teal-50 border-teal-200';
-                  } else if (finalScore >= 55) {
-                    rating = 'Needs Attention';
-                    ratingColor = 'text-amber-700 bg-amber-50 border-amber-200';
-                  } else {
-                    rating = 'At Risk';
-                    ratingColor = 'text-rose-700 bg-rose-50 border-rose-200';
-                  }
-
-                  return {
-                    score: finalScore,
-                    rating,
-                    ratingColor,
-                    deductions: {
-                      noCall: displayNoCall,
-                      sick: displaySick,
-                      tardy: displayTardy,
-                      timeOff: displayTimeOff
-                    }
-                  };
-                })();
-
-                // Warnings Banner
-                const warningBanners = (() => {
-                  const banners: string[] = [];
-                  const suffix = rangeDays === 9999 ? 'all-time' : `last ${rangeDays} days`;
-                  
-                  if (noCallCards.length >= RELIABILITY_CONFIG.thresholds.noCallShows) {
-                    banners.push(`⚠ ${noCallCards.length} no-shows in ${suffix} — review before assigning to upcoming events.`);
-                  }
-                  if (tardyCards.length >= RELIABILITY_CONFIG.thresholds.tardys) {
-                    banners.push(`⚠ ${tardyCards.length} tardys in ${suffix} — check shift alignment/punctuality.`);
-                  }
-                  const undocumentedSick = sickCards.filter(c => !c.sickDocumentationProvided).length;
-                  if (undocumentedSick >= RELIABILITY_CONFIG.thresholds.undocumentedSick) {
-                    banners.push(`⚠ ${undocumentedSick} undocumented sick call-ins in ${suffix} — verify documentation policy compliance.`);
-                  }
-                  return banners;
-                })();
-
-                // Helper to calculate trend
-                const getTrendIndicator = (current: number, prior: number) => {
-                  if (rangeDays === 9999) return null; // No trend for complete/all-time
-                  if (prior === 0) {
-                    return current === 0 ? null : { text: `+${current}`, isWorse: true };
-                  }
-                  const pct = Math.round(((current - prior) / prior) * 100);
-                  if (pct === 0) return null;
-                  return {
-                    text: pct > 0 ? `↑ ${pct}%` : `↓ ${Math.abs(pct)}%`,
-                    isWorse: pct > 0 // positive change for absence/lateness is worse
-                  };
-                };
-
-                // Helper to format rate baseline comparison
-                const getBaselineDiffText = (userVal: number, teamVal: number) => {
-                  const diff = (userVal - teamVal) * 100;
-                  if (Math.abs(diff) < 0.1) return 'Matches team average';
-                  const formatted = Math.abs(diff).toFixed(1) + '%';
-                  if (diff > 0) {
-                    return `${formatted} above team average`;
-                  } else {
-                    return `${formatted} below team average`;
-                  }
-                };
-
-                return (
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowReviewDropdown(!showReviewDropdown)}
-                      className="w-full flex items-center gap-2 border-b border-zinc-100 pb-2 text-left hover:opacity-85 transition-all"
-                    >
-                      {showReviewDropdown ? (
-                        <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
-                      )}
-                      <ClipboardCheck className="w-4 h-4 text-zinc-500 shrink-0" />
-                      <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">Review</span>
-                    </button>
-
-                    {showReviewDropdown && (
-                      <div className="mt-4 space-y-5 bg-zinc-50/30 border border-zinc-200 rounded-lg p-4 animate-in slide-in-from-top-2 duration-200">
-                        {/* Header controls: Range Tabs */}
-                        <div className="flex border border-zinc-200 rounded-lg overflow-hidden w-fit bg-white shadow-sm">
-                          {(['30', '60', '90', 'yearly', 'complete'] as const).map(range => (
-                            <button
-                              key={range}
-                              type="button"
-                              onClick={() => {
-                                setReviewRange(range);
-                                setActiveDrilldown(null);
-                              }}
-                              className={`px-3 py-1.5 text-[10px] sm:text-xs font-bold transition-colors ${
-                                reviewRange === range
-                                  ? 'bg-zinc-900 text-white'
-                                  : 'text-zinc-600 hover:bg-zinc-50'
-                              }`}
-                            >
-                              {range === '30' && '30 Days'}
-                              {range === '60' && '60 Days'}
-                              {range === '90' && '90 Days'}
-                              {range === 'yearly' && 'Yearly'}
-                              {range === 'complete' && 'All'}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Reliability Banner */}
-                        <div className="bg-zinc-900 text-white border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Reliability</span>
-                            <div className="flex flex-wrap items-center gap-3">
-                              <span className="text-3xl font-extrabold">{reliabilityCalculations.score}/100</span>
-                              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${reliabilityCalculations.ratingColor.replace('bg-', 'bg-white/10 ').replace('text-', 'text-')}`}>
-                                {reliabilityCalculations.rating}
-                              </span>
-                              {shiftsWorked < RELIABILITY_CONFIG.thresholds.lowSampleSizeShifts && (
-                                <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/35 px-2.5 py-0.5 rounded-full shrink-0 animate-pulse">
-                                  ⚠ Limited data — only {shiftsWorked} shifts this period
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-zinc-400 max-w-lg pt-1">
-                              Calculated weighted score based on punctuality, undocumented sick absences, and unplanned time off. Authorized vacation time does not count against this score.
-                            </p>
-                          </div>
-                          
-                          {/* Mini breakdown of deductions & shift count */}
-                          <div className="flex gap-4 shrink-0 text-center text-xs border-t sm:border-t-0 sm:border-l border-zinc-800 pt-3 sm:pt-0 sm:pl-6">
-                            <div className="border-r border-zinc-800 pr-4">
-                              <div className="text-[10px] text-zinc-300 font-bold uppercase cursor-help" title="To show scheduled vs worked shifts (e.g. X of Y), schedule data needs to be passed via props.">Shifts ⓘ</div>
-                              <div className="font-bold text-zinc-300">
-                                {shiftsWorked}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-zinc-500 font-bold uppercase">No-Show</div>
-                              <div className={`font-semibold ${reliabilityCalculations.deductions.noCall > 0 ? 'text-red-400' : 'text-zinc-500'}`}>
-                                -{reliabilityCalculations.deductions.noCall}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-zinc-500 font-bold uppercase">Sick</div>
-                              <div className={`font-semibold ${reliabilityCalculations.deductions.sick > 0 ? 'text-amber-400' : 'text-zinc-500'}`}>
-                                -{reliabilityCalculations.deductions.sick}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-zinc-500 font-bold uppercase">Tardy</div>
-                              <div className={`font-semibold ${reliabilityCalculations.deductions.tardy > 0 ? 'text-indigo-400' : 'text-zinc-500'}`}>
-                                -{reliabilityCalculations.deductions.tardy}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-zinc-500 font-bold uppercase">Time Off</div>
-                              <div className={`font-semibold ${reliabilityCalculations.deductions.timeOff > 0 ? 'text-blue-400' : 'text-zinc-500'}`}>
-                                -{reliabilityCalculations.deductions.timeOff}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Warnings Banner Stack */}
-                        {warningBanners.length > 0 && (
-                          <div className="space-y-2">
-                            {warningBanners.map((banner, index) => (
-                              <div key={index} className="bg-rose-50/80 border border-rose-200/60 rounded-xl p-3 text-xs text-rose-800 flex items-start gap-2.5 animate-in slide-in-from-top-1">
-                                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                                <span className="font-semibold leading-normal">{banner}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Metric Grid */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          {/* Sick Card */}
-                          <div
-                            onClick={() => setActiveDrilldown(activeDrilldown === 'sick' ? null : 'sick')}
-                            className={`bg-white border rounded-xl p-4 flex flex-col justify-between min-h-[110px] hover:scale-[1.02] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
-                              activeDrilldown === 'sick' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
-                            }`}
+                {showDocumentsDropdown && (
+                  <div className="mt-4 bg-zinc-50/30 border border-zinc-200 rounded-lg p-4 animate-in slide-in-from-top-2 duration-200">
+                    {formData.onboardingDocuments && formData.onboardingDocuments.length > 0 ? (
+                      <div className="flex flex-row gap-3 overflow-x-auto pb-2 scroll-smooth">
+                        {formData.onboardingDocuments.map(doc => (
+                          <a
+                            key={doc.id}
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={doc.fileName || (doc.formType === 'w9' ? 'W-9 Form' : 'Direct Deposit')}
+                            className="flex items-center gap-3 p-3 bg-white border border-zinc-200 rounded-lg shadow-sm hover:border-zinc-300 hover:shadow-md transition-all group flex-shrink-0 w-60"
                           >
-                            <div className="flex justify-between items-start">
-                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Sick Call-ins</span>
-                              <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
+                              <FileText className="w-5 h-5" />
                             </div>
-                            <div className="mt-2 flex items-baseline justify-between">
-                              <span className="text-2xl font-black text-zinc-900">{sickCards.length}</span>
-                              {/* Trend Badge */}
-                              {(() => {
-                                const trend = getTrendIndicator(sickCards.length, priorSick);
-                                if (!trend) return null;
-                                return (
-                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
-                                    trend.isWorse ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
-                                  }`}>
-                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
-                                    {trend.text.replace(/[↑↓\s]/g, '')}
-                                  </span>
-                                );
-                              })()}
-                            </div>
-                            <div className="mt-2 text-[10px] text-zinc-500 space-y-0.5 leading-tight">
-                              <div className="font-semibold">{sickCards.length} sick / {shiftsWorked} shifts</div>
-                              <div className={`font-medium ${userSickRate > teamStats.sickRate ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                {getBaselineDiffText(userSickRate, teamStats.sickRate)}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-semibold text-zinc-900 truncate">
+                                {doc.formType === 'w9' ? 'W-9 Form' : 'Direct Deposit'}
+                              </div>
+                              <div className="text-[10px] text-zinc-500">
+                                {new Date(doc.uploadedAt).toLocaleDateString()}
                               </div>
                             </div>
-                          </div>
-
-                          {/* Time Off Card */}
-                          <div
-                            onClick={() => setActiveDrilldown(activeDrilldown === 'timeOff' ? null : 'timeOff')}
-                            className={`bg-white border rounded-xl p-4 flex flex-col justify-between min-h-[110px] hover:scale-[1.02] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
-                              activeDrilldown === 'timeOff' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
-                            }`}
-                          >
-                            <div className="flex justify-between items-start">
-                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Time Off</span>
-                              <Calendar className="w-4 h-4 text-blue-500 shrink-0" />
-                            </div>
-                            <div className="mt-2 flex items-baseline justify-between">
-                              <span className="text-2xl font-black text-zinc-900">{timeOffRequests.length}</span>
-                              {(() => {
-                                const trend = getTrendIndicator(timeOffRequests.length, priorTimeOff);
-                                if (!trend) return null;
-                                return (
-                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
-                                    trend.isWorse ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
-                                  }`}>
-                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
-                                    {trend.text.replace(/[↑↓\s]/g, '')}
-                                  </span>
-                                );
-                              })()}
-                            </div>
-                            <div className="mt-2 text-[10px] text-zinc-500 space-y-0.5 leading-tight">
-                              <div className="font-semibold">{timeOffRequests.length} off / {shiftsWorked} shifts</div>
-                              <div className={`font-medium ${userTimeOffRate > teamStats.timeOffRate ? 'text-zinc-600' : 'text-emerald-600'}`}>
-                                {getBaselineDiffText(userTimeOffRate, teamStats.timeOffRate)}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* No Call Shows Card */}
-                          <div
-                            onClick={() => setActiveDrilldown(activeDrilldown === 'noCall' ? null : 'noCall')}
-                            className={`bg-white border rounded-xl p-4 flex flex-col justify-between min-h-[110px] hover:scale-[1.02] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
-                              activeDrilldown === 'noCall' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
-                            }`}
-                          >
-                            <div className="flex justify-between items-start">
-                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">No Call Shows</span>
-                              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-                            </div>
-                            <div className="mt-2 flex items-baseline justify-between">
-                              <span className="text-2xl font-black text-zinc-900">{noCallCards.length}</span>
-                              {(() => {
-                                const trend = getTrendIndicator(noCallCards.length, priorNoCall);
-                                if (!trend) return null;
-                                return (
-                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
-                                    trend.isWorse ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
-                                  }`}>
-                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
-                                    {trend.text.replace(/[↑↓\s]/g, '')}
-                                  </span>
-                                );
-                              })()}
-                            </div>
-                            <div className="mt-2 text-[10px] text-zinc-500 space-y-0.5 leading-tight">
-                              <div className="font-semibold">{noCallCards.length} missed / {shiftsWorked} shifts</div>
-                              <div className={`font-medium ${userNoCallRate > teamStats.noCallRate ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                {getBaselineDiffText(userNoCallRate, teamStats.noCallRate)}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Tardys Card */}
-                          <div
-                            onClick={() => setActiveDrilldown(activeDrilldown === 'tardy' ? null : 'tardy')}
-                            className={`bg-white border rounded-xl p-4 flex flex-col justify-between min-h-[110px] hover:scale-[1.02] hover:border-zinc-400 cursor-pointer shadow-sm transition-all relative select-none ${
-                              activeDrilldown === 'tardy' ? 'ring-2 ring-zinc-950 border-transparent bg-zinc-50/20' : 'border-zinc-200'
-                            }`}
-                          >
-                            <div className="flex justify-between items-start">
-                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Tardys</span>
-                              <Clock className="w-4 h-4 text-indigo-500 shrink-0" />
-                            </div>
-                            <div className="mt-2 flex items-baseline justify-between">
-                              <span className="text-2xl font-black text-zinc-900">{tardyCards.length}</span>
-                              {(() => {
-                                const trend = getTrendIndicator(tardyCards.length, priorTardys);
-                                if (!trend) return null;
-                                return (
-                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0 ${
-                                    trend.isWorse ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
-                                  }`}>
-                                    {trend.text.startsWith('↑') ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
-                                    {trend.text.replace(/[↑↓\s]/g, '')}
-                                  </span>
-                                );
-                              })()}
-                            </div>
-                            <div className="mt-2 text-[10px] text-zinc-500 space-y-0.5 leading-tight">
-                              <div className="font-semibold">{tardyCards.length} late / {shiftsWorked} shifts</div>
-                              <div className={`font-medium ${userTardyRate > teamStats.tardyRate ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                {getBaselineDiffText(userTardyRate, teamStats.tardyRate)}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Active Drilldown Section */}
-                        {activeDrilldown && (
-                          <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-inner mt-2 space-y-4 animate-in slide-in-from-bottom-2 duration-200">
-                            {/* Sick Call-ins details */}
-                            {activeDrilldown === 'sick' && (
-                              <div className="space-y-3">
-                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
-                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Sick Call-ins Logs ({sickCards.length} instances)</h5>
-                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Toggle status or review weekend patterns</span>
-                                </div>
-                                {sickCards.length === 0 ? (
-                                  <p className="text-xs text-zinc-400 italic">No sick call-ins logged for this period.</p>
-                                ) : (
-                                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                                    {sickCards.map(card => {
-                                      const proxy = isNearWeekendOrHoliday(card.clockIn);
-                                      return (
-                                        <div key={card.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-150 rounded-lg hover:bg-zinc-100/55 transition-colors">
-                                          <div>
-                                            <div className="text-xs font-bold text-zinc-800">{new Date(card.clockIn).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                                            {card.managerNotes && <div className="text-[10px] text-zinc-500 italic mt-0.5">Note: "{card.managerNotes}"</div>}
-                                          </div>
-                                          
-                                          <div className="flex flex-wrap items-center gap-2">
-                                            {proxy && (
-                                              <span className="text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded flex items-center gap-1 shrink-0">
-                                                ⚠️ {proxy}
-                                              </span>
-                                            )}
-                                            
-                                            {/* Documentation toggle button */}
-                                            <button
-                                              type="button"
-                                              onClick={() => handleToggleSickDoc(card.id)}
-                                              className={`text-[9px] font-bold px-2 py-1 rounded border transition-all ${
-                                                card.sickDocumentationProvided
-                                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/70'
-                                                  : 'bg-zinc-100 border-zinc-300 text-zinc-700 hover:bg-zinc-200/80'
-                                              }`}
-                                            >
-                                              {card.sickDocumentationProvided ? '✓ Document Provided' : '+ Add Documentation'}
-                                            </button>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Time Off details */}
-                            {activeDrilldown === 'timeOff' && (
-                              <div className="space-y-3">
-                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
-                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Time Off Requests Log ({timeOffRequests.length} instances)</h5>
-                                </div>
-                                {timeOffRequests.length === 0 ? (
-                                  <p className="text-xs text-zinc-400 italic">No time off requests recorded for this period.</p>
-                                ) : (
-                                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                                    {timeOffRequests.map(req => {
-                                      const isPlanned = req.requestedInAdvance !== false;
-                                      return (
-                                        <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-150 rounded-lg">
-                                          <div>
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-xs font-bold text-zinc-850">
-                                                {new Date(req.startDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                                {req.startDate !== req.endDate && ` - ${new Date(req.endDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`}
-                                              </span>
-                                              <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-zinc-200 text-zinc-700 tracking-wider">
-                                                {req.category || 'Vacation'}
-                                              </span>
-                                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                                                req.status === 'Approved' ? 'bg-emerald-50 text-emerald-700' : req.status === 'Pending' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
-                                              }`}>
-                                                {req.status}
-                                              </span>
-                                            </div>
-                                            <div className="text-[10px] text-zinc-500 mt-1">Reason: "{req.reason || 'None specified'}"</div>
-                                          </div>
-                                          
-                                          <div className="shrink-0">
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                              isPlanned
-                                                ? 'bg-blue-50 border-blue-100 text-blue-700'
-                                                : 'bg-rose-50 border-rose-100 text-rose-700'
-                                            }`}>
-                                              {isPlanned ? 'Notice Provided' : 'Last-Minute Request'}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {/* No Call Shows details */}
-                            {activeDrilldown === 'noCall' && (
-                              <div className="space-y-3">
-                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
-                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">No Call Shows Log ({noCallCards.length} instances)</h5>
-                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Log coverage tracking</span>
-                                </div>
-                                {noCallCards.length === 0 ? (
-                                  <p className="text-xs text-zinc-400 italic">No-shows logged for this period.</p>
-                                ) : (
-                                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                                    {noCallCards.map(card => (
-                                      <div key={card.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-150 rounded-lg hover:bg-zinc-100/55 transition-colors">
-                                        <div>
-                                          <div className="text-xs font-bold text-zinc-800">{new Date(card.clockIn).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                                          <div className="text-[10px] text-red-500 font-bold mt-0.5">Missed Shift: {card.missedShiftTitle || 'Not specified'}</div>
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-2 shrink-0">
-                                          <span className="text-[10px] text-zinc-500 font-semibold">Coverage:</span>
-                                          
-                                          {/* Dropdown select to log coverage */}
-                                          <select
-                                            value={card.coveredByUserId || ''}
-                                            onChange={(e) => handleUpdateNoCallCover(card.id, e.target.value)}
-                                            className="text-[10px] font-medium border-zinc-300 rounded bg-white py-0.5 px-2 focus:ring-zinc-500 focus:border-zinc-300"
-                                          >
-                                            <option value="">No cover logged</option>
-                                            {users.filter(u => u.id !== formData.id).map(u => (
-                                              <option key={u.id} value={u.id}>Covered by {u.name}</option>
-                                            ))}
-                                          </select>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Tardys details */}
-                            {activeDrilldown === 'tardy' && (
-                              <div className="space-y-3">
-                                <div className="flex justify-between items-center border-b border-zinc-100 pb-2">
-                                  <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Tardys Log ({tardyCards.length} instances)</h5>
-                                  <span className="text-[10px] text-zinc-400 font-semibold italic">Granular latency tracker</span>
-                                </div>
-                                {tardyCards.length === 0 ? (
-                                  <p className="text-xs text-zinc-400 italic">No tardy clock-ins logged for this period.</p>
-                                ) : (
-                                  <div className="space-y-3">
-                                    {/* Display clustering statistics summary */}
-                                    {(() => {
-                                      const dayCounts: Record<string, number> = {};
-                                      const shiftCounts: Record<string, number> = {};
-                                      
-                                      tardyCards.forEach(c => {
-                                        const dateVal = new Date(c.clockIn);
-                                        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dateVal.getDay()];
-                                        dayCounts[dayName] = (dayCounts[dayName] || 0) + 1;
-                                        
-                                        const shift = c.tardyShiftTitle || 'Default Shift';
-                                        shiftCounts[shift] = (shiftCounts[shift] || 0) + 1;
-                                      });
-                                      
-                                      const peakDays = Object.entries(dayCounts).filter(([_, count]) => count >= 2).map(([day]) => day);
-                                      const peakShifts = Object.entries(shiftCounts).filter(([name, count]) => name !== 'Default Shift' && count >= 2).map(([name]) => name);
-                                      
-                                      if (peakDays.length === 0 && peakShifts.length === 0) return null;
-                                      return (
-                                        <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-lg text-[11px] text-indigo-950 space-y-1">
-                                          <div className="font-bold flex items-center gap-1">
-                                            <AlertCircle className="w-3.5 h-3.5 text-indigo-600" />
-                                            Punctuality Cluster Alert
-                                          </div>
-                                          {peakDays.length > 0 && <div>• Repeated tardiness clustered on: <span className="font-bold">{peakDays.join(', ')}s</span>.</div>}
-                                          {peakShifts.length > 0 && <div>• Repeated tardiness clustered during: <span className="font-bold">{peakShifts.join(', ')}</span>.</div>}
-                                        </div>
-                                      );
-                                    })()}
-                                    
-                                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                                      {tardyCards.map(card => {
-                                        const isHighTardy = (card.minutesLate || 0) > 30;
-                                        const isMidTardy = (card.minutesLate || 0) > 10 && (card.minutesLate || 0) <= 30;
-                                        
-                                        return (
-                                          <div key={card.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-150 rounded-lg">
-                                            <div>
-                                              <div className="text-xs font-bold text-zinc-800">
-                                                {new Date(card.clockIn).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                                              </div>
-                                              <div className="text-[10px] text-zinc-500 mt-0.5">Shift: {card.tardyShiftTitle || 'Not specified'}</div>
-                                            </div>
-                                            
-                                            <div className="shrink-0 flex items-center gap-2">
-                                              <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
-                                                isHighTardy
-                                                  ? 'bg-rose-50 border-rose-200 text-rose-700 font-extrabold'
-                                                  : isMidTardy
-                                                  ? 'bg-amber-50 border-amber-200 text-amber-700'
-                                                  : 'bg-zinc-100 border-zinc-200 text-zinc-650'
-                                              }`}>
-                                                {card.minutesLate} mins late
-                                              </span>
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                            <Download className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 shrink-0" />
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-4 text-center text-sm text-zinc-500 italic">
+                        No documents submitted yet.
                       </div>
                     )}
                   </div>
-                );
-              })()}
+                )}
+              </div>
 
               {/* Scheduling Accordion Section */}
               <div className="mt-4">
@@ -2000,13 +2252,23 @@ export const UserProfileDialog: React.FC<Props> = ({ user, isOpen, onClose, onSa
           }
           existingWriteUp={selectedWriteUp}
           initialCategory={initialWriteUpCategory}
+          initialIncidentDate={initialWriteUpIncidentDate}
+          initialShiftTitle={initialWriteUpShiftTitle}
+          initialDescription={initialWriteUpDescription}
           onClose={() => {
             setShowWriteUpModal(false);
             setSelectedWriteUp(null);
+            setInitialWriteUpIncidentDate(undefined);
+            setInitialWriteUpShiftTitle(undefined);
+            setInitialWriteUpDescription(undefined);
           }}
           onSaveWriteUp={async updatedUser => {
             setFormData(updatedUser);
-            onSave(updatedUser);
+            if (onQuickUpdate) {
+              onQuickUpdate(updatedUser);
+            } else {
+              onSave(updatedUser);
+            }
           }}
         />
       )}

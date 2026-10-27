@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Settings, Cloud, Info, UserPlus, Users, Calendar, Check, UserCog, Trash2 } from 'lucide-react';
 import { User, AppSettings, PayFrequency, DayOfWeek, DailyAvailability, Department } from '../types';
-import { DAYS_OF_WEEK } from '../constants';
+import { DAYS_OF_WEEK, AVAILABLE_PERMISSIONS } from '../constants';
 import { UserProfileDialog } from './UserProfileDialog';
 
 interface Props {
@@ -104,10 +104,20 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
       .toUpperCase()
       .substring(0, 2);
 
+    const roleLower = newUser.role.trim().toLowerCase();
+    let initialPerms: string[] = [];
+    if (roleLower === 'admin') {
+      initialPerms = AVAILABLE_PERMISSIONS.map(p => p.id);
+    } else if (roleLower === 'manager') {
+      initialPerms = ['manage_users', 'edit_timecards', 'approve_timecards', 'manage_schedule', 'create_tasks', 'view_reports', 'manage_team'];
+    }
+
     const user: User = {
       id: `u-${Date.now()}`,
       name: newUser.name,
       role: newUser.role,
+      permissions: initialPerms,
+      isActive: true,
       username: newUser.username || undefined,
       password: newUser.password || undefined,
       primaryDepartment: Department.Production, // Default to Production
@@ -473,7 +483,7 @@ export const SettingsDialog: React.FC<Props> = ({ isOpen, onClose, users, onAddU
           setEditingUser(u);
           onUpdateUser(u, true);
         }}
-        isViewerAdmin={true}
+        isViewerAdmin={currentUser?.role?.trim().toLowerCase() === 'admin' || (Array.isArray(currentUser?.permissions) && currentUser.permissions.includes('admin'))}
         viewerUser={currentUser}
         users={users}
       />

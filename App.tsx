@@ -169,7 +169,11 @@ const App: React.FC = () => {
             isPaused: data.isPaused || false,
             pauseReason: data.pauseReason || undefined,
             currentIdleStartTime: data.currentIdleStartTime || null,
-            totalIdleTimeMs: data.totalIdleTimeMs || 0
+            totalIdleTimeMs: data.totalIdleTimeMs || 0,
+            clockInDepartment: data.clockInDepartment || undefined,
+            isUnscheduled: data.isUnscheduled || false,
+            minutesLate: data.minutesLate || 0,
+            tardyShiftTitle: data.tardyShiftTitle || undefined
           };
         });
         return newSessions;
@@ -537,11 +541,45 @@ const App: React.FC = () => {
 
   const handleClockIn = async (user: User, clockInDepartment?: string, isUnscheduled?: boolean) => {
     const now = Date.now();
+    let minutesLate = 0;
+    let tardyShiftTitle: string | undefined = undefined;
+
+    const nowObj = new Date(now);
+    const todayShifts = shiftBlocks
+      .filter(s => {
+        if (s.assignedTo !== user.id || typeof s.title !== 'string' || !s.title.startsWith('[SHIFT]')) return false;
+        const startObj = new Date(s.startTime);
+        return (
+          startObj.getFullYear() === nowObj.getFullYear() &&
+          startObj.getMonth() === nowObj.getMonth() &&
+          startObj.getDate() === nowObj.getDate()
+        );
+      })
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+    if (todayShifts.length > 0) {
+      const firstShift = todayShifts[0];
+      const scheduledStart = new Date(firstShift.startTime).getTime();
+      if (now > scheduledStart) {
+        minutesLate = Math.ceil((now - scheduledStart) / (1000 * 60));
+        tardyShiftTitle = firstShift.title || 'Scheduled Shift';
+      }
+    }
 
     // Optimistic local update (UI feels instant)
     setActiveSessions(prev => ({
       ...prev,
-      [user.id]: { userId: user.id, user, startTime: now, lastLogTime: now, logs: [], clockInDepartment, isUnscheduled }
+      [user.id]: {
+        userId: user.id,
+        user,
+        startTime: now,
+        lastLogTime: now,
+        logs: [],
+        clockInDepartment,
+        isUnscheduled,
+        minutesLate,
+        tardyShiftTitle
+      }
     }));
 
     // Primary: Write to Firebase (broadcasts to ALL devices instantly)
@@ -586,7 +624,9 @@ const App: React.FC = () => {
         clockIn: session.startTime,
         clockOut: now,
         totalHours: (now - session.startTime) / (1000 * 60 * 60),
-        status: 'Complete'
+        status: 'Complete',
+        minutesLate: session.minutesLate || 0,
+        tardyShiftTitle: session.tardyShiftTitle || undefined
       };
       import('./services/storageService').then(({ storageService }) => {
         storageService.saveTimeCard(timeCard);

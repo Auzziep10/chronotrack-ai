@@ -244,11 +244,20 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
   const viewerHasPermission = React.useCallback((permId: string) => {
     if (!currentUser) return false;
     if (isViewerAdmin) return true;
+    const roleLower = currentUser.role?.trim().toLowerCase() || '';
+    if (roleLower === 'manager') {
+      const fullManagerPerms = ['manage_team', 'manage_users', 'edit_timecards', 'approve_timecards', 'manage_schedule', 'create_tasks', 'view_reports'];
+      if (fullManagerPerms.includes(permId)) return true;
+    }
     return viewerPerms.includes(permId);
   }, [currentUser, isViewerAdmin, viewerPerms]);
 
   const isTargetUserAdmin = React.useCallback((u: User) => {
-    return u.role?.trim().toLowerCase() === 'admin';
+    return u.role?.trim().toLowerCase() === 'admin' || (Array.isArray(u.permissions) && u.permissions.includes('admin'));
+  }, []);
+
+  const isTargetUserManager = React.useCallback((u: User) => {
+    return u.role?.trim().toLowerCase() === 'manager';
   }, []);
 
   const isTargetUserActive = React.useCallback((u: User) => {
@@ -257,7 +266,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
 
   const displayedUsers = React.useMemo(() => {
     if (!isViewerAdmin) {
-      return users.filter(u => !isTargetUserAdmin(u) && isTargetUserActive(u));
+      return users.filter(u => !isTargetUserAdmin(u) && !isTargetUserManager(u) && isTargetUserActive(u));
     }
 
     const getPriorityGroup = (u: User) => {
@@ -267,7 +276,7 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
     };
 
     return [...users].sort((a, b) => getPriorityGroup(a) - getPriorityGroup(b));
-  }, [users, isViewerAdmin, isTargetUserAdmin, isTargetUserActive]);
+  }, [users, isViewerAdmin, isTargetUserAdmin, isTargetUserManager, isTargetUserActive]);
 
   // Allowed views based on permissions
   const allowedViews = React.useMemo(() => {
@@ -778,7 +787,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
       clockOut: null,
       totalHours: (Date.now() - session.startTime) / (1000 * 60 * 60),
       totalIdleHours: (session.totalIdleTimeMs || 0) / (1000 * 60 * 60),
-      status: 'Active'
+      status: 'Active',
+      minutesLate: session.minutesLate || 0,
+      tardyShiftTitle: session.tardyShiftTitle
     }));
 
     const allCards = [...activeCards, ...timeCards];
@@ -845,13 +856,22 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
         status: statusStr
       };
     })
-    .filter(group => group.cards.length > 0)
+    .filter(group => {
+      if (group.cards.length === 0) return false;
+      if (!isViewerAdmin) {
+        const targetU = users.find(u => u.id === group.userId);
+        if (targetU && (isTargetUserAdmin(targetU) || isTargetUserManager(targetU))) {
+          return false;
+        }
+      }
+      return true;
+    })
     .sort((a: any, b: any) => {
       const nameA = users.find(u => u.id === a.userId)?.name || '';
       const nameB = users.find(u => u.id === b.userId)?.name || '';
       return nameA.localeCompare(nameB);
     });
-  }, [filteredTimeCards, users, activeSessions]);
+  }, [filteredTimeCards, users, activeSessions, isViewerAdmin, isTargetUserAdmin, isTargetUserManager]);
 
   const handleSyncPlan = async () => {
     if (!externalPlanRaw.trim()) return;
@@ -1970,9 +1990,9 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             setSelectedUserForProfile(u);
             if (onUpdateUser) onUpdateUser(u, true);
           }}
-          isViewerAdmin={true}
+          isViewerAdmin={isViewerAdmin}
           viewerUser={currentUser}
-          timeCards={timeCards}
+          timeCards={allCurrentCards}
           users={users}
         />
       )}

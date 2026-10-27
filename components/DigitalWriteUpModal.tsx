@@ -25,6 +25,7 @@ interface DigitalWriteUpModalProps {
   currentManager: User;
   existingWriteUp?: DisciplinaryWriteUp | null;
   initialCategory?: WriteUpCategory;
+  initialIncidentDate?: string;
   initialShiftTitle?: string;
   initialDescription?: string;
   onClose: () => void;
@@ -100,6 +101,7 @@ export const DigitalWriteUpModal: React.FC<DigitalWriteUpModalProps> = ({
   currentManager,
   existingWriteUp,
   initialCategory = 'Failure to Communicate',
+  initialIncidentDate,
   initialShiftTitle = '',
   initialDescription,
   onClose,
@@ -114,7 +116,7 @@ export const DigitalWriteUpModal: React.FC<DigitalWriteUpModalProps> = ({
     existingWriteUp?.severity || CATEGORY_TEMPLATES[initialCategory].defaultSeverity
   );
   const [incidentDate, setIncidentDate] = useState<string>(
-    existingWriteUp?.incidentDate || todayStr
+    existingWriteUp?.incidentDate || initialIncidentDate || todayStr
   );
   const [shiftTitle, setShiftTitle] = useState<string>(
     existingWriteUp?.shiftTitle || initialShiftTitle
