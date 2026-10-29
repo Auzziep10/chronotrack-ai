@@ -25,43 +25,107 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
   const [pinMessage, setPinMessage] = useState<string>('');
   const [actionMenuUser, setActionMenuUser] = useState<User | null>(null);
   const [unscheduledUser, setUnscheduledUser] = useState<User | null>(null);
+  const [pendingScheduledShift, setPendingScheduledShift] = useState<{ user: User; shift: ScheduleBlock } | null>(null);
 
   const handlePinAction = () => {
     setPinMessage('');
     setActionMenuUser(null);
+    setPendingScheduledShift(null);
     setShowPinPad(true);
   };
 
-  const handlePinSuccess = (user: User) => {
-    const isClockedIn = !!activeSessions[user.id];
+  const findUserSession = (user: User): UserSession | undefined => {
+    return (
+      activeSessions[user.id] ||
+      Object.values(activeSessions).find(s => String(s.userId) === String(user.id))
+    );
+  };
 
-    if (isClockedIn) {
+  const handleRecordEndOfShiftClockOut = async (user: User, shift: ScheduleBlock) => {
+    const now = Date.now();
+    const startMs = new Date(shift.startTime).getTime();
+    const effectiveClockIn = startMs < now ? startMs : now - 8 * 60 * 60 * 1000;
+    const tzOffset = effectiveClockIn - new Date(effectiveClockIn).getTimezoneOffset() * 60000;
+    const dateStr = new Date(tzOffset).toISOString().split('T')[0];
+    const totalHours = Math.max(0, (now - effectiveClockIn) / (1000 * 60 * 60));
+
+    const timeCard = {
+      id: `tc-${user.id}-${now}`,
+      userId: user.id,
+      date: dateStr,
+      clockIn: effectiveClockIn,
+      clockOut: now,
+      totalHours,
+      totalIdleHours: 0,
+      status: 'Complete' as const,
+      minutesLate: 0,
+      tardyShiftTitle: shift.title || undefined
+    };
+
+    try {
+      const { isFirebaseConfigured, firebaseSaveTimeCard } = await import('../services/firebaseService');
+      if (isFirebaseConfigured()) {
+        await firebaseSaveTimeCard(timeCard);
+      }
+      const { storageService } = await import('../services/storageService');
+      storageService.saveTimeCard(timeCard);
+    } catch (e) {
+      console.error('Failed to record shift clock-out:', e);
+    }
+
+    setPinMessage(`Goodbye, ${user.name}! Clocked out for the day.`);
+    setPendingScheduledShift(null);
+    setShowPinPad(true);
+    setTimeout(() => {
+      setShowPinPad(false);
+      setPinMessage('');
+    }, 2000);
+  };
+
+  const handlePinSuccess = (user: User) => {
+    const existingSession = findUserSession(user);
+
+    if (existingSession) {
       // Open the action menu instead of instantly clocking out
       setActionMenuUser(user);
       setShowPinPad(false);
     } else {
-      // Check if they are scheduled right now
+      // Check if they are scheduled today
       const now = new Date();
-      const currentShift = shiftBlocks?.find(b => {
-        if (b.assignedTo !== user.id || !b.title.startsWith('[SHIFT]')) return false;
-        const start = new Date(b.startTime);
-        
-        // Match if the shift is scheduled for today
-        return (
-          start.getDate() === now.getDate() &&
-          start.getMonth() === now.getMonth() &&
-          start.getFullYear() === now.getFullYear()
-        );
-      });
+      const nowMs = now.getTime();
+      const todayShifts = (shiftBlocks || [])
+        .filter(b => {
+          if (String(b.assignedTo) !== String(user.id) || typeof b.title !== 'string' || !b.title.startsWith('[SHIFT]')) return false;
+          const start = new Date(b.startTime);
+          return (
+            start.getDate() === now.getDate() &&
+            start.getMonth() === now.getMonth() &&
+            start.getFullYear() === now.getFullYear()
+          );
+        })
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+      const currentShift =
+        todayShifts.find(s => nowMs <= new Date(s.endTime).getTime()) || todayShifts[todayShifts.length - 1];
 
       if (currentShift) {
-        // Scheduled - clock in immediately
-        onClockIn(user, currentShift.department, false);
-        setPinMessage(`Welcome, ${user.name}! Clocked in successfully.`);
-        setTimeout(() => {
+        const startMs = new Date(currentShift.startTime).getTime();
+        const endMs = new Date(currentShift.endTime).getTime();
+        const isPastTwoHoursOrNearEnd = nowMs > startMs + 120 * 60 * 1000 || nowMs >= endMs - 30 * 60 * 1000;
+
+        if (isPastTwoHoursOrNearEnd) {
+          // If it's late into the shift or near/past shift end, NEVER auto-clock them in — show explicit Clock Out / Clock In choice!
+          setPendingScheduledShift({ user, shift: currentShift });
           setShowPinPad(false);
-          setPinMessage('');
-        }, 1500);
+        } else {
+          // Within normal shift start window — clock in immediately
+          onClockIn(user, currentShift.department, false);
+          setPinMessage(`Welcome, ${user.name}! Clocked in successfully.`);
+          setTimeout(() => {
+            setShowPinPad(false);
+            setPinMessage('');
+          }, 1500);
+        }
       } else {
         // Unscheduled - ask for department
         setUnscheduledUser(user);
@@ -129,8 +193,53 @@ export const TimeStation: React.FC<Props> = ({ activeSessions, users, onClockIn,
     );
   }
 
+  if (pendingScheduledShift) {
+    const { user, shift } = pendingScheduledShift;
+    return (
+      <div className="max-w-2xl mx-auto py-12 animate-fade-in">
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-zinc-100">
+          <div className="bg-black p-8 text-center text-white">
+            <div className="w-16 h-16 bg-white/10 rounded-full mx-auto flex items-center justify-center text-2xl font-bold mb-4 border border-white/20">
+              {user.avatarInitials}
+            </div>
+            <h2 className="text-3xl font-bold mb-2">Hello, {user.name}</h2>
+            <p className="text-zinc-300">Are you clocking out for the day or starting a new shift?</p>
+          </div>
+          <div className="p-8 space-y-4 bg-zinc-50">
+            <button
+              onClick={() => handleRecordEndOfShiftClockOut(user, shift)}
+              className="w-full bg-red-600 hover:bg-red-700 text-white p-6 rounded-2xl shadow-sm text-xl font-bold transition-transform active:scale-95 flex items-center justify-center gap-3"
+            >
+              <LogOut className="w-6 h-6" /> Clock Out For the Day
+            </button>
+
+            <button
+              onClick={() => {
+                onClockIn(user, shift.department, true);
+                setPinMessage(`Welcome, ${user.name}! Clocked in successfully.`);
+                setPendingScheduledShift(null);
+                setShowPinPad(true);
+                setTimeout(() => { setShowPinPad(false); setPinMessage(''); }, 1800);
+              }}
+              className="w-full bg-zinc-900 hover:bg-zinc-800 text-white p-5 rounded-2xl shadow-sm text-lg font-bold transition-transform active:scale-95 flex items-center justify-center gap-3"
+            >
+              <Play className="w-5 h-5" /> Start Shift (Clock In)
+            </button>
+
+            <button
+              onClick={() => setPendingScheduledShift(null)}
+              className="w-full mt-4 bg-transparent border-2 border-zinc-300 text-zinc-500 hover:bg-zinc-200 p-4 rounded-2xl font-bold transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (actionMenuUser) {
-    const session = activeSessions[actionMenuUser.id];
+    const session = findUserSession(actionMenuUser);
     if (!session) {
       setActionMenuUser(null);
       return null;

@@ -41,7 +41,7 @@ export interface TimeOffRequest {
   status: 'Pending' | 'Approved' | 'Denied';
   reason: string;
   submittedAt: number;
-  category?: 'Retainer Time Off' | 'Unpaid Leave' | 'Sick' | 'Personal' | 'Emergency' | 'Vacation' | 'Bereavement' | 'Other';
+  category?: 'Unpaid Leave' | 'Sick' | 'Personal' | 'Emergency' | 'Vacation' | 'Bereavement' | 'Other';
   requestedInAdvance?: boolean;
 }
 
@@ -93,6 +93,10 @@ export interface AttendanceAuditEntry {
   details: string;
   responseMessage?: string;
   responseLatencyMinutes?: number;
+  minutesLate?: number;
+  takenCareOf?: boolean;
+  resolvedBy?: string;
+  managerNotes?: string;
 }
 
 export interface User {
@@ -163,6 +167,8 @@ export interface DailyTimeCard {
   managerNotes?: string;
   minutesLate?: number;
   tardyShiftTitle?: string;
+  tardyTakenCareOf?: boolean;
+  tardyResolvedBy?: string;
   sickDocumentationProvided?: boolean;
   coveredByUserId?: string;
   coveredByUserName?: string;

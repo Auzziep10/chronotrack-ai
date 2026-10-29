@@ -1527,13 +1527,37 @@ export const ActivityManager: React.FC<Props> = ({ users, settings, activeSessio
             {/* Keeping current filter logic from previous implementation for backward compatibility */}
             {activeView === 'users' ? (
               <div className="space-y-6 animate-in slide-in-from-bottom-4">
-                <div className="flex flex-col md:flex-row gap-4 justify-between bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+                <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
                   <div>
                     <h3 className="text-xl font-bold text-zinc-800">
                       Active Team Members - {displayedUsers.filter(u => isTargetUserAdmin(u) || isTargetUserActive(u)).length}
                     </h3>
                     <p className="text-zinc-500 text-sm">Select a staff member to view their performance metrics and full profile.</p>
                   </div>
+                  {(isViewerAdmin || isViewerManager) && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!confirm('Reset all team members\' write-ups and strike levels to 0?')) return;
+                        for (const u of users) {
+                          if ((u.disciplinaryWriteUps && u.disciplinaryWriteUps.length > 0) || (u.strikeLevel || 0) > 0 || (u.tardyCount30Days || 0) > 0) {
+                            await onUpdateUser({
+                              ...u,
+                              disciplinaryWriteUps: [],
+                              strikeLevel: 0,
+                              tardyCount30Days: 0,
+                              attendanceAuditLog: [],
+                              lateDays: 0
+                            }, true);
+                          }
+                        }
+                        alert('All team members\' write-ups and strike levels have been reset to 0.');
+                      }}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300 transition-colors flex items-center gap-1.5 shrink-0"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Reset All Write-Ups to 0
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

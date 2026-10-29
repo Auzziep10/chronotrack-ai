@@ -29,7 +29,9 @@ import {
   subscribeToSettings,
   firebaseSaveSettings,
   firebaseSaveTimeCard,
-  subscribeToRecentMessages
+  subscribeToRecentMessages,
+  WRITEUP_RESET_TIMESTAMP,
+  firebaseResetAllWriteUpsToZero
 } from './services/firebaseService';
 import { sendPushNotification } from './services/pushNotificationService';
 
@@ -188,16 +190,33 @@ const App: React.FC = () => {
   // 2. Real-time users listener — MUST run before login so new devices have the users list to authenticate against!
   useEffect(() => {
     if (!isFirebaseConfigured() || !isFirebaseAuthed) return;
+
+    // Reset all pre-existing write-ups, strikes, and false tardy counts to 0 starting from WRITEUP_RESET_TIMESTAMP
+    firebaseResetAllWriteUpsToZero().catch(err => console.warn('Reset write-ups failed:', err));
     
     const unsubUsers = subscribeToUsers((firebaseUsers) => {
       if (firebaseUsers.length > 0) {
-        // Merge: Firebase data wins for every field it has
+        // Merge: Firebase data wins for every field it has, with pre-reset write-ups/strikes cleared to 0
         setUsers(prev => {
           const merged = firebaseUsers
             .filter(fu => fu.role?.trim().toLowerCase() !== 'client')
             .map(fu => {
               const local = prev.find(u => u.id === fu.id);
-              return { ...local, ...fu };
+              const combined = { ...local, ...fu };
+              const postResetWriteUps = (combined.disciplinaryWriteUps || []).filter(
+                w => (w.createdAt || 0) >= WRITEUP_RESET_TIMESTAMP
+              );
+              const postResetAudits = (combined.attendanceAuditLog || []).filter(
+                a => (a.timestamp || 0) >= WRITEUP_RESET_TIMESTAMP
+              );
+              return {
+                ...combined,
+                disciplinaryWriteUps: postResetWriteUps,
+                strikeLevel: (postResetWriteUps.length === 0 ? 0 : (combined.strikeLevel || 0)) as 0 | 1 | 2 | 3,
+                tardyCount30Days: postResetAudits.filter(a => a.type === 'Late_Clock_In' || a.type === '5_Min_Tardy_Alert').length,
+                attendanceAuditLog: postResetAudits,
+                lateDays: 0
+              };
             });
           return merged;
         });
@@ -557,12 +576,17 @@ const App: React.FC = () => {
       })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
-    if (todayShifts.length > 0) {
-      const firstShift = todayShifts[0];
-      const scheduledStart = new Date(firstShift.startTime).getTime();
-      if (now > scheduledStart) {
+    if (todayShifts.length > 0 && !isUnscheduled) {
+      const matchingShift = todayShifts.find(s => {
+        const startMs = new Date(s.startTime).getTime();
+        const endMs = new Date(s.endTime).getTime();
+        const maxLateClockInWindowMs = startMs + 120 * 60 * 1000; // Max 2 hours after shift start
+        return now > startMs && now < Math.min(endMs - 15 * 60 * 1000, maxLateClockInWindowMs);
+      });
+      if (matchingShift) {
+        const scheduledStart = new Date(matchingShift.startTime).getTime();
         minutesLate = Math.ceil((now - scheduledStart) / (1000 * 60));
-        tardyShiftTitle = firstShift.title || 'Scheduled Shift';
+        tardyShiftTitle = matchingShift.title || 'Scheduled Shift';
       }
     }
 
@@ -594,20 +618,23 @@ const App: React.FC = () => {
   };
 
   const handleClockOut = async (user: User) => {
-    const session = activeSessions[user.id];
+    const session =
+      activeSessions[user.id] ||
+      Object.values(activeSessions).find(s => String(s.userId) === String(user.id));
     if (!session) return;
 
     // Optimistic local removal
     setActiveSessions(prev => {
       const next = { ...prev };
       delete next[user.id];
+      delete next[session.userId];
       return next;
     });
 
     // Primary: Write to Firebase (broadcasts to ALL devices instantly)
     if (isFirebaseConfigured()) {
       try {
-        const timeCard = await firebaseClockOut(user.id, session);
+        const timeCard = await firebaseClockOut(session.userId || user.id, session);
         import('./services/storageService').then(({ storageService }) => {
           storageService.saveTimeCard(timeCard);
         });
@@ -617,10 +644,11 @@ const App: React.FC = () => {
     } else {
       // Fallback: save locally
       const now = Date.now();
+      const tzOffset = session.startTime - new Date(session.startTime).getTimezoneOffset() * 60000;
       const timeCard: DailyTimeCard = {
         id: crypto.randomUUID(),
         userId: user.id,
-        date: new Date(session.startTime).toISOString().split('T')[0],
+        date: new Date(tzOffset).toISOString().split('T')[0],
         clockIn: session.startTime,
         clockOut: now,
         totalHours: (now - session.startTime) / (1000 * 60 * 60),
@@ -874,7 +902,18 @@ const App: React.FC = () => {
       try {
         const { firebaseGetTimeCards } = await import('./services/firebaseService');
         const allCards = await firebaseGetTimeCards();
-        todayTimeCards = allCards.filter(tc => tc.date === todayStr);
+        todayTimeCards = allCards.filter(tc => {
+          if (tc.date === todayStr) return true;
+          if (tc.clockIn) {
+            const cInLocal = new Date(tc.clockIn - new Date(tc.clockIn).getTimezoneOffset() * 60000).toISOString().split('T')[0];
+            if (cInLocal === todayStr) return true;
+          }
+          if (tc.clockOut) {
+            const cOutLocal = new Date(tc.clockOut - new Date(tc.clockOut).getTimezoneOffset() * 60000).toISOString().split('T')[0];
+            if (cOutLocal === todayStr) return true;
+          }
+          return false;
+        });
       } catch (e) {
         console.warn('[FiveMinTardyMonitor] Failed to fetch timeCards:', e);
       }
@@ -1055,7 +1094,7 @@ const App: React.FC = () => {
     checkFiveMinTardyShifts();
     const interval = setInterval(checkFiveMinTardyShifts, 15 * 1000); // Check every 15 seconds
     return () => clearInterval(interval);
-  }, [authToken, isFirebaseAuthed, shiftBlocks, activeSessions, currentUser]);
+  }, [authToken, isFirebaseAuthed, shiftBlocks, currentUser]);
 
   const handleLogSubmit = (userId: string, logData: Omit<WorkLog, 'id' | 'timestamp' | 'periodStart' | 'periodEnd' | 'userId' | 'userName'>) => {
     const now = Date.now();

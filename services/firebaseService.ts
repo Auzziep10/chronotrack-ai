@@ -93,39 +93,65 @@ export const subscribeToActiveSessions = (
     });
 };
 
+/** Baseline reset timestamp (Oct 29, 2026 09:06 AM local) — all write-ups and strikes reset to 0 starting from this point */
+export const WRITEUP_RESET_TIMESTAMP = new Date(2026, 9, 29, 9, 6, 0).getTime();
+
+const toLocalIsoDate = (ms: number): string => {
+    const d = new Date(ms);
+    return new Date(ms - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+};
+
 /** Clock in — writes/overwrites session document in Firestore */
 export const firebaseClockIn = async (user: User, clockInDepartment?: string, isUnscheduled?: boolean): Promise<void> => {
     const now = Date.now();
     let minutesLate = 0;
     let tardyShiftTitle: string | undefined = undefined;
+    const todayStr = toLocalIsoDate(now);
 
-    // Check if user clocked in late against today's shift schedule (zero grace period)
+    // Check if user clocked in late against today's shift schedule
+    // Safeguards:
+    // 1. Never mark late if the user already has a timeCard logged today (e.g., returning from break or re-entering PIN after clocking out).
+    // 2. Never mark late if the shift has already ended (or is within 15 mins of ending) or if >2 hours past shift start (prevents end-of-day clock-out attempts from firing late clock-in alerts).
     try {
-        const todayStr = new Date(now).toISOString().split('T')[0];
-        const shiftsSnap = await getDocs(query(
-            collection(db, SHIFTS_COL),
-            where('assignedTo', '==', user.id)
-        ));
-        
-        const todayShifts = shiftsSnap.docs.map(d => d.data()).filter(s => {
-            if (typeof s.title !== 'string' || !s.title.startsWith('[SHIFT]')) return false;
-            const startObj = new Date(s.startTime);
-            const nowObj = new Date(now);
-            return (
-                startObj.getFullYear() === nowObj.getFullYear() &&
-                startObj.getMonth() === nowObj.getMonth() &&
-                startObj.getDate() === nowObj.getDate()
-            );
+        const [shiftsSnap, userCardsSnap] = await Promise.all([
+            getDocs(query(collection(db, SHIFTS_COL), where('assignedTo', '==', user.id))),
+            getDocs(query(collection(db, TIMECARDS_COL), where('userId', '==', user.id)))
+        ]);
+
+        const alreadyWorkedToday = userCardsSnap.docs.some(d => {
+            const tc = d.data();
+            const cIn = tc.clockIn instanceof Timestamp ? tc.clockIn.toMillis() : (tc.clockIn || 0);
+            const tcDate = tc.date || (cIn ? toLocalIsoDate(cIn) : '');
+            return tcDate === todayStr;
         });
 
-        if (todayShifts.length > 0) {
-            const sortedShifts = todayShifts.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-            const firstShift = sortedShifts[0];
-            const scheduledStart = new Date(firstShift.startTime).getTime();
+        if (!alreadyWorkedToday && !isUnscheduled) {
+            const nowObj = new Date(now);
+            const todayShifts = shiftsSnap.docs.map(d => d.data()).filter(s => {
+                if (typeof s.title !== 'string' || !s.title.startsWith('[SHIFT]')) return false;
+                const startObj = new Date(s.startTime);
+                return (
+                    startObj.getFullYear() === nowObj.getFullYear() &&
+                    startObj.getMonth() === nowObj.getMonth() &&
+                    startObj.getDate() === nowObj.getDate()
+                );
+            });
 
-            if (now > scheduledStart) {
-                minutesLate = Math.ceil((now - scheduledStart) / (1000 * 60));
-                tardyShiftTitle = firstShift.title || 'Scheduled Shift';
+            if (todayShifts.length > 0) {
+                const sortedShifts = todayShifts.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+                // Find the active shift that has started but has NOT ended (and isn't in the final 15 minutes of shift end)
+                const matchingShift = sortedShifts.find(s => {
+                    const startMs = new Date(s.startTime).getTime();
+                    const endMs = new Date(s.endTime).getTime();
+                    const maxLateClockInWindowMs = startMs + 120 * 60 * 1000; // Max 2 hours after shift start
+                    return now > startMs && now < Math.min(endMs - 15 * 60 * 1000, maxLateClockInWindowMs);
+                });
+
+                if (matchingShift) {
+                    const scheduledStart = new Date(matchingShift.startTime).getTime();
+                    minutesLate = Math.ceil((now - scheduledStart) / (1000 * 60));
+                    tardyShiftTitle = matchingShift.title || 'Scheduled Shift';
+                }
             }
         }
     } catch (err) {
@@ -155,7 +181,6 @@ export const firebaseClockIn = async (user: User, clockInDepartment?: string, is
     // If clocked in late, dispatch immediate tardy alert to managers & update user's attendance audit / auto-write-up
     if (minutesLate > 0) {
         try {
-            const todayStr = new Date(now - new Date(now).getTimezoneOffset() * 60000).toISOString().split('T')[0];
             const userDocRef = doc(db, USERS_COL, user.id);
             const userSnap = await getDoc(userDocRef);
 
@@ -170,17 +195,18 @@ export const firebaseClockIn = async (user: User, clockInDepartment?: string, is
                     timestamp: now,
                     type: 'Late_Clock_In' as const,
                     shiftTitle: tardyShiftTitle || '[SHIFT]',
+                    minutesLate,
                     details: `Clocked in ${minutesLate} min(s) late for ${tardyShiftTitle || 'scheduled shift'}.`
                 };
 
-                // Count rolling 30-day tardies (including today's late clock-in)
-                const thirtyDaysAgoMs = now - 30 * 24 * 60 * 60 * 1000;
+                // Count rolling 30-day tardies since WRITEUP_RESET_TIMESTAMP (including today's late clock-in)
+                const windowStartMs = Math.max(now - 30 * 24 * 60 * 60 * 1000, WRITEUP_RESET_TIMESTAMP);
                 const userCardsSnap = await getDocs(query(collection(db, TIMECARDS_COL), where('userId', '==', user.id)));
                 const prior30DayTardies = userCardsSnap.docs
                     .map(d => d.data())
                     .filter(tc => {
                         const cIn = tc.clockIn instanceof Timestamp ? tc.clockIn.toMillis() : (tc.clockIn || 0);
-                        return cIn >= thirtyDaysAgoMs && (tc.minutesLate || 0) > 0 && tc.date !== todayStr;
+                        return cIn >= windowStartMs && (tc.minutesLate || 0) > 0 && !tc.tardyTakenCareOf && tc.date !== todayStr;
                     }).length;
 
                 const rollingTardyCount = prior30DayTardies + 1;
@@ -205,7 +231,7 @@ export const firebaseClockIn = async (user: User, clockInDepartment?: string, is
                         w =>
                             w.category === 'Excessive Tardiness' &&
                             w.severity === milestoneSeverity &&
-                            w.createdAt >= thirtyDaysAgoMs
+                            w.createdAt >= windowStartMs
                     );
                     if (!alreadyHasRecentMilestone) {
                         updatedWriteUps.unshift({
@@ -253,7 +279,67 @@ export const firebaseClockIn = async (user: User, clockInDepartment?: string, is
     }
 };
 
-/** Clock out — marks session clockedOut and saves a time card */
+/** Reset all users' disciplinary write-ups, strike levels, and pre-reset tardy counts to 0 in Firestore */
+export const firebaseResetAllWriteUpsToZero = async (): Promise<void> => {
+    try {
+        const usersSnap = await getDocs(collection(db, USERS_COL));
+        const updates: Promise<any>[] = [];
+
+        usersSnap.docs.forEach(d => {
+            const u = d.data() as User;
+            const postResetWriteUps = (u.disciplinaryWriteUps || []).filter(
+                w => (w.createdAt || 0) >= WRITEUP_RESET_TIMESTAMP
+            );
+            const postResetAudits = (u.attendanceAuditLog || []).filter(
+                a => (a.timestamp || 0) >= WRITEUP_RESET_TIMESTAMP
+            );
+
+            const needsReset =
+                (u.disciplinaryWriteUps && u.disciplinaryWriteUps.length !== postResetWriteUps.length) ||
+                (postResetWriteUps.length === 0 && ((u.strikeLevel || 0) > 0 || (u.tardyCount30Days || 0) > 0)) ||
+                (u.attendanceAuditLog && u.attendanceAuditLog.length !== postResetAudits.length);
+
+            if (needsReset) {
+                updates.push(
+                    updateDoc(doc(db, USERS_COL, d.id), {
+                        disciplinaryWriteUps: postResetWriteUps,
+                        strikeLevel: postResetWriteUps.length === 0 ? 0 : (u.strikeLevel || 0),
+                        tardyCount30Days: postResetAudits.filter(a => a.type === 'Late_Clock_In' || a.type === '5_Min_Tardy_Alert').length,
+                        attendanceAuditLog: postResetAudits,
+                        lateDays: 0,
+                        updatedAt: serverTimestamp()
+                    })
+                );
+            }
+        });
+
+        // Also clear false minutesLate flags on today's timeCards created before WRITEUP_RESET_TIMESTAMP
+        const todayStr = toLocalIsoDate(Date.now());
+        const cardsSnap = await getDocs(query(collection(db, TIMECARDS_COL), where('date', '==', todayStr)));
+        cardsSnap.docs.forEach(d => {
+            const tc = d.data();
+            const cIn = tc.clockIn instanceof Timestamp ? tc.clockIn.toMillis() : (tc.clockIn || 0);
+            if ((tc.minutesLate || 0) > 0 && cIn < WRITEUP_RESET_TIMESTAMP) {
+                updates.push(
+                    updateDoc(doc(db, TIMECARDS_COL, d.id), {
+                        minutesLate: 0,
+                        tardyTakenCareOf: true,
+                        updatedAt: serverTimestamp()
+                    })
+                );
+            }
+        });
+
+        if (updates.length > 0) {
+            await Promise.all(updates);
+            console.log(`[Firebase] Reset write-ups and strikes to 0 across ${updates.length} records.`);
+        }
+    } catch (err) {
+        console.warn("[Firebase] Error resetting write-ups to 0:", err);
+    }
+};
+
+/** Clock out — saves time card FIRST, then marks session clockedOut to prevent unclocked tardy race conditions */
 export const firebaseClockOut = async (userId: string, session: UserSession): Promise<DailyTimeCard> => {
     const now = Date.now();
 
@@ -270,7 +356,7 @@ export const firebaseClockOut = async (userId: string, session: UserSession): Pr
     const timeCard: DailyTimeCard = {
         id: `tc-${userId}-${now}`,
         userId,
-        date: new Date(session.startTime).toISOString().split('T')[0],
+        date: toLocalIsoDate(session.startTime || now),
         clockIn: session.startTime,
         clockOut: now,
         totalHours: netHours,
@@ -280,6 +366,13 @@ export const firebaseClockOut = async (userId: string, session: UserSession): Pr
         tardyShiftTitle: (session as any).tardyShiftTitle || undefined
     };
 
+    // 1. Write timeCard FIRST so the 5-min tardy monitor immediately sees the completed timeCard for today
+    await setDoc(doc(db, TIMECARDS_COL, timeCard.id), {
+        ...timeCard,
+        createdAt: serverTimestamp()
+    });
+
+    // 2. Mark active session as clockedOut
     await setDoc(doc(db, SESSIONS_COL, userId), {
         clockedOut: true,
         clockOutTime: now,
@@ -287,11 +380,6 @@ export const firebaseClockOut = async (userId: string, session: UserSession): Pr
         totalIdleTimeMs: totalIdle,
         updatedAt: serverTimestamp()
     }, { merge: true });
-
-    await setDoc(doc(db, TIMECARDS_COL, timeCard.id), {
-        ...timeCard,
-        createdAt: serverTimestamp()
-    });
 
     return timeCard;
 };
